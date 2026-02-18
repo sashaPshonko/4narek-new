@@ -1,0 +1,71 @@
+[
+        {
+        "name": "netherite_sword",
+        "id": "sword5",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 5
+            }
+        ],
+        "num": 1,
+        "nacenka": 250000
+    },
+
+    {
+        "name": "netherite_sword",
+        "id": "sword7",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 7
+            }
+        ],
+        "num": 4,
+        "nacenka": 250000
+    },
+    {
+        "name": "netherite_sword",
+        "id": "megasword",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 7
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "poison",
+                "lvl": 2
+            },
+            {
+                "name": "vampirism",
+                "lvl": 2
+            }
+        ],
+        "num": 15,
+        "nacenka": 300000
+    }
+]
