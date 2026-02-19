@@ -1,0 +1,29 @@
+{
+  "date": "2026-02-19",
+  "prices": {
+    "megasword": 5800008,
+    "sword5": 1200004,
+    "sword7": 2100003
+  },
+  "ratios": {
+    "megasword": 0.8,
+    "sword5": 0.8,
+    "sword7": 0.8
+  },
+  "buy_stats": {
+    "megasword": 1982,
+    "sword5": 2209,
+    "sword7": 7009
+  },
+  "sell_stats": {
+    "megasword": 1952,
+    "sword5": 2071,
+    "sword7": 7032
+  },
+  "try_sell_stats": {
+    "megasword": 3035,
+    "sword5": 3437,
+    "sword7": 8913
+  },
+  "message_id": 0
+}
