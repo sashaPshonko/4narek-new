@@ -351,56 +351,80 @@ bot.on('windowOpen', async () => {
             break;
 
         case myItems:
-            await delay(1000)
-            needReset = false
+            await delay(1000);
+            needReset = false;
             logger.info(`${name} - ${bot.menu}`);
-            bot.count = 0
-            bot.ah = []
-            if (bot.count < 8) bot.ahFull = false
-            let slot = null
+            
+            bot.count = 0;
+            bot.ah = [];
+            bot.itemsToReset = []; // Обязательно инициализируем перед использованием
+            
+            let slot = null;
+
+            // 1. Проверка на необходимость сброса
             for (let i = 0; i < 8; i++) {
-                if (!bot.currentWindow?.slots[i]) break
-                const price = await getBuyPriceInStorage(bot.currentWindow?.slots[i])
-                const id = getIdBySellPrice(itemPrices, price)
+                const currentSlot = bot.currentWindow?.slots[i];
+                if (!currentSlot) break; // Слотов больше нет
+
+                const priceOnAH = await getBuyPriceInStorage(currentSlot);
+                const id = getIdBySellPrice(itemPrices, priceOnAH);
+
+                // ФИКС 1: Если предмет не найден в базе по этой цене (цена изменилась)
                 if (!id) {
-                    bot.itemsToReset.push(id)
-                    slot = i
-                    break
+                    slot = i;
+                    // Мы не знаем ID, но знаем, что цена неактуальна
+                    bot.itemsToReset.push("unknown_id"); 
+                    break;
                 }
-                const item = itemPrices.find(data => data.id === id)
-                if (!item || item.priceSell !== price) {
-                    bot.itemsToReset.push()
-                    slot = i
-                    break
-                }
-            }
-            if (slot) {
 
-                bot.ahFull = false
-                bot.needSell = true
-                bot.menu = myItems
-                await safeClick(bot, slot, getRandomDelayInRange(700, 1300))
-                break
+                const itemData = itemPrices.find(data => data.id === id);
+
+                // ФИКС 2: Проверяем, совпадает ли цена в конфиге с ценой на аукционе
+                if (!itemData || itemData.priceSell !== priceOnAH) {
+                    slot = i;
+                    bot.itemsToReset.push(id); // Теперь пушим реальный ID
+                    break;
+                }
             }
+
+            // 2. Если нашли слот для сброса — кликаем и выходим
+            if (slot !== null) { // Используем явную проверку на null
+                bot.ahFull = false;
+                bot.needSell = true;
+                bot.menu = myItems;
+                await safeClick(bot, slot, getRandomDelayInRange(700, 1300));
+                break;
+            }
+
+            // 3. Если сброс не нужен — считаем предметы для статистики
             for (let i = 0; i < 8; i++) {
-                if (bot.currentWindow?.slots[i]) { bot.count++ } else break
-
-                const price = await getBuyPriceInStorage(bot.currentWindow?.slots[i])
-                const id = getIdBySellPrice(itemPrices, price)
-                bot.ah.push(id)
+                const currentSlot = bot.currentWindow?.slots[i];
+                if (currentSlot) { 
+                    bot.count++; 
+                    const price = await getBuyPriceInStorage(currentSlot);
+                    const id = getIdBySellPrice(itemPrices, price);
+                    if (id) bot.ah.push(id);
+                } else {
+                    break;
+                }
             }
-            const msgAH = { name: 'items', username: bot.username, items: bot.ah }
-            parentPort.postMessage(msgAH)
+
+            // ФИКС 3: Правильное определение заполненности аукциона
+            // Допустим, лимит — 8 слотов
+            bot.ahFull = (bot.count >= 8);
+
+            const msgAH = { name: 'items', username: bot.username, items: bot.ah };
+            parentPort.postMessage(msgAH);
+
+            // 4. Переход в следующее меню
             if (Math.floor((Date.now() - bot.timeReset) / 1000) > 60) {
                 bot.menu = setAH;
-                bot.timeReset = Date.now()
-                await safeClick(bot, 52, getRandomDelayInRange(700, 1300))
+                bot.timeReset = Date.now();
+                await safeClick(bot, 52, getRandomDelayInRange(700, 1300));
             } else {
                 bot.menu = analysisAH;
-                await safeClick(bot, 46, getRandomDelayInRange(700, 1300))
+                await safeClick(bot, 46, getRandomDelayInRange(700, 1300));
             }
-
-
             break;
 
         case setAH:
