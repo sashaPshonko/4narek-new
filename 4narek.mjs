@@ -504,7 +504,7 @@ bot.on('message', async (message) => {
         return
     }
 
-    if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
+     if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
         await delay(getRandomDelayInRange(500, 700));
         if (bot.currentWindow) {
             bot.closeWindow(bot.currentWindow);
