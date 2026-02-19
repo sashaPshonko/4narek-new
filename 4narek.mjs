@@ -112,7 +112,6 @@ async function launchBookBuyer(name, password, anarchy) {
         bot.netakbistro = true
         bot.ah = []
         bot.needSell = false
-        bot.itemsToReset = []
         setInterval(() => {
             const inv = []
             const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
@@ -357,7 +356,6 @@ bot.on('windowOpen', async () => {
             
             bot.count = 0;
             bot.ah = [];
-            bot.itemsToReset = []; // Обязательно инициализируем перед использованием
             
             let slot = null;
 
@@ -373,7 +371,6 @@ bot.on('windowOpen', async () => {
                 if (!id) {
                     slot = i;
                     // Мы не знаем ID, но знаем, что цена неактуальна
-                    bot.itemsToReset.push("unknown_id"); 
                     break;
                 }
 
@@ -382,7 +379,6 @@ bot.on('windowOpen', async () => {
                 // ФИКС 2: Проверяем, совпадает ли цена в конфиге с ценой на аукционе
                 if (!itemData || itemData.priceSell !== priceOnAH) {
                     slot = i;
-                    bot.itemsToReset.push(id); // Теперь пушим реальный ID
                     break;
                 }
             }
@@ -713,15 +709,6 @@ function getBestSellPrice(bot, item, itemPrices) {
     const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
     for (const configItem of sortedConfig) {
         if (itemMatchesConfig(item, configItem)) {
-            if (bot.itemsToReset.some((i => i === configItem.id))) {
-                const index = array.findIndex((j => j === configItem.id));
-                if (index !== -1) {
-                    bot.itemsToReset.splice(index, 1); // Удаляем один элемент по найденному индексу
-                }
-                bot.typeSell = null
-            } else {
-                bot.typeSell = configItem.id;
-            }
             return configItem.priceSell;
         }
     }
