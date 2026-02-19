@@ -12,7 +12,7 @@ let items = JSON.parse(itemsJson);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const token = '8053905786:AAFHZ91Df2hex-zVteBmBPK2m4tk9iI7gAs';
+const token = '7256193231:AAG5rgzcK5kc2JH6HMvVbn2zEIJIBOC3Q9Q';
 
 const tgBot = new TelegramBot(token, { polling: true });
 
@@ -21,9 +21,9 @@ const alertChatID = -4763690917
 const pomoikaChatID = -4896488855
 
 const bots = [
-  { username: 'gg137senyafuu', password: 'ggggg', anarchy: 502, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword' },
-  { username: 'oioioier666', password: 'ggggg', anarchy: 502, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword' },
-  { username: 'tobolsksugar', password: 'ggggg', anarchy: 502, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword' },
+  { username: 'krabyi_rot666', password: 'ggggg', anarchy: 503, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots' },
+  { username: 'bolvaneblan22', password: 'ggggg', anarchy: 503, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots' },
+  { username: 'krivoigorb', password: 'ggggg', anarchy: 503, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots' },
 ];
 
 
