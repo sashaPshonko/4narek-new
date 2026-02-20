@@ -142,7 +142,6 @@ async function launchBookBuyer(name, password, anarchy) {
 });
         bot.on('end', (reason) => {
             parentPort.postMessage({ name: 'error', message: `Соединение разорвано: ${reason}`, username: workerData.username });
-            // КРИТИЧНО: без process.exit(1) воркер может висеть вечно, и restart не сработает
             process.exit(1); 
         });
 
