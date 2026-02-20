@@ -854,7 +854,7 @@ func adjustPrice(item string) {
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
-	} else if float64(buys) > float64(sales)*1.5 && currentItemCount > cfg.NormalSales {
+	} else if float64(buys) > float64(sales)*2 && currentItemCount > cfg.NormalSales {
     	newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
