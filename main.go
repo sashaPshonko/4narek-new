@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"sync"
@@ -770,7 +769,6 @@ func upRatio(ratio float64) float64 {
 	}
 	return ratio + 0.05
 }
-
 func adjustPrice(item string) {
 	cfg, ok := itemsConfig[item]
 	if !ok {
@@ -789,92 +787,84 @@ func adjustPrice(item string) {
 	priceBefore := newPrice
 	ratioBefore := data.Ratios[item]
 
-	salesRate := float64(cfg.NormalSales) / cfg.AnalysisTime.Minutes()
-	totalSalesRate := 0.0
-
-	for _, otherCfg := range itemsConfig {
-		if otherCfg.Type == cfg.Type {
-			totalSalesRate += float64(otherCfg.NormalSales) / otherCfg.AnalysisTime.Minutes()
-		}
-	}
-	if totalSalesRate == 0 {
-		totalSalesRate = 1
-	}
-	itemShare := salesRate / totalSalesRate
-
-	maxSlots := itemLimit[cfg.Type]
-	allocatedSlots := int(math.Round(itemShare * float64(maxSlots)))
-	if allocatedSlots < 1 {
-		allocatedSlots = 1
-	}
-
-	// --- 🔥 НОВЫЙ КОД: сбор статистики по типу предмета без лишних lock'ов ---
-	totalTypeItems := 0   // все предметы типа cfg.Type на аукционе
-	currentItemCount := 0 // текущий предмет на аукционе
-	totalInventory := 0   // все предметы типа cfg.Type в инвентарях
-	inventoryCount := 0   // текущий предмет в инвентарях
-
-	// Проходим по всем клиентам — без mutex, потому что мы уже его держим!
+	// --- 📊 СБОР СТАТИСТИКИ И ОПРЕДЕЛЕНИЕ ЛИДЕРА ТИПА ---
+	// Нам нужно знать количество КАЖДОГО предмета этого типа, чтобы найти лидера
+	countsInType := make(map[string]int)
+	
 	for _, items := range clientItems {
 		for name, count := range items {
 			if itemsConfig[name].Type == cfg.Type {
-				totalTypeItems += count
-			}
-			if name == item {
-				currentItemCount += count
+				countsInType[name] += count
 			}
 		}
 	}
-
 	for _, inv := range clientInventory {
 		for name, count := range inv {
 			if itemsConfig[name].Type == cfg.Type {
-				totalInventory += count
-			}
-			if name == item {
-				inventoryCount += count
+				countsInType[name] += count
 			}
 		}
 	}
 
-	// Теперь считаем свободные слоты — уже имея totalInventory
-	// freeInventorySlots := inventoryLimit[cfg.Type] - totalInventory
+	// Общее кол-во текущего предмета (АХ + Инвентарь)
+	totalItemCount := countsInType[item]
 
-	// --- ✅ Больше нет вызова getInventoryFreeSlots() — дедлок исчез!
-	// --- ✅ Все данные собраны внутри уже захваченного mutex — безопасно!
+	// Определяем лидера типа (у кого абсолютный максимум предметов на руках)
+	leaderID := ""
+	maxCount := -1
+	for name, count := range countsInType {
+		if count > maxCount {
+			maxCount = count
+			leaderID = name
+		}
+	}
+
+	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ ---
 
 	ratio := ratioBefore
-	if currentItemCount+inventoryCount < cfg.NormalSales*1 {
+
+	// 1. Повышение цены (Для всех)
+	if totalItemCount < cfg.NormalSales*1 {
 		newPrice += cfg.PriceStep
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice
 		}
-	} else if ((currentItemCount > sales && currentItemCount > cfg.NormalSales)) && sales < cfg.NormalSales {
+
+	// 2. Снижение при плохих продажах (Для всех)
+	} else if (totalItemCount > sales && totalItemCount > cfg.NormalSales) && sales < cfg.NormalSales {
 		newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
-	} else if float64(buys) > float64(sales)*2 && currentItemCount > cfg.NormalSales {
-    	newPrice -= cfg.PriceStep
+
+	// 3. Снижение при избытке покупок над продажами (Для всех)
+	} else if float64(buys) > float64(sales)*2 && totalItemCount > cfg.NormalSales {
+		newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
-	} else if currentItemCount + inventoryCount > sales*3 {
+
+	// 4. 🔥 Снижение при перенасыщении 3 к 1 (ТОЛЬКО ДЛЯ ЛИДЕРА)
+	} else if item == leaderID && totalItemCount > sales*3 {
 		newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
 	}
 
+	// --- ✅ ЗАВЕРШЕНИЕ ---
 	if newPrice != priceBefore || ratio != ratioBefore {
 		data.Prices[item] = newPrice
 		dailyData.Prices[item] = newPrice
 		data.Ratios[item] = ratio
 		dailyData.Ratios[item] = ratio
 		lastPriceUpdate[item] = now
-		mutex.Unlock() // 👈 Освобождаем мьютекс перед рассылкой
+		
+		mutex.Unlock() // Освобождаем перед логом/рассылкой
 
-		log.Printf("[PRICE] %s: цена изменена с %d на %d", item, priceBefore, newPrice)
+		log.Printf("[PRICE] %s: цена %d -> %d (Лидер типа %s: %s с кол-вом %d)", 
+			item, priceBefore, newPrice, cfg.Type, leaderID, maxCount)
+
 		select {
 		case broadcast <- PriceAndRatio{
 			Prices: data.Prices,
