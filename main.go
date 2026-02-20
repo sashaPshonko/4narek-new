@@ -813,10 +813,10 @@ func adjustPrice(item string) {
 	leaderID := ""
 	maxCount := -1
 	for name, count := range countsInType {
-		if count > maxCount {
-			maxCount = count
-			leaderID = name
-		}
+		if count > maxCount || (count == maxCount && name < leaderID) {
+		maxCount = count
+		leaderID = name
+	}
 	}
 
 	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ ---
@@ -824,7 +824,7 @@ func adjustPrice(item string) {
 	ratio := ratioBefore
 
 	// 1. Повышение цены (Для всех)
-	if totalItemCount < cfg.NormalSales*1 {
+	if totalItemCount < cfg.NormalSales && buys < cfg.NormalSales {
 		newPrice += cfg.PriceStep
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice
