@@ -845,11 +845,18 @@ func adjustPrice(item string) {
 		}
 
 	// 4. 🔥 Снижение при перенасыщении 3 к 1 (ТОЛЬКО ДЛЯ ЛИДЕРА)
-	} else if item == leaderID && totalItemCount > sales*3 {
-		newPrice -= cfg.PriceStep
-		if newPrice < cfg.MinPrice {
-			newPrice = cfg.MinPrice
+	} else if item == leaderID  {
+		salesLeader := cfg.NormalSales
+		if sales > cfg.NormalSales {
+			salesLeader = sales
 		}
+		if totalItemCount > salesLeader*3 {
+			newPrice -= cfg.PriceStep
+			if newPrice < cfg.MinPrice {
+				newPrice = cfg.MinPrice
+			}
+		}
+
 	}
 
 	// --- ✅ ЗАВЕРШЕНИЕ ---
