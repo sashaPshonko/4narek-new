@@ -98,15 +98,6 @@ var (
 			MaxPrice:     9900003,
 			Type:         "netherite_sword",
 		},
-		"ботинки_позорные":{
-			BasePrice:    1500004,
-			NormalSales:  4,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			MinPrice:     1200004,
-			MaxPrice:     9900004,
-			Type:         "netherite_boots",
-		},
 		"ботинки":{
 			BasePrice:    1200005,
 			NormalSales:  4,

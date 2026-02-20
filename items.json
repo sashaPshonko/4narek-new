@@ -70,22 +70,6 @@
     },
     {
         "name": "netherite_boots",
-        "id": "ботинки_позорные",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:protection",
-                "lvl": 4
-            }
-        ],
-        "num": 1,
-        "nacenka": 200000
-    },
-    {
-        "name": "netherite_boots",
         "id": "ботинки",
         "effects": [
             {
