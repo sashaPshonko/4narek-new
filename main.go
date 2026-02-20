@@ -115,6 +115,15 @@ var (
 			MaxPrice:     9900006,
 			Type:         "netherite_boots",
 		},
+		"ботинки_позорные":{
+			BasePrice:    1200007,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200007,
+			MaxPrice:     9900007,
+			Type:         "netherite_boots",
+		},
 	}
 )
 
