@@ -859,7 +859,12 @@ func adjustPrice(item string) {
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
-	}	
+	} else if currentItemCount + inventoryCount > sales*3 {
+		newPrice -= cfg.PriceStep
+		if newPrice < cfg.MinPrice {
+			newPrice = cfg.MinPrice
+		}
+	}
 
 	if newPrice != priceBefore || ratio != ratioBefore {
 		data.Prices[item] = newPrice
