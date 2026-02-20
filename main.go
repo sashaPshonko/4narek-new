@@ -858,22 +858,17 @@ func adjustPrice(item string) {
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice
 		}
-	} else if ((currentItemCount > sales && currentItemCount > cfg.NormalSales)) && sales < cfg.NormalSales && !(float64(currentItemCount+inventoryCount) < float64(cfg.NormalSales)*1.5 && buys < cfg.NormalSales) {
+	} else if ((currentItemCount > sales && currentItemCount > cfg.NormalSales)) && sales < cfg.NormalSales {
 		newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
-	} else if buys > sales && currentItemCount+inventoryCount > sales && currentItemCount >= cfg.NormalSales {	
-		newPrice -= cfg.PriceStep
+	} else if float64(buys) > float64(sales)*1.5 && currentItemCount > cfg.NormalSales {
+    	newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
-	} else if buys > sales*2 && buys > 6 {
-		newPrice -= cfg.PriceStep
-		if newPrice < cfg.MinPrice {
-			newPrice = cfg.MinPrice
-		}
-	}
+	}	
 
 	if newPrice != priceBefore || ratio != ratioBefore {
 		data.Prices[item] = newPrice
