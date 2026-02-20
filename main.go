@@ -787,76 +787,79 @@ func adjustPrice(item string) {
 	priceBefore := newPrice
 	ratioBefore := data.Ratios[item]
 
-	// --- 📊 СБОР СТАТИСТИКИ И ОПРЕДЕЛЕНИЕ ЛИДЕРА ТИПА ---
-	// Нам нужно знать количество КАЖДОГО предмета этого типа, чтобы найти лидера
-	countsInType := make(map[string]int)
+	// --- 📊 СБОР СТАТИСТИКИ ---
+	ahCounts := make(map[string]int)  // Только аукцион
+	invCounts := make(map[string]int) // Только инвентарь
 	
 	for _, items := range clientItems {
 		for name, count := range items {
-			if itemsConfig[name].Type == cfg.Type {
-				countsInType[name] += count
+			if conf, exists := itemsConfig[name]; exists && conf.Type == cfg.Type {
+				ahCounts[name] += count
 			}
 		}
 	}
 	for _, inv := range clientInventory {
 		for name, count := range inv {
-			if itemsConfig[name].Type == cfg.Type {
-				countsInType[name] += count
+			if conf, exists := itemsConfig[name]; exists && conf.Type == cfg.Type {
+				invCounts[name] += count
 			}
 		}
 	}
 
-	// Общее кол-во текущего предмета (АХ + Инвентарь)
-	totalItemCount := countsInType[item]
+	onAH := ahCounts[item]      // Сколько этого предмета на аукционе
+	inInv := invCounts[item]    // Сколько этого предмета в инвентаре
+	totalStock := onAH + inInv  // Общий запас (для лидера)
 
-	// Определяем лидера типа (у кого абсолютный максимум предметов на руках)
+	// Определяем лидера типа (по общему количеству AH + INV)
 	leaderID := ""
-	maxCount := -1
-	for name, count := range countsInType {
-		if count > maxCount || (count == maxCount && name < leaderID) {
-		maxCount = count
-		leaderID = name
-	}
+	maxTotal := -1
+	for name := range itemsConfig {
+		if itemsConfig[name].Type == cfg.Type {
+			total := ahCounts[name] + invCounts[name]
+			if total > maxTotal || (total == maxTotal && name < leaderID) {
+				maxTotal = total
+				leaderID = name
+			}
+		}
 	}
 
 	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ ---
-
 	ratio := ratioBefore
 
-	// 1. Повышение цены (Для всех)
-	if totalItemCount < cfg.NormalSales && buys < cfg.NormalSales {
+	// 1. Повышение цены (Для всех) — смотрим ТОЛЬКО аукцион
+	if onAH < cfg.NormalSales && buys < cfg.NormalSales {
 		newPrice += cfg.PriceStep
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice
 		}
 
-	// 2. Снижение при плохих продажах (Для всех)
-	} else if (totalItemCount > sales && totalItemCount > cfg.NormalSales) && sales < cfg.NormalSales {
+	// 2. Снижение при плохих продажах (Для всех) — смотрим ТОЛЬКО аукцион
+	} else if (onAH > sales && onAH > cfg.NormalSales) && sales < cfg.NormalSales {
 		newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
 
-	// 3. Снижение при избытке покупок над продажами (Для всех)
-	} else if float64(buys) > float64(sales)*2 && totalItemCount > cfg.NormalSales {
+	// 3. Снижение при избытке покупок (Для всех) — смотрим ТОЛЬКО аукцион
+	} else if float64(buys) > float64(sales)*2 && totalStock > cfg.NormalSales {
 		newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
 
 	// 4. 🔥 Снижение при перенасыщении 3 к 1 (ТОЛЬКО ДЛЯ ЛИДЕРА)
-	} else if item == leaderID  {
+	// Здесь проверяем сумму AH + INV, как ты и просил в самом начале
+	} else if item == leaderID {
 		salesLeader := cfg.NormalSales
 		if sales > cfg.NormalSales {
 			salesLeader = sales
 		}
-		if totalItemCount > salesLeader*3 {
+		if totalStock > salesLeader*3 {
 			newPrice -= cfg.PriceStep
 			if newPrice < cfg.MinPrice {
 				newPrice = cfg.MinPrice
 			}
 		}
-
 	}
 
 	// --- ✅ ЗАВЕРШЕНИЕ ---
@@ -867,16 +870,13 @@ func adjustPrice(item string) {
 		dailyData.Ratios[item] = ratio
 		lastPriceUpdate[item] = now
 		
-		mutex.Unlock() // Освобождаем перед логом/рассылкой
+		mutex.Unlock()
 
-		log.Printf("[PRICE] %s: цена %d -> %d (Лидер типа %s: %s с кол-вом %d)", 
-			item, priceBefore, newPrice, cfg.Type, leaderID, maxCount)
+		log.Printf("[PRICE] %s: цена %d -> %d (На АХ: %d, Продажи: %d/%d, Лидер: %s)", 
+			item, priceBefore, newPrice, onAH, sales, cfg.NormalSales, leaderID)
 
 		select {
-		case broadcast <- PriceAndRatio{
-			Prices: data.Prices,
-			Ratios: data.Ratios,
-		}:
+		case broadcast <- PriceAndRatio{Prices: data.Prices, Ratios: data.Ratios}:
 		default:
 		}
 	} else {
