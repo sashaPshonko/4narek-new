@@ -100,7 +100,7 @@ var (
 		},
 		"ботинки":{
 			BasePrice:    1200005,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     1200005,
