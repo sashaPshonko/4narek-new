@@ -72,7 +72,7 @@ var (
 	itemsConfig = map[string]ItemConfig{
 		"sword7": {
 			BasePrice:    700001,
-			NormalSales:  7,
+			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700001,
@@ -81,7 +81,7 @@ var (
 		},
 		"sword5": {
 			BasePrice:    500002,
-			NormalSales:  6,
+			NormalSales:  7,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500002,
@@ -90,7 +90,7 @@ var (
 		},
 		"megasword": {
 			BasePrice:    1200003,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     1200003,
@@ -99,7 +99,7 @@ var (
 		},
 		"ботинки":{
 			BasePrice:    1200005,
-			NormalSales:  5,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     1200005,
@@ -108,7 +108,7 @@ var (
 		},
 		"ботинки_починка":{
 			BasePrice:    1200006,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     1200006,
@@ -117,7 +117,7 @@ var (
 		},
 		"ботинки_позорные":{
 			BasePrice:    1200007,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700007,
