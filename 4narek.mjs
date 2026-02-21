@@ -266,6 +266,7 @@ bot.on('windowOpen', async () => {
             logger.info(`${name} - ${bot.menu}`);
             bot.timeActive = Date.now();
             generateRandomKey(bot);
+            saveToJsonFile('helmet.json', bot.currentWindow.slots)
             const resetime = Math.floor((Date.now() - bot.timeReset) / 1000)
             if (resetime > 60 || needReset) {
                 logger.info(`${name} - ресет`);
