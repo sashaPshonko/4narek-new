@@ -117,7 +117,7 @@ var (
 		},
 		"ботинки_позорные":{
 			BasePrice:    1200007,
-			NormalSales:  5,
+			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700007,
