@@ -124,6 +124,33 @@ var (
 			MaxPrice:     9900007,
 			Type:         "netherite_boots",
 		},
+		"шлем":{
+			BasePrice:    3200008,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200008,
+			MaxPrice:     9900008,
+			Type:         "netherite_helmet",
+		},
+		"шлем_починка":{
+			BasePrice:    5200009,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200009,
+			MaxPrice:     9900009,
+			Type:         "netherite_helmet",
+		},
+		"шлем_позорный":{
+			BasePrice:    1200010,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     700010,
+			MaxPrice:     9900010,
+			Type:         "netherite_helmet",
+		},
 	}
 )
 
