@@ -21,26 +21,6 @@
     },
     {
         "name": "netherite_sword",
-        "id": "sword6",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:fire_aspect",
-                "lvl": 1
-            },
-            {
-                "name": "minecraft:sharpness",
-                "lvl": 6
-            }
-        ],
-        "num": 2,
-        "nacenka": 300000
-    },
-    {
-        "name": "netherite_sword",
         "id": "sword7",
         "effects": [
             {

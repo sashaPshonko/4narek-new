@@ -124,15 +124,6 @@ var (
 			MaxPrice:     9900007,
 			Type:         "netherite_boots",
 		},
-		"sword6": {
-			BasePrice:    1200008,
-			NormalSales:  4,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			MinPrice:     700008,
-			MaxPrice:     9900008,
-			Type:         "netherite_sword",			
-		},
 	}
 )
 
