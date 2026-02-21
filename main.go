@@ -81,7 +81,7 @@ var (
 		},
 		"sword5": {
 			BasePrice:    500002,
-			NormalSales:  7,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500002,
@@ -90,7 +90,7 @@ var (
 		},
 		"megasword": {
 			BasePrice:    1200003,
-			NormalSales:  5,
+			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     1200003,
@@ -123,6 +123,15 @@ var (
 			MinPrice:     700007,
 			MaxPrice:     9900007,
 			Type:         "netherite_boots",
+		},
+		"sword6": {
+			BasePrice:    1200008,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     700008,
+			MaxPrice:     9900008,
+			Type:         "netherite_sword",			
 		},
 	}
 )
