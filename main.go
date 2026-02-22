@@ -890,7 +890,7 @@ func adjustPrice(item string) {
 		if sales > cfg.NormalSales {
 			salesLeader = sales
 		}
-		if totalStock > salesLeader*3 {
+		if float64(totalStock) > float64(salesLeader)*3.5 {
 			newPrice -= cfg.PriceStep
 			if newPrice < cfg.MinPrice {
 				newPrice = cfg.MinPrice
