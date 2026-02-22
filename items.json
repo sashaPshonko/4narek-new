@@ -125,7 +125,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_helmet",
@@ -197,6 +197,6 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     }
 ]
