@@ -200,7 +200,7 @@
         "nacenka": 300000
     },
     {
-        "name": "netherite_helmet",
+        "name": "netherite_leggings",
         "id": "штаны",
         "effects": [
             {
@@ -216,7 +216,7 @@
         "nacenka": 300000
     },
     {
-        "name": "netherite_helmet",
+        "name": "netherite_leggings",
         "id": "штаны_починка",
         "effects": [
             {
@@ -236,7 +236,7 @@
         "nacenka": 300000
     },
     {
-        "name": "netherite_helmet",
+        "name": "netherite_leggings",
         "id": "штаны_позорные",
         "effects": [
             {
