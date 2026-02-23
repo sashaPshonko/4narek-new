@@ -178,6 +178,33 @@ var (
 			MaxPrice:     9900013,
 			Type:         "netherite_leggings",
 		},
+		"нагрудник":{
+			BasePrice:    2300014,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200014,
+			MaxPrice:     9900014,
+			Type:         "netherite_chestplate",
+		},
+		"нагрудник_починка":{
+			BasePrice:    5200015,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200015,
+			MaxPrice:     9900015,
+			Type:         "netherite_chestplate",
+		},
+		"нагрудник_позорный":{
+			BasePrice:    1800016,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     700016,
+			MaxPrice:     9900016,
+			Type:         "netherite_chestplate",
+		},
 	}
 )
 
