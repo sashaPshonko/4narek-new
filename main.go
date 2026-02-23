@@ -189,7 +189,7 @@ var (
 		},
 		"нагрудник_починка":{
 			BasePrice:    5200015,
-			NormalSales:  5,
+			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     1200015,
@@ -917,7 +917,7 @@ func adjustPrice(item string) {
 	ratio := ratioBefore
 
 	// 1. Повышение цены (Для всех) — смотрим ТОЛЬКО аукцион
-	if sales < cfg.NormalSales && totalStock < sales*3 {
+	if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 {
 		newPrice += cfg.PriceStep
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice
