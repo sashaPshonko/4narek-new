@@ -942,24 +942,51 @@ async function getBuyPrice(slotData) {
     if (!loreArray) return undefined;
 
     for (const jsonString of loreArray) {
-        const parsedData = JSON.parse(jsonString);
-
-        // Проверяем есть ли extra массив
-        if (!parsedData.extra) continue;
-
-        // Проверяем каждый элемент в extra
-        for (const element of parsedData.extra) {
-            if (element.text && element.text.startsWith(' $')) {
-                const priceString = element.text.replace(/\D/g, '');
-                const price = parseInt(priceString);
+        try {
+            const parsedData = JSON.parse(jsonString);
+            
+            // Функция для рекурсивного поиска цены
+            function findPrice(obj) {
+                if (!obj) return null;
+                
+                // Если это строка и содержит цифры с запятыми
+                if (typeof obj === 'string') {
+                    const match = obj.match(/[\d,]+/);
+                    if (match) return match[0];
+                }
+                
+                // Если это объект с extra массивом
+                if (obj.extra && Array.isArray(obj.extra)) {
+                    for (const item of obj.extra) {
+                        const found = findPrice(item);
+                        if (found) return found;
+                    }
+                }
+                
+                // Если это объект с text полем
+                if (obj.text && typeof obj.text === 'string') {
+                    const match = obj.text.match(/[\d,]+/);
+                    if (match) return match[0];
+                }
+                
+                return null;
+            }
+            
+            // Ищем цену рекурсивно
+            const priceStr = findPrice(parsedData);
+            if (priceStr) {
+                const price = parseInt(priceStr.replace(/,/g, ''));
                 if (!isNaN(price)) return price;
             }
+            
+        } catch (e) {
+            // Игнорируем ошибки парсинга отдельных строк
+            continue;
         }
     }
 
-    logger.error('Цена не найдена')
+    logger.error('Цена не найдена');
     saveToJsonFile('error.json', slotData);
-
     return undefined;
 }
 
@@ -971,16 +998,53 @@ async function getBuyPriceInStorage(slotData) {
         try {
             const parsed = JSON.parse(jsonString);
 
-            // Если это просто строка без extra — пропускаем
-            if (!parsed.extra) continue;
-
-            for (const el of parsed.extra) {
-                if (typeof el.text === 'string' && el.text.trim().startsWith('$')) {
-                    const priceString = el.text.replace(/[^\d]/g, '');
-                    const price = parseInt(priceString);
+            // Вариант 1: ищем структуру где text = "$" и есть extra с ценой
+            if (parsed.text === '$' && parsed.extra?.[0]?.extra?.[0]?.extra?.[0]) {
+                const priceStr = parsed.extra[0].extra[0].extra[0];
+                if (typeof priceStr === 'string') {
+                    const price = parseInt(priceStr.replace(/[^\d]/g, ''));
                     if (!isNaN(price)) return price;
                 }
             }
+
+            // Вариант 2: рекурсивный поиск любой строки с цифрами
+            function findPriceInExtra(obj) {
+                if (!obj) return null;
+                
+                if (typeof obj === 'string') {
+                    const match = obj.match(/[\d,]+/);
+                    return match ? match[0] : null;
+                }
+                
+                if (Array.isArray(obj)) {
+                    for (const item of obj) {
+                        const found = findPriceInExtra(item);
+                        if (found) return found;
+                    }
+                }
+                
+                if (obj.extra && Array.isArray(obj.extra)) {
+                    for (const item of obj.extra) {
+                        const found = findPriceInExtra(item);
+                        if (found) return found;
+                    }
+                }
+                
+                if (obj.text && typeof obj.text === 'string') {
+                    const match = obj.text.match(/[\d,]+/);
+                    if (match) return match[0];
+                }
+                
+                return null;
+            }
+
+            // Пробуем найти цену рекурсивно
+            const priceStr = findPriceInExtra(parsed);
+            if (priceStr) {
+                const price = parseInt(priceStr.replace(/[^\d]/g, ''));
+                if (!isNaN(price)) return price;
+            }
+
         } catch (e) {
             // Игнорируем строки, которые не парсятся
             continue;
@@ -989,6 +1053,7 @@ async function getBuyPriceInStorage(slotData) {
 
     // Если цена не найдена — логируем и сохраняем
     console.error('Цена не найдена');
+    // saveToJsonFile('error.json', slotData); // раскомментируй если нужно
 
     return undefined;
 }
