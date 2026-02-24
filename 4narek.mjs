@@ -958,7 +958,7 @@ async function getBuyPrice(slotData) {
     }
 
     logger.error('Цена не найдена')
-    fs.writeFileSync('error.json', JSON.stringify(slotData, null, 2));
+    saveToJsonFile('error.json', slotData);
 
     return undefined;
 }
