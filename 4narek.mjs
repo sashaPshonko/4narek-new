@@ -20,7 +20,6 @@ parentPort.on('message', (data) => {
     }
 });
 
-
 const minDelay = 500;
 const AHDelay = 2000;
 const loadingDelay = 100;
@@ -171,6 +170,7 @@ bot.startTime = Date.now() - 240000;
 
 
 bot.on('windowOpen', async () => {
+    let key = ""
     switch (bot.menu) {
         case chooseBuying:
             const msg = { name: 'success', username: bot.username };
@@ -342,6 +342,7 @@ bot.on('windowOpen', async () => {
 
         case myItems:
             generateRandomKey(bot)
+            key = bot.key
             if (bot.currentWindow.slots[27]) {
                 logger.error('суки обновили аукцион')
                 break
@@ -421,6 +422,7 @@ bot.on('windowOpen', async () => {
 
         case setAH:
             generateRandomKey(bot)
+            key = bot.key
             logger.info(`${name} - ${bot.menu}`);
             bot.menu = analysisAH;
 
@@ -438,6 +440,11 @@ bot.on('message', async (message) => {
         bot.needSell = true
         const msg = { name: 'buy', id: bot.type }
         parentPort.postMessage(msg);
+        return
+    }
+
+    if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
+        await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 3000))
         return
     }
 

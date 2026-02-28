@@ -21,9 +21,9 @@ const alertChatID = -4763690917
 const pomoikaChatID = -4896488855
 
 const bots = [
-  { username: 'dolbatyirotgorba', password: 'ggggg', anarchy: 504, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet' },
-  { username: 'lesnoiopesdolgpt', password: 'ggggg', anarchy: 504, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet' },
-  { username: 'tormoznabite', password: 'ggggg', anarchy: 504, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet' },
+  { username: 'dolbatyirotgorba', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet' },
+  { username: 'lesnoiopesdolgpt', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet' },
+  { username: 'tormoznabite', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet' },
 ];
 
 
