@@ -55,7 +55,7 @@ let type = ""
 
 const missingEnchantsNames = ["minecraft:knockback", "heavy", "unstable", "minecraft:thorns", "minecraft:binding_curse"]
 
-const minBalance = 30000000
+const minBalance = 10000000
 
 const leftMouseButton = 0;
 const noShift = 0;
@@ -266,7 +266,7 @@ bot.on('windowOpen', async () => {
             logger.info(`${name} - ${bot.menu}`);
             bot.timeActive = Date.now();
             generateRandomKey(bot);
-            // saveToJsonFile('helmet.json', bot.currentWindow.slots)
+            key = bot.key
             const resetime = Math.floor((Date.now() - bot.timeReset) / 1000)
             if (resetime > 60 || needReset) {
                 logger.info(`${name} - ресет`);
@@ -325,9 +325,9 @@ bot.on('windowOpen', async () => {
                         default:
                             if (bot.netakbistro) {
                                 bot.netakbistro = false;
-                                await safeClickBuy(bot, slotToBuy, 4555);
+                                await safeClickBuy(bot, slotToBuy, 1655, key);
                             } else if (slotToBuy < 9) {
-                                await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(100, 150)*(slotToBuy+1));
+                                await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(100, 150)*(slotToBuy+1), key);
                             } else {
                                 await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500));
                             }
@@ -340,17 +340,13 @@ bot.on('windowOpen', async () => {
 
             break;
 
-        case buy:
-            bot.timeActive = Date.now();
-            logger.info(`${name} - ${bot.menu}`);
-
-            bot.menu = analysisAH
-            await safeClick(bot, Math.floor(Math.random() * 3), getRandomDelayInRange(400, 500))
-
-            break;
-
         case myItems:
-            await delay(1000);
+            generateRandomKey(bot)
+            if (bot.currentWindow.slots[27]) {
+                logger.error('суки обновили аукцион')
+                break
+            }
+            await delay(500);
             needReset = false;
             logger.info(`${name} - ${bot.menu}`);
             
@@ -388,7 +384,7 @@ bot.on('windowOpen', async () => {
                 bot.ahFull = false;
                 bot.needSell = true;
                 bot.menu = myItems;
-                await safeClick(bot, slot, getRandomDelayInRange(700, 1300));
+                await safeClickBuy(bot, slot, getRandomDelayInRange(700, 1300), key);
                 break;
             }
 
@@ -416,18 +412,19 @@ bot.on('windowOpen', async () => {
             if (Math.floor((Date.now() - bot.timeReset) / 1000) > 60) {
                 bot.menu = setAH;
                 bot.timeReset = Date.now();
-                await safeClick(bot, 52, getRandomDelayInRange(700, 1300));
+                await safeClickBuy(bot, 52, getRandomDelayInRange(700, 1300), key);
             } else {
                 bot.menu = analysisAH;
-                await safeClick(bot, 46, getRandomDelayInRange(700, 1300));
+                await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
             }
             break;
 
         case setAH:
+            generateRandomKey(bot)
             logger.info(`${name} - ${bot.menu}`);
             bot.menu = analysisAH;
 
-            await safeClick(bot, 46, getRandomDelayInRange(700, 1300))
+            await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key)
 
             break;
     }
@@ -1104,7 +1101,7 @@ async function longWalk(bot) {
         if (Date.now() - timeTP > 10000) {
             await delay(500)
             timeTP = Date.now()
-            const warps = ['fisher', 'mine', 'casino', 'case', 'shop']
+            const warps = ['mine', 'casino', 'case', 'shop']
             const warp = getRandomElement(warps)
             bot.chat(`/warp ${warp}`)
             await delay(8000)
@@ -1146,7 +1143,7 @@ async function walk(bot) {
         bot.setControlState(move, false)
     );
 
-    const warps = ['fisher', 'mine', 'casino', 'case', 'shop']
+    const warps = ['mine', 'casino', 'case', 'shop']
     const warp = getRandomElement(warps)
     bot.chat(`/warp ${warp}`)
     await delay(8000)
@@ -1155,7 +1152,11 @@ async function walk(bot) {
 
 }
 
-async function safeClickBuy(bot, slot, time) {
+async function safeClickBuy(bot, slot, time, key) {
+    if (bot.key != key) {
+        console.log('твари ах обновили и теперь так')
+        return
+    }
     await delay(time);
 
     if (bot.currentWindow) {

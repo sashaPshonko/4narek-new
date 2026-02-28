@@ -1,0 +1,2 @@
+ForceBindIP/ForceBindIP64.exe 192.168.8.109 "C:\Users\Sasha\AppData\Roaming\.minecraft\runtime\jre-legacy\windows\jre-legacy\bin\javaw.exe" -cp "C:\Users\Sasha\AppData\Roaming\.minecraft\libraries\*" net.minecraft.client.main.Main -- 0000 --accessToken 0 --userType mojang;74a3a852-f899-40f3-a4a4-c0a652110f74\Roaming\.minecraft" --assetsDir "C:\Users\Sasha\AppData\Roaming\.minecraft\assets" 
+--assetIndex 1.16 --uuid 0000 --accessToken 0 --userType mojang
