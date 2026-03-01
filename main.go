@@ -145,7 +145,7 @@ var (
 		"шлем_позорный":{
 			BasePrice:    300010,
 			NormalSales:  4,
-			PriceStep:    100000,
+			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     20010,
 			MaxPrice:     9900010,
