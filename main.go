@@ -917,7 +917,7 @@ func adjustPrice(item string) {
 	ratio := ratioBefore
 
 	// 1. Повышение цены (Для всех) — смотрим ТОЛЬКО аукцион
-	if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 {
+	if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 && onAH < cfg.NormalSales {
 		newPrice += cfg.PriceStep
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice

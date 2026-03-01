@@ -523,7 +523,7 @@ bot.on('message', async (message) => {
         await safeAH(bot);
         return
     }
-    if (messageText.includes('[☃] Освободите хранилище или уберите предметы с продажи')) {
+    if (messageText.includes('[☃] Не удалось выставить')) {
         bot.ahFull = true;
         return
     }
