@@ -2,21 +2,20 @@ import fs from 'fs/promises';
 import mineflayer from 'mineflayer';
 import inventoryViewer from 'mineflayer-web-inventory';
 import { createLogger, transports, format } from 'winston';
-import { workerData, parentPort } from 'worker_threads';
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import { writeFile, rename } from 'fs/promises';
 import { join } from 'path';
 
-let itemPrices = workerData.itemPrices
+let itemPrices = []
 let itemsBuying = []
 let needReset = false
-parentPort.on('message', (data) => {
+process.on('message', (data) => {
     if (data.type === 'price') {
-        needReset = true
-        itemPrices = data.data
+        needReset = true;
+        itemPrices = data.data;
     }
     if (data.type === 'items_buying') {
-        itemsBuying = data.data
+        itemsBuying = data.data;
     }
 });
 
@@ -48,7 +47,7 @@ const slotToTuneAH = 52;
 const slotToReloadAH = 49;
 const slotToTryBuying = 0;
 
-const ahCommand = `/ah search ${workerData.item}`
+const ahCommand = `/ah search ${process.env.BOT_ITEM}`
 
 let type = ""
 
@@ -96,7 +95,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
     bot.once('spawn', async () => {
         const msg = `${bot.username} запущен!`
-        parentPort.postMessage(msg);
+        process.send(msg);
         bot.loadPlugin(autoEat)
         bot.mu = false;
         bot.startTime = Date.now() - 55000;
@@ -126,7 +125,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
             }
             const msg = {name: "inventory", data: inv, username: bot.username}
-            parentPort.postMessage(msg)
+            process.send(msg)
         }, 10000)
 
     logger.info(`${name} успешно проник на сервер.`);
@@ -140,17 +139,15 @@ async function launchBookBuyer(name, password, anarchy) {
     bot.chat(shopCommand);
 });
         bot.on('end', (reason) => {
-            parentPort.postMessage({ name: 'error', message: `Соединение разорвано: ${reason}`, username: workerData.username });
+
             process.exit(1); 
         });
 
         bot.on('kicked', (reason) => {
-            parentPort.postMessage({ name: 'error', message: `Кикнут: ${reason}`, username: workerData.username });
             process.exit(1);
         });
 
         bot.on('error', (err) => {
-            parentPort.postMessage({ name: 'error', message: `Ошибка: ${err.message}`, username: workerData.username });
             process.exit(1);
         });
 bot.on('physicsTick', async () => {
@@ -174,7 +171,7 @@ bot.on('windowOpen', async () => {
     switch (bot.menu) {
         case chooseBuying:
             const msg = { name: 'success', username: bot.username };
-            parentPort.postMessage(msg);
+            process.send(msg);
             await delay(3000);
             logger.info(`${name} - ${bot.menu}`);
             bot.menu = setSectionFarmer;
@@ -407,7 +404,7 @@ bot.on('windowOpen', async () => {
             bot.ahFull = (bot.count >= 8);
 
             const msgAH = { name: 'items', username: bot.username, items: bot.ah };
-            parentPort.postMessage(msgAH);
+            process.send(msgAH);
 
             // 4. Переход в следующее меню
             if (Math.floor((Date.now() - bot.timeReset) / 1000) > 60) {
@@ -438,7 +435,7 @@ bot.on('message', async (message) => {
     if (messageText.includes('[☃] Вы успешно купили')) {
         bot.needSell = true
         const msg = { name: 'buy', id: bot.type }
-        parentPort.postMessage(msg);
+        process.send(msg);
         return
     }
 
@@ -474,7 +471,7 @@ bot.on('message', async (message) => {
         const balance = parseInt(balanceStr);
         const id = getIdBySellPrice(itemPrices, balance)
         const msg = { name: 'sell', id: id }
-        parentPort.postMessage(msg);
+        process.send(msg);
         bot.needSell = true
         return
     }
@@ -483,7 +480,7 @@ bot.on('message', async (message) => {
     if (messageText.includes('[☃]') && messageText.includes('выставлен на продажу!')) {
         if (bot.typeSell) {
             const msg = { name: 'try-sell', id: bot.typeSell }
-            parentPort.postMessage(msg);
+            process.send(msg);
         }
         bot.inventoryFull = false
         bot.count++
@@ -537,6 +534,12 @@ bot.on('message', async (message) => {
         await delay(getRandomDelayInRange(500, 700));
         bot.menu = analysisAH;
         await safeAH(bot);
+    }
+    if (messageText.includes('[⚠] Данной команды не существует!')) {
+        bot.chat(anarchyCommand)
+        await delay(11000)
+        await safeAH(bot)
+        return
     }
 
     // if (messageText.includes('Добро пожаловать на FunTime.su') && bot.login) {
@@ -863,7 +866,7 @@ async function getBestAHSlot(bot, itemPrices) {
                 if (!bot.type) logger.error('id undefined');
                 // return null
                 const message = {name: 'buying', data: JSON.stringify(slotData)}
-                parentPort.postMessage(message)
+                process.send(message)
                 return slotData.slot;
             } catch (error) {
                 console.error(error)
@@ -1065,8 +1068,8 @@ function getRandomDelayInRange(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-if (workerData) {
-    launchBookBuyer(workerData.username, workerData.password, workerData.anarchy);
+if (process.env) {
+    launchBookBuyer(process.env.BOT_USERNAME, process.env.BOT_PASSWORD, process.env.BOT_ANARCHY);
 }
 
 function getRandomElement(array) {
@@ -1163,7 +1166,7 @@ async function safeClickBuy(bot, slot, time, key) {
         console.log('твари ах обновили и теперь так')
         return
     }
-    if (slot == 52) bot.timeReset = Date.now();
+    if (slot === 52) bot.timeReset = Date.now();
     await delay(time);
 
     if (bot.currentWindow) {
