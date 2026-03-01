@@ -118,7 +118,7 @@ var (
 		"ботинки_позорные":{
 			BasePrice:    300007,
 			NormalSales:  4,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200007,
 			MaxPrice:     9900007,
@@ -145,7 +145,7 @@ var (
 		"шлем_позорный":{
 			BasePrice:    300010,
 			NormalSales:  4,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     20010,
 			MaxPrice:     9900010,

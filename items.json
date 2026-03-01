@@ -161,7 +161,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 100000
+        "nacenka": 200000
     },
     {
         "name": "netherite_helmet",
@@ -233,7 +233,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 100000
+        "nacenka": 200000
     },
     {
         "name": "netherite_leggings",
