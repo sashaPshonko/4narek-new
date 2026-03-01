@@ -14,14 +14,10 @@
             {
                 "name": "minecraft:sharpness",
                 "lvl": 6
-            },
-            {
-                "name": "minecraft:sweeping",
-                "lvl": 3
             }
         ],
         "num": 1,
-        "nacenka": 150000
+        "nacenka": 200000
     },
     {
         "name": "netherite_sword",
@@ -38,14 +34,10 @@
             {
                 "name": "minecraft:sharpness",
                 "lvl": 7
-            },
-            {
-                "name": "minecraft:sweeping",
-                "lvl": 3
             }
         ],
         "num": 3,
-        "nacenka": 150000
+        "nacenka": 200000
     },
     {
         "name": "netherite_sword",
@@ -74,10 +66,14 @@
             {
                 "name": "minecraft:sweeping",
                 "lvl": 3
+            },
+            {
+                "name": "minecraft:looting",
+                "lvl": 2
             }
         ],
         "num": 4,
-        "nacenka": 150000
+        "nacenka": 300000
     },
     {
         "name": "netherite_boots",

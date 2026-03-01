@@ -91,7 +91,7 @@ var (
 		"megasword": {
 			BasePrice:    1200003,
 			NormalSales:  4,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     1200003,
 			MaxPrice:     9900003,
