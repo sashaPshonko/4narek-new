@@ -39,6 +39,34 @@
         "num": 3,
         "nacenka": 200000
     },
+        {
+        "name": "netherite_sword",
+        "id": "farm-sword",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 7
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 2
+            },
+            {
+                "name": "minecraft:looting",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:sweeping",
+                "lvl": 4
+            }
+        ],
+        "num": 4,
+        "nacenka": 200000
+    },
     {
         "name": "netherite_sword",
         "id": "megasword",
@@ -62,17 +90,9 @@
             {
                 "name": "vampirism",
                 "lvl": 2
-            },
-            {
-                "name": "minecraft:sweeping",
-                "lvl": 3
-            },
-            {
-                "name": "minecraft:looting",
-                "lvl": 2
             }
         ],
-        "num": 4,
+        "num": 5,
         "nacenka": 300000
     },
     {

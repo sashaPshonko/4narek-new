@@ -205,6 +205,15 @@ var (
 			MaxPrice:     9900016,
 			Type:         "netherite_chestplate",
 		},
+		"farm-sword": {
+			BasePrice:    800017,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200017,
+			MaxPrice:     9900017,
+			Type:         "netherite_sword",
+		},
 	}
 )
 
