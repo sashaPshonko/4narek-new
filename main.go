@@ -73,7 +73,7 @@ var (
 		"sword7": {
 			BasePrice:    300001,
 			NormalSales:  8,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200001,
 			MaxPrice:     7000001,
@@ -82,7 +82,7 @@ var (
 		"sword5": {
 			BasePrice:    300002,
 			NormalSales:  5,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200002,
 			MaxPrice:     5000002,
