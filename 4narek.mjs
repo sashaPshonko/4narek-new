@@ -412,7 +412,6 @@ bot.on('windowOpen', async () => {
             // 4. Переход в следующее меню
             if (Math.floor((Date.now() - bot.timeReset) / 1000) > 60) {
                 bot.menu = setAH;
-                bot.timeReset = Date.now();
                 await safeClickBuy(bot, 52, getRandomDelayInRange(700, 1300), key);
             } else {
                 bot.menu = analysisAH;
@@ -1164,6 +1163,7 @@ async function safeClickBuy(bot, slot, time, key) {
         console.log('твари ах обновили и теперь так')
         return
     }
+    if (slot == 52) bot.timeReset = Date.now();
     await delay(time);
 
     if (bot.currentWindow) {
