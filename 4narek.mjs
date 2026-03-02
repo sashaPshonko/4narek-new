@@ -115,7 +115,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
     console.warn = () => { };
 
-    bot.once('spawn', async () => {
+    bot.once('login', async () => {
         const msg = `${bot.username} запущен!`
         parentPort.postMessage(msg);
         bot.loadPlugin(autoEat)
