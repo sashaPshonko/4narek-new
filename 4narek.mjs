@@ -640,6 +640,8 @@ async function sellItems(bot, itemPrices) {
                         await delay(getRandomDelayInRange(400, 600));
                     }
                     bot.chat(`/ah sell ${price}`);
+                    await delay(getRandomDelayInRange(100,200))
+                    bot.chat(`/ah sell ${price}`);
                     itemsSold++;
                     await delay(getRandomDelayInRange(600, 800));
                 } else {
@@ -673,6 +675,8 @@ async function sellItems(bot, itemPrices) {
                             await bot.moveSlotItem(inventorySlot, firstSellSlot + sellSlot);
                             await delay(getRandomDelayInRange(500, 700));
 
+                            bot.chat(`/ah sell ${price}`);
+                            await delay(getRandomDelayInRange(100,200))
                             bot.chat(`/ah sell ${price}`);
                             itemsSold++;
                             await delay(getRandomDelayInRange(600, 800));
