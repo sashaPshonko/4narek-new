@@ -149,13 +149,13 @@ async function launchBookBuyer(name, password, anarchy) {
         }, 10000)
 
     logger.info(`${name} успешно проник на сервер.`);
-    await delay(3000);
+    await delay(5000);
     bot.chat(loginCommand);
 
-    await delay(minDelay);
+    await delay(5000);
     bot.chat(anarchyCommand);
 
-    await delay(minDelay);
+    await delay(5000);
     bot.chat(shopCommand);
 });
         bot.on('end', (reason) => {
