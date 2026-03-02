@@ -192,7 +192,7 @@ bot.on('windowOpen', async () => {
     let key = ""
     switch (bot.menu) {
         case chooseBuying:
-            const msg = { name: 'success', username: bot.username };
+            const msg = { name: 'success', username: workerData.username };
             parentPort.postMessage(msg);
             await delay(3000);
             logger.info(`${name} - ${bot.menu}`);
@@ -872,7 +872,7 @@ async function getBestAHSlot(bot, itemPrices) {
 
         for (const configItem of sortedConfig) {
             if (!itemMatchesConfig(slotData, configItem)) continue;
-
+            if (configItem.id != workerData.itemID) break
             try {
                 const price = await getBuyPrice(slotData);
                 if (!price || price >= configItem.priceSell - configItem.nacenka) continue;

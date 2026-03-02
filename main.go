@@ -925,40 +925,18 @@ func adjustPrice(item string) {
 	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ ---
 	ratio := ratioBefore
 
-	// 1. Повышение цены (Для всех) — смотрим ТОЛЬКО аукцион
-	if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 && onAH < cfg.NormalSales {
+	if sales < cfg.NormalSales && totalStock < cfg.NormalSales {
 		newPrice += cfg.PriceStep
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice
 		}
 
-	// 2. Снижение при плохих продажах (Для всех) — смотрим ТОЛЬКО аукцион
-	} else if (onAH > sales && onAH > cfg.NormalSales) && sales < cfg.NormalSales {
+	} else if sales < cfg.NormalSales && totalStock > sales*2 {
 		newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
 
-	// 3. Снижение при избытке покупок (Для всех) — смотрим ТОЛЬКО аукцион
-	} else if float64(buys) > float64(sales)*2 && totalStock > cfg.NormalSales {
-		newPrice -= cfg.PriceStep
-		if newPrice < cfg.MinPrice {
-			newPrice = cfg.MinPrice
-		}
-
-	// 4. 🔥 Снижение при перенасыщении 3 к 1 (ТОЛЬКО ДЛЯ ЛИДЕРА)
-	// Здесь проверяем сумму AH + INV, как ты и просил в самом начале
-	} else if item == leaderID {
-		salesLeader := cfg.NormalSales
-		if sales > cfg.NormalSales {
-			salesLeader = sales
-		}
-		if float64(totalStock) > float64(salesLeader)*3 {
-			newPrice -= cfg.PriceStep
-			if newPrice < cfg.MinPrice {
-				newPrice = cfg.MinPrice
-			}
-		}
 	}
 
 	// --- ✅ ЗАВЕРШЕНИЕ ---
