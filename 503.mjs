@@ -107,7 +107,7 @@ function runWorker(bot) {
       }
     } else {
       try {
-        await tgBot.sendMessage(alertChatID, message);
+        // await tgBot.sendMessage(alertChatID, message);
       } catch (tgError) {
         console.error(`❌ Ошибка отправки в Telegram: ${tgError.message}`);
       }
