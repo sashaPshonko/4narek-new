@@ -21,9 +21,9 @@ const alertChatID = -4763690917
 const pomoikaChatID = -4896488855
 
 const bots = [
-  { username: 'krabyi_rot666', password: 'ggggg', anarchy: 5003, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots', ip: '192.168.8.1', itemID: "ботинки" },
-  { username: 'bolvaneblan22', password: 'ggggg', anarchy: 5003, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots', ip: '192.168.8.1', itemID: "ботинки_починка" },
-  { username: 'krivoigorb', password: 'ggggg', anarchy: 5003, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots', ip: '192.168.8.1', itemID: "ботинки_позорные" },
+  { username: 'krabyi_rot666', password: 'ggggg', anarchy: 5003, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots', ip: '192.168.8.114', itemID: "ботинки" },
+  { username: 'bolvaneblan22', password: 'ggggg', anarchy: 5003, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots', ip: '192.168.8.114', itemID: "ботинки_починка" },
+  { username: 'krivoigorb', password: 'ggggg', anarchy: 5003, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots', ip: '192.168.8.114', itemID: "ботинки_позорные" },
 ];
 
 

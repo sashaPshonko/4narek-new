@@ -21,9 +21,9 @@ const alertChatID = -4763690917
 const pomoikaChatID = -4896488855
 
 const bots = [
-  { username: 'dolbatyirotgorba', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.1', itemID: "шлем" },
-  { username: 'lesnoiopesdolgpt', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.1', itemID: "шлем_починка" },
-  { username: 'tormoznabite', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.1', itemID: "шлем_позорный" },
+  { username: 'dolbatyirotgorba', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.114', itemID: "шлем" },
+  { username: 'lesnoiopesdolgpt', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.114', itemID: "шлем_починка" },
+  { username: 'tormoznabite', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.114', itemID: "шлем_позорный" },
 ];
 
 
