@@ -21,9 +21,9 @@ const alertChatID = -4763690917
 const pomoikaChatID = -4896488855
 
 const bots = [
-  { username: 'gg137senyafuu', password: 'ggggg', anarchy: 5002, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword' },
-  { username: 'oioioier666', password: 'ggggg', anarchy: 5002, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword' },
-  { username: 'tobolsksugar', password: 'ggggg', anarchy: 5002, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword' },
+  { username: 'gg137senyafuu', password: 'ggggg', anarchy: 5002, type: '4narek', inventoryPort: 3002, balance: undefined, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.0.57' },
+  { username: 'oioioier666', password: 'ggggg', anarchy: 5002, type: '4narek', inventoryPort: 3000, balance: undefined, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.0.57' },
+  { username: 'tobolsksugar', password: 'ggggg', anarchy: 5002, type: '4narek', inventoryPort: 3002, balance: undefined, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.0.57' },
 ];
 
 let workers = [];

@@ -1,0 +1,57 @@
+version: '3.8'
+
+networks:
+  modem1_net:
+    driver: macvlan
+    driver_opts:
+      parent: eth0  # первый модем в WSL2
+    ipam:
+      config:
+        - subnet: 192.168.8.0/24
+          gateway: 192.168.8.1
+
+  modem2_net:
+    driver: macvlan
+    driver_opts:
+      parent: eth1  # второй модем в WSL2
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24
+          gateway: 192.168.100.1
+
+services:
+  bot-502:
+    build: .
+    container_name: bot-502
+    command: node 502.mjs
+    networks:
+      modem1_net:
+        ipv4_address: 192.168.8.150  # свой IP в сети первого модема
+    restart: unless-stopped
+
+  bot-503:
+    build: .
+    container_name: bot-503
+    command: node 503.mjs
+    networks:
+      modem1_net:
+        ipv4_address: 192.168.8.151
+    restart: unless-stopped
+
+  bot-504:
+    build: .
+    container_name: bot-504
+    command: node 504.mjs
+    networks:
+      modem2_net:
+        ipv4_address: 192.168.100.150  # свой IP в сети второго модема
+    restart: unless-stopped
+
+  bot-505:
+    build: .
+    container_name: bot-505
+    command: node 505.mjs
+    networks:
+      modem2_net:
+        ipv4_address: 192.168.100.151
+    restart: unless-stopped

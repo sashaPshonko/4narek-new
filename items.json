@@ -61,11 +61,11 @@
             },
             {
                 "name": "minecraft:sweeping",
-                "lvl": 4
+                "lvl": 3
             }
         ],
         "num": 4,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_sword",
@@ -90,6 +90,10 @@
             {
                 "name": "vampirism",
                 "lvl": 2
+            },
+            {
+                "name": "minecraft:sweeping",
+                "lvl": 3
             }
         ],
         "num": 5,

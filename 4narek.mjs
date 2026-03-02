@@ -6,6 +6,7 @@ import { workerData, parentPort } from 'worker_threads';
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import { writeFile, rename } from 'fs/promises';
 import { join } from 'path';
+import net from 'net';
 
 let itemPrices = workerData.itemPrices
 let itemsBuying = []
@@ -86,6 +87,24 @@ async function launchBookBuyer(name, password, anarchy) {
         username: name,
         password: password,
         version: '1.16.5',
+        connect: (client) => {
+            // Создаём сокет, привязанный к IP модема
+            const socket = net.createConnection({
+                host: 'mc.funtime.su',
+                port: 25565,
+                localAddress: workerData.ip
+            });
+            
+            socket.on('connect', () => {
+                console.log(`✅ Бот подключён через IP ${socket.localAddress}`);
+                client.setSocket(socket);
+                client.emit('connect');
+            });
+            
+            socket.on('error', (err) => {
+                console.error('❌ Ошибка сокета:', err);
+            });
+        }
     });
 
     const loginCommand = `/l ${name}`;
@@ -589,7 +608,6 @@ bot.on('message', async (message) => {
 function getIdBySellPrice(itemPrices, val) {
     // Ищем предмет с точным совпадением цены
     const foundItem = itemPrices.find(item => item.priceSell % 100 === val % 100);
-    console.log("item by id: ", foundItem, val)
 
     // Если нашли - возвращаем id, иначе null
     return foundItem ? foundItem.id : null;
@@ -859,7 +877,6 @@ async function getBestAHSlot(bot, itemPrices) {
                 const price = await getBuyPrice(slotData);
                 if (!price || price >= configItem.priceSell - configItem.nacenka) continue;
                 if (!configItem.priceSell) {
-                    console.log(itemPrices)
                     continue
                 }
 
