@@ -880,7 +880,7 @@ func adjustPrice(item string) {
 	lastUpdate := now.Add(-cfg.AnalysisTime)
 
 	sales := countRecentSales(item, lastUpdate)
-	buys := countRecentBuys(item, lastUpdate)
+	// buys := countRecentBuys(item, lastUpdate)
 
 	newPrice := data.Prices[item]
 	priceBefore := newPrice
