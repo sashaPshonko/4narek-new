@@ -30,6 +30,7 @@ const bots = [
 ];
 
 
+
 let workers = [];
 let botItems = new Map
 let botInventory = new Map
