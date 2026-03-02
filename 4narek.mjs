@@ -104,7 +104,9 @@ async function launchBookBuyer(name, password, anarchy) {
             socket.on('error', (err) => {
                 console.error('❌ Ошибка сокета:', err);
             });
-        }
+        },
+        chatLengthLimit: 256,  // Добавь это
+        viewDistance: 'tiny'    // И это
     });
 
     const loginCommand = `/l ${name}`;
@@ -157,7 +159,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
     await delay(5000);
     bot.chat(shopCommand);
-});
+    });
         bot.on('end', (reason) => {
             parentPort.postMessage({ name: 'error', message: `Соединение разорвано: ${reason}`, username: workerData.username });
             process.exit(1); 
