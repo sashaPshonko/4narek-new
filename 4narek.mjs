@@ -386,16 +386,12 @@ bot.on('windowOpen', async () => {
                 const id = getIdBySellPrice(itemPrices, priceOnAH);
 
                 // ФИКС 1: Если предмет не найден в базе по этой цене (цена изменилась)
-                if (!id) {
-                    slot = i;
-                    // Мы не знаем ID, но знаем, что цена неактуальна
-                    break;
-                }
+                const priceSell = getPriceByEnchantments(currentSlot)
 
                 const itemData = itemPrices.find(data => data.id === id);
 
                 // ФИКС 2: Проверяем, совпадает ли цена в конфиге с ценой на аукционе
-                if (!itemData || itemData.priceSell !== priceOnAH) {
+                if (priceSell !== priceOnAH) {
                     slot = i;
                     break;
                 }
@@ -494,7 +490,7 @@ bot.on('message', async (message) => {
         balanceStr = balanceStr.replace(/\D/g, '')
         const balance = parseInt(balanceStr);
         const id = getIdBySellPrice(itemPrices, balance)
-        const msg = { name: 'sell', id: id }
+        const msg = { name: 'sell', id: workerData.itemID }
         parentPort.postMessage(msg);
         bot.needSell = true
         return
@@ -901,6 +897,53 @@ async function getBestAHSlot(bot, itemPrices) {
         }
     }
     return null;
+}
+
+async function getPriceByEnchantments(slotData, itemPrices) {
+    if (!slotData) return null;
+    
+    // Получаем все зачарования предмета
+    const enchantments = slotData.nbt?.value?.Enchantments?.value?.value || [];
+    const customEnchantments = slotData.nbt?.value?.['custom-enchantments']?.value?.value || [];
+    
+    const itemEnchants = [
+        ...enchantments.map(e => ({ 
+            name: e.id?.value, 
+            lvl: e.lvl?.value 
+        })),
+        ...customEnchantments.map(e => ({ 
+            name: e.type?.value, 
+            lvl: e.level?.value 
+        }))
+    ];
+    
+    // Сортируем конфиги по num (приоритету)
+    const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
+    
+    // Ищем подходящий конфиг
+    for (const configItem of sortedConfig) {
+        // Проверяем название предмета
+        if (slotData.name !== configItem.name) continue;
+        
+        // Проверяем, что все зачарования из конфига есть в предмете
+        const allEffectsMatch = configItem.effects?.every(required => {
+            const foundEnchant = itemEnchants.find(e => e.name === required.name);
+            return foundEnchant && foundEnchant.lvl >= required.lvl;
+        });
+        
+        if (!allEffectsMatch) continue;
+        
+        // Проверяем, нет ли лишних "запрещённых" зачарований
+        const hasMissingEnchants = itemEnchants.some(en => 
+            missingEnchantsNames?.includes(en.name)
+        );
+        if (hasMissingEnchants) continue;
+        
+        
+        return configItem.priceSell
+    }
+    
+    return 0;
 }
 
 function removeSlotAndTime(obj) {
