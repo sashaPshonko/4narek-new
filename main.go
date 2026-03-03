@@ -71,7 +71,7 @@ type DailyData struct {
 var (
 	itemsConfig = map[string]ItemConfig{
 		"sword7": {
-			BasePrice:    300001,
+			BasePrice:    800001,
 			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -80,7 +80,7 @@ var (
 			Type:         "netherite_sword",
 		},
 		"sword5": {
-			BasePrice:    300002,
+			BasePrice:    600002,
 			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -89,7 +89,7 @@ var (
 			Type:         "netherite_sword",
 		},
 		"megasword": {
-			BasePrice:    1200003,
+			BasePrice:    3000003,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -98,7 +98,7 @@ var (
 			Type:         "netherite_sword",
 		},
 		"ботинки":{
-			BasePrice:    300005,
+			BasePrice:    1000005,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -107,7 +107,7 @@ var (
 			Type:         "netherite_boots",
 		},
 		"ботинки_починка":{
-			BasePrice:    700006,
+			BasePrice:    3000006,
 			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -116,7 +116,7 @@ var (
 			Type:         "netherite_boots",
 		},
 		"ботинки_позорные":{
-			BasePrice:    300007,
+			BasePrice:    600007,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -125,7 +125,7 @@ var (
 			Type:         "netherite_boots",
 		},
 		"шлем":{
-			BasePrice:    300008,
+			BasePrice:    1000008,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -134,7 +134,7 @@ var (
 			Type:         "netherite_helmet",
 		},
 		"шлем_починка":{
-			BasePrice:    700009,
+			BasePrice:    2500009,
 			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -143,7 +143,7 @@ var (
 			Type:         "netherite_helmet",
 		},
 		"шлем_позорный":{
-			BasePrice:    300010,
+			BasePrice:    600010,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -152,7 +152,7 @@ var (
 			Type:         "netherite_leggings",
 		},
 		"штаны":{
-			BasePrice:    300011,
+			BasePrice:    1000011,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -161,7 +161,7 @@ var (
 			Type:         "netherite_leggings",
 		},
 		"штаны_починка":{
-			BasePrice:    700012,
+			BasePrice:    2000012,
 			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -170,7 +170,7 @@ var (
 			Type:         "netherite_leggings",
 		},
 		"штаны_позорные":{
-			BasePrice:    300013,
+			BasePrice:    800013,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -179,7 +179,7 @@ var (
 			Type:         "netherite_leggings",
 		},
 		"нагрудник":{
-			BasePrice:    300014,
+			BasePrice:    1000014,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -188,7 +188,7 @@ var (
 			Type:         "netherite_chestplate",
 		},
 		"нагрудник_починка":{
-			BasePrice:    700015,
+			BasePrice:    2000015,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -197,7 +197,7 @@ var (
 			Type:         "netherite_chestplate",
 		},
 		"нагрудник_позорный":{
-			BasePrice:    300016,
+			BasePrice:    800016,
 			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -925,7 +925,19 @@ func adjustPrice(item string) {
 	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ ---
 	ratio := ratioBefore
 
-	if sales < cfg.NormalSales && totalStock < cfg.NormalSales {
+	if onAH == 0 && totalStock >= cfg.NormalSales && sales < cfg.NormalSales {
+		if priceBefore < cfg.BasePrice {
+			newPrice += cfg.PriceStep
+			if newPrice > cfg.MaxPrice {
+				newPrice = cfg.MaxPrice
+			}
+		} else  {
+			newPrice -= cfg.PriceStep
+			if newPrice < cfg.MinPrice {
+				newPrice = cfg.MinPrice
+			}
+		}
+	} else if sales < cfg.NormalSales && totalStock < cfg.NormalSales {
 		newPrice += cfg.PriceStep
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice
@@ -936,7 +948,6 @@ func adjustPrice(item string) {
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
 		}
-
 	}
 
 	// --- ✅ ЗАВЕРШЕНИЕ ---

@@ -383,15 +383,14 @@ bot.on('windowOpen', async () => {
                 if (!currentSlot) break; // Слотов больше нет
 
                 const priceOnAH = await getBuyPriceInStorage(currentSlot);
-                const id = getIdBySellPrice(itemPrices, priceOnAH);
 
                 // ФИКС 1: Если предмет не найден в базе по этой цене (цена изменилась)
-                const priceSell = getPriceByEnchantments(currentSlot, itemPrices)
+                const priceSell = await getPriceByEnchantments(currentSlot, itemPrices)
 
-                const itemData = itemPrices.find(data => data.id === id);
 
                 // ФИКС 2: Проверяем, совпадает ли цена в конфиге с ценой на аукционе
                 if (priceSell !== priceOnAH) {
+                    logger.error(`chnge ${priceSell} ${priceOnAH}`)
                     slot = i;
                     break;
                 }
@@ -410,10 +409,8 @@ bot.on('windowOpen', async () => {
             for (let i = 0; i < 8; i++) {
                 const currentSlot = bot.currentWindow?.slots[i];
                 if (currentSlot) { 
-                    bot.count++; 
-                    const price = await getBuyPriceInStorage(currentSlot);
-                    const id = getIdBySellPrice(itemPrices, price);
-                    if (id) bot.ah.push(id);
+                    // const id = getIdBySellPrice(itemPrices, price);
+                    bot.ah.push(workerData.itemID);
                 } else {
                     break;
                 }
@@ -457,7 +454,13 @@ bot.on('message', async (message) => {
         const msg = { name: 'buy', id: bot.type }
         parentPort.postMessage(msg);
         return
+    }//[✘] Ошибка! По такой цене
+
+    if (messageText.includes('[✘] Ошибка! По такой цене')) {
+        console.log('[✘] Ошибка! По такой цене ', workerData.itemID)
+        return
     }
+
 
     if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
         await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 3000))
@@ -899,7 +902,7 @@ async function getBestAHSlot(bot, itemPrices) {
     return null;
 }
 
-async function getPriceByEnchantments(slotData, itemPrices) {
+function getPriceByEnchantments(slotData, itemPrices) {
     if (!slotData) return null;
     
     // Получаем все зачарования предмета
