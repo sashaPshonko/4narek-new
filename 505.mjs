@@ -66,12 +66,6 @@ function runWorker(bot) {
       }
     }, 30000)
 
-        // Ограничить время жизни воркера (1 час)
-    setTimeout(() => {
-      console.log(`⏲️ Воркер ${bot.username} отработал 1 час. Завершаем.`);
-      worker.terminate();
-    }, 1800000);
-
     worker.on('message', async (message) => {
   try {
     if (message.name === 'success') {

@@ -1,2 +1,74 @@
-ForceBindIP/ForceBindIP64.exe 192.168.8.109 "C:\Users\Sasha\AppData\Roaming\.minecraft\runtime\jre-legacy\windows\jre-legacy\bin\javaw.exe" -cp "C:\Users\Sasha\AppData\Roaming\.minecraft\libraries\*" net.minecraft.client.main.Main -- 0000 --accessToken 0 --userType mojang;74a3a852-f899-40f3-a4a4-c0a652110f74\Roaming\.minecraft" --assetsDir "C:\Users\Sasha\AppData\Roaming\.minecraft\assets" 
---assetIndex 1.16 --uuid 0000 --accessToken 0 --userType mojang
+#!/bin/bash
+
+# ==============================================
+# НАСТРОЙКА ДВУХ МОДЕМОВ ДЛЯ БОТОВ НА UBUNTU
+# ==============================================
+
+echo "🚀 Начинаю настройку двух модемов..."
+
+# ==============================================
+# ТВОИ IP АДРЕСА (ПРОВЕРЬ ИХ!)
+# ==============================================
+MODEM1_IP="192.168.8.109"
+MODEM1_GW="192.168.8.1"
+
+MODEM2_IP="192.168.100.254"
+MODEM2_GW="192.168.100.1"
+
+# ==============================================
+# НАХОДИМ ИНТЕРФЕЙСЫ ПО IP
+# ==============================================
+echo "🔍 Ищу интерфейсы..."
+
+MODEM1_IFACE=$(ip -4 addr show | grep "$MODEM1_IP" -B2 | head -1 | awk '{print $2}' | tr -d ':')
+MODEM2_IFACE=$(ip -4 addr show | grep "$MODEM2_IP" -B2 | head -1 | awk '{print $2}' | tr -d ':')
+
+if [ -n "$MODEM1_IFACE" ]; then
+    echo "✅ Модем 1 ($MODEM1_IP) на интерфейсе: $MODEM1_IFACE"
+else
+    echo "❌ Модем 1 ($MODEM1_IP) не найден!"
+    exit 1
+fi
+
+if [ -n "$MODEM2_IFACE" ]; then
+    echo "✅ Модем 2 ($MODEM2_IP) на интерфейсе: $MODEM2_IFACE"
+else
+    echo "❌ Модем 2 ($MODEM2_IP) не найден!"
+    exit 1
+fi
+
+# ==============================================
+# НАСТРАИВАЕМ МАРШРУТЫ
+# ==============================================
+echo "🔧 Настраиваю маршруты..."
+
+# Удаляем старые маршруты
+sudo ip route del default 2>/dev/null
+
+# Добавляем маршруты для двух модемов
+sudo ip route add default via $MODEM1_GW dev $MODEM1_IFACE metric 100
+sudo ip route add default via $MODEM2_GW dev $MODEM2_IFACE metric 200
+
+echo "✅ Маршруты добавлены:"
+ip route show
+
+# ==============================================
+# ПРОВЕРКА
+# ==============================================
+echo "📡 Проверяю соединения..."
+
+ping -I $MODEM1_IFACE -c 2 8.8.8.8 >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "✅ Модем 1 работает"
+else
+    echo "❌ Модем 1 НЕ работает"
+fi
+
+ping -I $MODEM2_IFACE -c 2 8.8.8.8 >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "✅ Модем 2 работает"
+else
+    echo "❌ Модем 2 НЕ работает"
+fi
+
+echo -e "\n✅ ГОТОВО! Теперь можно запускать ботов"
