@@ -386,7 +386,7 @@ bot.on('windowOpen', async () => {
                 const id = getIdBySellPrice(itemPrices, priceOnAH);
 
                 // ФИКС 1: Если предмет не найден в базе по этой цене (цена изменилась)
-                const priceSell = getPriceByEnchantments(currentSlot)
+                const priceSell = getPriceByEnchantments(currentSlot, itemPrices)
 
                 const itemData = itemPrices.find(data => data.id === id);
 
