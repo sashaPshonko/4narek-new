@@ -99,7 +99,7 @@ var (
 		},
 		"ботинки":{
 			BasePrice:    1000005,
-			NormalSales:  4,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200005,
@@ -108,7 +108,7 @@ var (
 		},
 		"ботинки_починка":{
 			BasePrice:    3000006,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200006,
@@ -126,7 +126,7 @@ var (
 		},
 		"шлем":{
 			BasePrice:    1000008,
-			NormalSales:  4,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200008,
@@ -135,7 +135,7 @@ var (
 		},
 		"шлем_починка":{
 			BasePrice:    2500009,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200009,
@@ -153,7 +153,7 @@ var (
 		},
 		"штаны":{
 			BasePrice:    1000011,
-			NormalSales:  4,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200011,
@@ -162,7 +162,7 @@ var (
 		},
 		"штаны_починка":{
 			BasePrice:    2000012,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200012,
@@ -180,7 +180,7 @@ var (
 		},
 		"нагрудник":{
 			BasePrice:    1000014,
-			NormalSales:  4,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200014,
@@ -198,7 +198,7 @@ var (
 		},
 		"нагрудник_позорный":{
 			BasePrice:    800016,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     200016,
