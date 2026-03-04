@@ -937,18 +937,38 @@ func adjustPrice(item string) {
 				newPrice = cfg.MinPrice
 			}
 		}
-	} else if sales < cfg.NormalSales && totalStock < cfg.NormalSales {
+	} else if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 && onAH < cfg.NormalSales {
 		newPrice += cfg.PriceStep
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice
 		}
 
-	} else if sales < cfg.NormalSales && totalStock > sales*2 &&
-		!(buys < cfg.NormalSales && totalStock < 18) &&
-		onAH >= 7 {
+	// 2. Снижение при плохих продажах (Для всех) — смотрим ТОЛЬКО аукцион
+	} else if (onAH > sales && onAH > cfg.NormalSales) && sales < cfg.NormalSales {
 		newPrice -= cfg.PriceStep
 		if newPrice < cfg.MinPrice {
 			newPrice = cfg.MinPrice
+		}
+
+	// 3. Снижение при избытке покупок (Для всех) — смотрим ТОЛЬКО аукцион
+	} else if float64(buys) > float64(sales)*2 && totalStock > cfg.NormalSales {
+		newPrice -= cfg.PriceStep
+		if newPrice < cfg.MinPrice {
+			newPrice = cfg.MinPrice
+		}
+
+	// 4. 🔥 Снижение при перенасыщении 3 к 1 (ТОЛЬКО ДЛЯ ЛИДЕРА)
+	// Здесь проверяем сумму AH + INV, как ты и просил в самом начале
+	} else if item == leaderID {
+		salesLeader := cfg.NormalSales
+		if sales > cfg.NormalSales {
+			salesLeader = sales
+		}
+		if float64(totalStock) > float64(salesLeader)*3.5 {
+			newPrice -= cfg.PriceStep
+			if newPrice < cfg.MinPrice {
+				newPrice = cfg.MinPrice
+			}
 		}
 	}
 

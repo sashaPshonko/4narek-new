@@ -497,7 +497,7 @@ bot.on('message', async (message) => {
         balanceStr = balanceStr.replace(/\D/g, '')
         const balance = parseInt(balanceStr);
         const id = getIdBySellPrice(itemPrices, balance)
-        const msg = { name: 'sell', id: workerData.itemID }
+        const msg = { name: 'sell', id: id }
         parentPort.postMessage(msg);
         bot.needSell = true
         return
@@ -877,7 +877,7 @@ async function getBestAHSlot(bot, itemPrices) {
 
         for (const configItem of sortedConfig) {
             if (!itemMatchesConfig(slotData, configItem)) continue;
-            if (configItem.id != workerData.itemID) break
+            // if (configItem.id != workerData.itemID) break
             try {
                 const price = await getBuyPrice(slotData);
                 if (!price || price >= configItem.priceSell - configItem.nacenka) continue;
