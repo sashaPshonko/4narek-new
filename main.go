@@ -89,7 +89,7 @@ var (
 			Type:         "netherite_sword",
 		},
 		"megasword": {
-			BasePrice:    3000003,
+			BasePrice:    4000003,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
