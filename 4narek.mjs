@@ -413,6 +413,7 @@ bot.on('windowOpen', async () => {
             for (let i = 0; i < 8; i++) {
                 const currentSlot = bot.currentWindow?.slots[i];
                 if (currentSlot) { 
+                    bot.count++;
                     // const id = getIdBySellPrice(itemPrices, price);
                     bot.ah.push(workerData.itemID);
                 } else {
@@ -864,14 +865,14 @@ async function getBestAHSlot(bot, itemPrices) {
 
     for (let slot = firstAHSlot; slot <= 17; slot++) {
         const slotData = bot.currentWindow.slots[slot];
-     if (itemsBuying.some(it => {
-            const parsed = JSON.parse(it);
-            return JSON.stringify(normalizeItemData(parsed)) === JSON.stringify(normalizeItemData(slotData)) &&
-                   extractTimeToSeconds(parsed) - extractTimeToSeconds(slotData) >= 0 &&
-                   extractTimeToSeconds(parsed) - extractTimeToSeconds(slotData) <= 2;
-        })) {
-            continue;
-        }
+    //  if (itemsBuying.some(it => {
+    //         const parsed = JSON.parse(it);
+    //         return JSON.stringify(normalizeItemData(parsed)) === JSON.stringify(normalizeItemData(slotData)) &&
+    //                extractTimeToSeconds(parsed) - extractTimeToSeconds(slotData) >= 0 &&
+    //                extractTimeToSeconds(parsed) - extractTimeToSeconds(slotData) <= 2;
+    //     })) {
+    //         continue;
+    //     }
         
         if (!slotData) continue;
 

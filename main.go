@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"sync"
@@ -147,7 +148,7 @@ var (
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     20010,
+			MinPrice:     200010,
 			MaxPrice:     9900010,
 			Type:         "netherite_leggings",
 		},
@@ -994,6 +995,7 @@ func adjustPrice(item string) {
 	}
 }
 func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales, expectedSales, buyCount, trySellCount,
+	time.Sleep(time.Duration(rand.Intn(600)+100) * time.Millisecond)
 	oldPrice, oldRatio, newPrice, newRatio float64) {
 	status := "✅"
 	if actualSales < expectedSales {

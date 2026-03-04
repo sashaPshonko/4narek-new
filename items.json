@@ -17,7 +17,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_sword",
@@ -37,7 +37,7 @@
             }
         ],
         "num": 3,
-        "nacenka": 200000
+        "nacenka": 300000
     },
         {
         "name": "netherite_sword",
@@ -116,8 +116,8 @@
                 "lvl": 2
             }
         ],
-        "num": 1,
-        "nacenka": 200000
+        "num": 2,
+        "nacenka": 300000
     },
     {
         "name": "netherite_boots",
@@ -165,7 +165,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_helmet",
@@ -188,8 +188,8 @@
                 "lvl": 1
             }
         ],
-        "num": 1,
-        "nacenka": 200000
+        "num": 2,
+        "nacenka": 300000
     },
     {
         "name": "netherite_helmet",
@@ -237,7 +237,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_leggings",
@@ -252,8 +252,8 @@
                 "lvl": 5
             }
         ],
-        "num": 1,
-        "nacenka": 200000
+        "num": 2,
+        "nacenka": 300000
     },
     {
         "name": "netherite_leggings",
@@ -297,7 +297,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_chestplate",
@@ -312,8 +312,8 @@
                 "lvl": 5
             }
         ],
-        "num": 1,
-        "nacenka": 200000
+        "num": 2,
+        "nacenka": 300000
     },
     {
         "name": "netherite_chestplate",
@@ -357,6 +357,6 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     }
 ]
