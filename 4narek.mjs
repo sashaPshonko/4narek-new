@@ -367,6 +367,7 @@ bot.on('windowOpen', async () => {
 
         case myItems:
             generateRandomKey(bot)
+            bot.ahFull = false
             key = bot.key
             if (bot.currentWindow.slots[27]) {
                 logger.error('суки обновили аукцион')
@@ -424,7 +425,7 @@ bot.on('windowOpen', async () => {
 
             // ФИКС 3: Правильное определение заполненности аукциона
             // Допустим, лимит — 8 слотов
-            bot.ahFull = (bot.count >= 8);
+            
 
             const msgAH = { name: 'items', username: bot.username, items: bot.ah };
             parentPort.postMessage(msgAH);
@@ -621,9 +622,7 @@ function getIdBySellPrice(itemPrices, val) {
 }
 
 async function sellItems(bot, itemPrices) {
-    bot.needSell = false
-    const sellLimit = 7 - bot.count; // Максимальное количество предметов для продажи
-    let itemsSold = 0; // Счетчик проданных предметов
+    bot.needSell = false;
 
     if (bot.mu) {
         await delay(500);
@@ -634,92 +633,92 @@ async function sellItems(bot, itemPrices) {
     bot.mu = true;
 
     try {
-        // Ожидание после логина
         while (Date.now() - bot.timeLogin < 13000) {
             await delay(1000);
         }
         bot.timeActive = Date.now();
 
-        // Закрытие всех окон перед началом
         if (bot.currentWindow) {
             bot.closeWindow(bot.currentWindow);
             await delay(getRandomDelayInRange(300, 500));
         }
 
-        // Продажа предметов только если AH не заполнен и не достигнут лимит
-        if (!bot.ahFull && itemsSold < sellLimit) {
-            // 1. Сначала проверяем быструю панель (горячие слоты)
+        // Пока аукцион не заполнен
+        while (!bot.ahFull) {
+            let soldAnything = false;
+
+            // 1. Проверяем горячие слоты (0–8)
             for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
-                if (bot.ahFull || itemsSold >= sellLimit) break;
+                if (bot.ahFull) break;
 
                 const slotIndex = firstSellSlot + quickSlot;
                 const item = bot.inventory.slots[slotIndex];
-
                 if (!item) continue;
 
                 const price = getBestSellPrice(bot, item, itemPrices);
                 if (price > 0) {
-                    // Подготовка и продажа
                     if (bot.quickBarSlot !== quickSlot) {
                         await bot.setQuickBarSlot(quickSlot);
                         await delay(getRandomDelayInRange(400, 600));
                     }
                     bot.chat(`/ah sell ${price}`);
-                    await delay(getRandomDelayInRange(100,200))
+                    await delay(getRandomDelayInRange(100, 200));
                     bot.chat(`/ah sell ${price}`);
-                    itemsSold++;
+
+                    soldAnything = true;
                     await delay(getRandomDelayInRange(600, 800));
                 } else {
-                    // Выбрасывание невалидного предмета
                     await bot.tossStack(item);
                     await delay(getRandomDelayInRange(300, 500));
                 }
             }
 
-            // 2. Затем проверяем основной инвентарь
-            if (!bot.ahFull && itemsSold < sellLimit) {
-                let sellSlot = null;
+            // 2. Основной инвентарь, если ещё есть место
+            if (!bot.ahFull) {
+                // Находим свободный слот в горячей панели
+                let freeSlot = null;
                 for (let i = 0; i < 9; i++) {
                     if (!bot.inventory.slots[i + firstSellSlot]) {
-                        sellSlot = i;
+                        freeSlot = i;
                         break;
                     }
                 }
-                if (sellSlot !== null) {
-                    for (let inventorySlot = 0; inventorySlot < 27; inventorySlot++) {
-                        if (bot.ahFull || itemsSold >= sellLimit) break;
 
-                        const item = bot.inventory.slots[inventorySlot];
+                if (freeSlot !== null) {
+                    for (let invSlot = 0; invSlot < 27; invSlot++) {
+                        if (bot.ahFull) break;
+
+                        const item = bot.inventory.slots[invSlot];
                         if (!item) continue;
 
                         const price = getBestSellPrice(bot, item, itemPrices);
                         if (price > 0) {
-                            // Переносим в первый слот быстрой панели и продаем
-                            await bot.setQuickBarSlot(sellSlot);
+                            await bot.setQuickBarSlot(freeSlot);
                             await delay(300);
-                            await bot.moveSlotItem(inventorySlot, firstSellSlot + sellSlot);
+                            await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
                             await delay(getRandomDelayInRange(500, 700));
 
                             bot.chat(`/ah sell ${price}`);
-                            await delay(getRandomDelayInRange(100,200))
+                            await delay(getRandomDelayInRange(100, 200));
                             bot.chat(`/ah sell ${price}`);
-                            itemsSold++;
+
+                            soldAnything = true;
                             await delay(getRandomDelayInRange(600, 800));
-                            break; // После успешной продажи прерываем цикл
                         } else {
-                            // Выбрасывание невалидного предмета
                             await bot.tossStack(item);
                             await delay(getRandomDelayInRange(300, 500));
                         }
                     }
                 }
             }
+
+            // Условие выхода: ничего не продали за этот проход
+            if (!soldAnything) break;
         }
     } catch (error) {
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
     } finally {
-        // Пост-обработка
-        logger.info(`${bot.username} - завершение продажи (продано ${itemsSold}/${sellLimit} предметов)`);
+        logger.info(`${bot.username} - продажа завершена`);
         await delay(500);
 
         bot.chat('/balance');
