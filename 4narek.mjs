@@ -81,7 +81,11 @@ const logger = createLogger({
 
 
 async function launchBookBuyer(name, password, anarchy) {
-    const bot = mineflayer.createBot({
+    let bot = {
+        mu: false,
+    }
+    await delay(getRandomDelayInRange(0, 10000))
+    bot = mineflayer.createBot({
         host: 'mc.funtime.su',
         port: 25565,
         username: name,
@@ -161,17 +165,17 @@ async function launchBookBuyer(name, password, anarchy) {
     bot.chat(shopCommand);
     });
         bot.on('end', (reason) => {
-            parentPort.postMessage({ name: 'error', message: `Соединение разорвано: ${reason}`, username: workerData.username });
+            console.log(reason)
             process.exit(1); 
         });
 
         bot.on('kicked', (reason) => {
-            parentPort.postMessage({ name: 'error', message: `Кикнут: ${reason}`, username: workerData.username });
+            console.log(reason)
             process.exit(1);
         });
 
         bot.on('error', (err) => {
-            parentPort.postMessage({ name: 'error', message: `Ошибка: ${err.message}`, username: workerData.username });
+            console.log(err)
             process.exit(1);
         });
 bot.on('physicsTick', async () => {

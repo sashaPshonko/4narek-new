@@ -71,7 +71,7 @@ type DailyData struct {
 var (
 	itemsConfig = map[string]ItemConfig{
 		"sword7": {
-			BasePrice:    800001,
+			BasePrice:    1000001,
 			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -80,7 +80,7 @@ var (
 			Type:         "netherite_sword",
 		},
 		"sword5": {
-			BasePrice:    600002,
+			BasePrice:    800002,
 			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -116,7 +116,7 @@ var (
 			Type:         "netherite_boots",
 		},
 		"ботинки_позорные":{
-			BasePrice:    600007,
+			BasePrice:    800007,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
@@ -143,7 +143,7 @@ var (
 			Type:         "netherite_helmet",
 		},
 		"шлем_позорный":{
-			BasePrice:    600010,
+			BasePrice:    800010,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,

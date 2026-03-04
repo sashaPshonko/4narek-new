@@ -35,10 +35,12 @@ let isSocketOpen = false;
 
 function runWorker(bot) {
   // Если уже есть активный воркер для этого бота — не запускаем повторно
-  if (workers.some(w => w.workerData?.username === bot.username)) {
-    console.warn(`⏩ Воркер для ${bot.username} уже запущен. Пропуск.`);
-    return;
-  }
+  workers
+    .filter(w => w.workerData?.username === bot.username)
+    .forEach(w => {
+      try { w.terminate(); } catch (e) {}
+    });
+  workers = workers.filter(w => w.workerData?.username !== bot.username);
 
   return new Promise((resolve, reject) => {
     const workerScriptPath = join(__dirname, `${bot.type}.mjs`);
@@ -62,7 +64,7 @@ function runWorker(bot) {
     }, 30000)
 
 
-   worker.on('message', async (message) => {
+    worker.on('message', async (message) => {
   try {
     if (message.name === 'success') {
       const botToUpdate = bots.find(b => b.username === message.username);

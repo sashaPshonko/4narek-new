@@ -23,10 +23,8 @@ const pomoikaChatID = -4896488855
 const bots = [
   { username: 'bugulmark2', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны" },
   { username: 'otstalyibolvan', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны_починка" },
-  // { username: 'zbnennabite', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны_позорные" },
-  { username: 'sashapshonkoumer', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник_починка" },
-  { username: 'ahahaetopravda', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник" },
-  // { username: 'ochenlubludashu', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник_позорный" },
+  { username: 'zbnennabite', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны_позорные" },
+
 ];
 
 
@@ -40,10 +38,12 @@ let isSocketOpen = false;
 
 function runWorker(bot) {
   // Если уже есть активный воркер для этого бота — не запускаем повторно
-  if (workers.some(w => w.workerData?.username === bot.username)) {
-    console.warn(`⏩ Воркер для ${bot.username} уже запущен. Пропуск.`);
-    return;
-  }
+  workers
+    .filter(w => w.workerData?.username === bot.username)
+    .forEach(w => {
+      try { w.terminate(); } catch (e) {}
+    });
+  workers = workers.filter(w => w.workerData?.username !== bot.username);
 
   return new Promise((resolve, reject) => {
     const workerScriptPath = join(__dirname, `${bot.type}.mjs`);
@@ -65,6 +65,7 @@ function runWorker(bot) {
         worker.terminate();
       }
     }, 30000)
+
 
     worker.on('message', async (message) => {
   try {
@@ -148,7 +149,6 @@ function runWorker(bot) {
     });
   });
 }
-
 function stopWorkers() {
   bots.forEach(bot => {
     bot.isManualStop = true;
