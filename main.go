@@ -67,6 +67,8 @@ type DailyData struct {
 	SellStats    map[string]int     `json:"sell_stats"`
 	TrySellStats map[string]int     `json:"try_sell_stats"`
 	MessageID    int                `json:"message_id"`
+	BuySum       map[string]int   // новая
+    SellSum      map[string]int   // новая
 }
 
 var (
@@ -231,6 +233,8 @@ type Data struct {
 	TrySellStats map[string]int
 	LastTrade    map[string]time.Time
 	TradeHistory map[string][]TradeLog
+	BuySum       map[string]int   // новая
+    SellSum      map[string]int   // новая
 }
 
 var (
@@ -277,6 +281,8 @@ func main() {
 	data.LastTrade = make(map[string]time.Time)
 	data.TradeHistory = make(map[string][]TradeLog)
 	data.Ratios = make(map[string]float64)
+	data.BuySum = make(map[string]int)
+	data.SellSum = make(map[string]int)
 
 	// Загрузка данных за сегодня
 	loadDailyData(loc)
@@ -373,10 +379,24 @@ func loadDailyData(loc *time.Location) {
 		SellStats:    make(map[string]int),
 		TrySellStats: make(map[string]int),
 		Ratios:       make(map[string]float64),
+		BuySum:       make(map[string]int),   // добавить
+    	SellSum:      make(map[string]int),   // добавить
 	}
 
 	if file, err := os.ReadFile(filename); err == nil {
-		if err := json.Unmarshal(file, &dailyData); err == nil && dailyData.Date == today {
+			if err := json.Unmarshal(file, &dailyData); err == nil && dailyData.Date == today {
+				if dailyData.BuySum == nil {
+				dailyData.BuySum = make(map[string]int)
+			}
+			if dailyData.SellSum == nil {
+				dailyData.SellSum = make(map[string]int)
+			}
+			for item, sum := range dailyData.BuySum {
+				data.BuySum[item] = sum
+			}
+			for item, sum := range dailyData.SellSum {
+				data.SellSum[item] = sum
+			}
 			for item, price := range dailyData.Prices {
 				data.Prices[item] = price
 			}
@@ -492,6 +512,8 @@ func saveDailyDataNoMessageUpdate() {
 	dailyData.SellStats = data.SellStats
 	dailyData.TrySellStats = data.TrySellStats
 	dailyData.Ratios = data.Ratios
+	dailyData.BuySum = data.BuySum
+	dailyData.SellSum = data.SellSum
 
 	file, err := json.MarshalIndent(dailyData, "", "  ")
 	if err != nil {
@@ -612,6 +634,8 @@ func saveDailyData() {
 	dailyData.SellStats = data.SellStats
 	dailyData.TrySellStats = data.TrySellStats
 	dailyData.Ratios = data.Ratios
+	dailyData.BuySum = data.BuySum
+	dailyData.SellSum = data.SellSum
 
 	file, err := json.MarshalIndent(dailyData, "", "  ")
 	if err != nil {
@@ -683,6 +707,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			Type      string         `json:"type"`
 			Items     map[string]int `json:"items"`
 			Inventory map[string]int `json:"inventory"`
+			Price int    `json:"price"`
 		}
 		if msg.Action != "add" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
@@ -698,6 +723,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			data.BuyStats[msg.Type]++
 			data.LastTrade[msg.Type] = time.Now()
 			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy"})
+			data.BuySum[msg.Type] += msg.Price 
 			mutex.Unlock()
 
 			mutex.Lock()
@@ -708,6 +734,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			data.SellStats[msg.Type]++
 			data.LastTrade[msg.Type] = time.Now()
 			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "sell"})
+			data.SellSum[msg.Type] += msg.Price 
 			mutex.Unlock()
 
 			mutex.Lock()

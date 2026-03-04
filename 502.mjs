@@ -73,18 +73,9 @@ function runWorker(bot) {
         console.log(`✅ ${message.username} успешно запущен`);
       }
     } else if (message.name === "buy") {
-      try {
-        socket?.send(JSON.stringify({ action: 'buy', type: message.id }));
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки buy (сервер недоступен?): ${socketError.message}`);
-        // Можно сохранить в локальную очередь и переотправить позже
-      }
+      socket?.send(JSON.stringify({ action: 'buy', type: message.id, price: message.price }));
     } else if (message.name === "sell") {
-      try {
-        socket?.send(JSON.stringify({ action: 'sell', type: message.id }));
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки sell: ${socketError.message}`);
-      }
+      socket?.send(JSON.stringify({ action: 'sell', type: message.id, price: message.price }));
     } else if (message.name === "items") {
       botItems.set(message.username, message.items);
     } else if (message.name === "try-sell") {

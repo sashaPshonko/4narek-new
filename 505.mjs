@@ -68,59 +68,50 @@ function runWorker(bot) {
 
 
     worker.on('message', async (message) => {
-  try {
-    if (message.name === 'success') {
-      const botToUpdate = bots.find(b => b.username === message.username);
-      if (botToUpdate) {
-        botToUpdate.success = true;
-        console.log(`✅ ${message.username} успешно запущен`);
-      }
-    } else if (message.name === "buy") {
       try {
-        socket?.send(JSON.stringify({ action: 'buy', type: message.id }));
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки buy (сервер недоступен?): ${socketError.message}`);
-        // Можно сохранить в локальную очередь и переотправить позже
+        if (message.name === 'success') {
+          const botToUpdate = bots.find(b => b.username === message.username);
+          if (botToUpdate) {
+            botToUpdate.success = true;
+            console.log(`✅ ${message.username} успешно запущен`);
+          }
+        } else if (message.name === "buy") {
+          socket?.send(JSON.stringify({ action: 'buy', type: message.id, price: message.price }));
+        } else if (message.name === "sell") {
+          socket?.send(JSON.stringify({ action: 'sell', type: message.id, price: message.price }));
+        } else if (message.name === "items") {
+          botItems.set(message.username, message.items);
+        } else if (message.name === "try-sell") {
+          try {
+            socket?.send(JSON.stringify({ action: "try-sell", type: message.id }));
+          } catch (socketError) {
+            console.error(`❌ Ошибка отправки try-sell: ${socketError.message}`);
+          }
+        } else if (message.name === "inventory") {
+          botInventory.set(message.username, message.data);
+        } else if (message.name === "buying") {
+          try {
+            socket?.send(JSON.stringify({ action: "add", json_data: message.data }));
+          } catch (socketError) {
+            console.error(`❌ Ошибка отправки buying: ${socketError.message}`);
+          }
+        } else {
+          try {
+            // await tgBot.sendMessage(alertChatID, message);
+          } catch (tgError) {
+            console.error(`❌ Ошибка отправки в Telegram: ${tgError.message}`);
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Критическая ошибка в обработчике сообщений: ${error.message}`);
+        // Можно добавить отправку в Telegram об ошибке
+        try {
+          await tgBot.sendMessage(alertChatID, `❌ Ошибка в main: ${error.message}`);
+        } catch (e) {
+          // Игнорируем, если Telegram тоже недоступен
+        }
       }
-    } else if (message.name === "sell") {
-      try {
-        socket?.send(JSON.stringify({ action: 'sell', type: message.id }));
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки sell: ${socketError.message}`);
-      }
-    } else if (message.name === "items") {
-      botItems.set(message.username, message.items);
-    } else if (message.name === "try-sell") {
-      try {
-        socket?.send(JSON.stringify({ action: "try-sell", type: message.id }));
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки try-sell: ${socketError.message}`);
-      }
-    } else if (message.name === "inventory") {
-      botInventory.set(message.username, message.data);
-    } else if (message.name === "buying") {
-      try {
-        socket?.send(JSON.stringify({ action: "add", json_data: message.data }));
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки buying: ${socketError.message}`);
-      }
-    } else {
-      try {
-        // await tgBot.sendMessage(alertChatID, message);
-      } catch (tgError) {
-        console.error(`❌ Ошибка отправки в Telegram: ${tgError.message}`);
-      }
-    }
-  } catch (error) {
-    console.error(`❌ Критическая ошибка в обработчике сообщений: ${error.message}`);
-    // Можно добавить отправку в Telegram об ошибке
-    try {
-      await tgBot.sendMessage(alertChatID, `❌ Ошибка в main: ${error.message}`);
-    } catch (e) {
-      // Игнорируем, если Telegram тоже недоступен
-    }
-  }
-});
+    });
 
     const handleRestart = () => {
       // Удалить воркер из списка

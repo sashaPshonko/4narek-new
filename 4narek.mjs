@@ -458,7 +458,13 @@ bot.on('message', async (message) => {
 
     if (messageText.includes('[☃] Вы успешно купили')) {
         bot.needSell = true
-        const msg = { name: 'buy', id: bot.type }
+         let balanceStr = messageText
+        if (messageText.includes('.')) {
+            balanceStr = balanceStr.slice(0, -3)
+        }
+        balanceStr = balanceStr.replace(/\D/g, '')
+        const balance = parseInt(balanceStr);
+        const msg = { name: 'buy', id: bot.type, price: balance }
         parentPort.postMessage(msg);
         return
     }//[✘] Ошибка! По такой цене
@@ -500,7 +506,7 @@ bot.on('message', async (message) => {
         balanceStr = balanceStr.replace(/\D/g, '')
         const balance = parseInt(balanceStr);
         const id = getIdBySellPrice(itemPrices, balance)
-        const msg = { name: 'sell', id: id }
+        const msg = { name: 'sell', id: id, price: balance }
         parentPort.postMessage(msg);
         bot.needSell = true
         return
