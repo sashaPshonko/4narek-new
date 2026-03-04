@@ -414,8 +414,9 @@ bot.on('windowOpen', async () => {
                 const currentSlot = bot.currentWindow?.slots[i];
                 if (currentSlot) { 
                     bot.count++;
+                    const id = getIDByEnchantments(currentSlot, itemPrices)
                     // const id = getIdBySellPrice(itemPrices, price);
-                    bot.ah.push(workerData.itemID);
+                    bot.ah.push(id);
                 } else {
                     break;
                 }
@@ -952,6 +953,53 @@ function getPriceByEnchantments(slotData, itemPrices) {
     }
     
     return 0;
+}
+
+function getIDByEnchantments(slotData, itemPrices) {
+    if (!slotData) return null;
+    
+    // Получаем все зачарования предмета
+    const enchantments = slotData.nbt?.value?.Enchantments?.value?.value || [];
+    const customEnchantments = slotData.nbt?.value?.['custom-enchantments']?.value?.value || [];
+    
+    const itemEnchants = [
+        ...enchantments.map(e => ({ 
+            name: e.id?.value, 
+            lvl: e.lvl?.value 
+        })),
+        ...customEnchantments.map(e => ({ 
+            name: e.type?.value, 
+            lvl: e.level?.value 
+        }))
+    ];
+    
+    // Сортируем конфиги по num (приоритету)
+    const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
+    
+    // Ищем подходящий конфиг
+    for (const configItem of sortedConfig) {
+        // Проверяем название предмета
+        if (slotData.name !== configItem.name) continue;
+        
+        // Проверяем, что все зачарования из конфига есть в предмете
+        const allEffectsMatch = configItem.effects?.every(required => {
+            const foundEnchant = itemEnchants.find(e => e.name === required.name);
+            return foundEnchant && foundEnchant.lvl >= required.lvl;
+        });
+        
+        if (!allEffectsMatch) continue;
+        
+        // Проверяем, нет ли лишних "запрещённых" зачарований
+        const hasMissingEnchants = itemEnchants.some(en => 
+            missingEnchantsNames?.includes(en.name)
+        );
+        if (hasMissingEnchants) continue;
+        
+        
+        return configItem.id
+    }
+    
+    return "";
 }
 
 function removeSlotAndTime(obj) {
