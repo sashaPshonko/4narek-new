@@ -995,69 +995,72 @@ func adjustPrice(item string) {
 	}
 }
 func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales, expectedSales, buyCount, trySellCount,
-	time.Sleep(time.Duration(rand.Intn(600)+100) * time.Millisecond)
-	oldPrice, oldRatio, newPrice, newRatio float64) {
-	status := "✅"
-	if actualSales < expectedSales {
-		status = "⚠️"
-	}
+    oldPrice, oldRatio, newPrice, newRatio float64) {
 
-	onlineCount := getOnlineCount()
-	onHand, inInventory := getInventoryStats(item)
+    // Случайная задержка от 100 до 700 мс
+    time.Sleep(time.Duration(rand.Intn(600)+100) * time.Millisecond)
 
-	msg := fmt.Sprintf(
-		"*%s* %s\n"+
-			"⏳ Интервал: %s - %s\n"+
-			"📦 Покупки: *%.0f*\n"+
-			"🛒 Попытки продаж: *%.0f*\n"+
-			"📊 Продажи: *%.0f* из *%.0f* (норма)\n"+
-			"💰 Цена: %d → %d (%s)\n"+
-			"🧮 Коэффициент: %.2f → %.2f\n"+
-			"🎒 На аукционе: %d\n"+
-			"🎒 В инвентаре: %d\n"+
-			"👥 Онлайн: %d игроков",
-		item,
-		status,
-		start.Format("15:04:05"),
-		end.Format("15:04:05"),
-		buyCount,
-		trySellCount,
-		actualSales,
-		expectedSales,
-		int(oldPrice), int(newPrice),
-		getPriceChangeEmoji(int(oldPrice), int(newPrice)),
-		oldRatio, newRatio,
-		onHand,
-		inInventory,
-		onlineCount,
-	)
+    status := "✅"
+    if actualSales < expectedSales {
+        status = "⚠️"
+    }
 
-	ctx := context.Background()
-	_, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:    -4633184325,
-		Text:      msg,
-		ParseMode: "Markdown",
-	})
-	if err != nil {
-		log.Printf("[Telegram] Ошибка при отправке интервал-статы: %v", err)
-	}
+    onlineCount := getOnlineCount()
+    onHand, inInventory := getInventoryStats(item)
 
-	plainLog := fmt.Sprintf(
-		"%s [%s → %s] %s | Покупки: %.0f | Продажи: %.0f/%.0f | Цена: %d→%d | Коэф: %.2f→%.2f | На руках: %d | Онлайн: %d\n",
-		item,
-		start.Format("15:04:05"),
-		end.Format("15:04:05"),
-		status,
-		buyCount,
-		actualSales,
-		expectedSales,
-		int(oldPrice), int(newPrice),
-		oldRatio, newRatio,
-		onHand,
-		onlineCount,
-	)
+    msg := fmt.Sprintf(
+        "*%s* %s\n"+
+            "⏳ Интервал: %s - %s\n"+
+            "📦 Покупки: *%.0f*\n"+
+            "🛒 Попытки продаж: *%.0f*\n"+
+            "📊 Продажи: *%.0f* из *%.0f* (норма)\n"+
+            "💰 Цена: %d → %d (%s)\n"+
+            "🧮 Коэффициент: %.2f → %.2f\n"+
+            "🎒 На аукционе: %d\n"+
+            "🎒 В инвентаре: %d\n"+
+            "👥 Онлайн: %d игроков",
+        item,
+        status,
+        start.Format("15:04:05"),
+        end.Format("15:04:05"),
+        buyCount,
+        trySellCount,
+        actualSales,
+        expectedSales,
+        int(oldPrice), int(newPrice),
+        getPriceChangeEmoji(int(oldPrice), int(newPrice)),
+        oldRatio, newRatio,
+        onHand,
+        inInventory,
+        onlineCount,
+    )
 
-	appendToFile("logs_interval.txt", plainLog)
+    ctx := context.Background()
+    _, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
+        ChatID:    -4633184325,
+        Text:      msg,
+        ParseMode: "Markdown",
+    })
+    if err != nil {
+        log.Printf("[Telegram] Ошибка при отправке интервал-статы: %v", err)
+    }
+
+    plainLog := fmt.Sprintf(
+        "%s [%s → %s] %s | Покупки: %.0f | Продажи: %.0f/%.0f | Цена: %d→%d | Коэф: %.2f→%.2f | На руках: %d | Онлайн: %d\n",
+        item,
+        start.Format("15:04:05"),
+        end.Format("15:04:05"),
+        status,
+        buyCount,
+        actualSales,
+        expectedSales,
+        int(oldPrice), int(newPrice),
+        oldRatio, newRatio,
+        onHand,
+        onlineCount,
+    )
+
+    appendToFile("logs_interval.txt", plainLog)
 }
 
 func getPriceChangeEmoji(oldPrice, newPrice int) string {
