@@ -288,7 +288,6 @@ bot.on('windowOpen', async () => {
             break;
 
         case analysisAH:
-            if (workerData.item == 'netherite pickaxe') saveToJsonFile('kirka.json', bot.currentWindow.slots)
             logger.info(`${name} - ${bot.menu}`);
             bot.timeActive = Date.now();
             generateRandomKey(bot);
