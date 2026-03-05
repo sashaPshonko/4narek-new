@@ -175,7 +175,7 @@ var (
 		"штаны_позорные":{
 			BasePrice:    800013,
 			NormalSales:  4,
-			PriceStep:    100000,
+			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500013,
 			MaxPrice:     9900013,
