@@ -953,19 +953,7 @@ func adjustPrice(item string) {
 	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ ---
 	ratio := ratioBefore
 
-	if onAH == 0 && totalStock >= cfg.NormalSales && sales == 0 {
-		if priceBefore < cfg.BasePrice {
-			newPrice += cfg.PriceStep
-			if newPrice > cfg.MaxPrice {
-				newPrice = cfg.MaxPrice
-			}
-		} else  {
-			newPrice -= cfg.PriceStep
-			if newPrice < cfg.MinPrice {
-				newPrice = cfg.MinPrice
-			}
-		}
-	} else if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 && onAH < cfg.NormalSales {
+	if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 && onAH < cfg.NormalSales {
 		newPrice += cfg.PriceStep
 		if newPrice > cfg.MaxPrice {
 			newPrice = cfg.MaxPrice

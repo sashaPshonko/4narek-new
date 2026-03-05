@@ -38,7 +38,7 @@
             }
         ],
         "num": 3,
-        "nacenka": 400000
+        "nacenka": 300000
     },
     {
         "name": "netherite_sword",
@@ -65,16 +65,12 @@
                 "lvl": 2
             },
             {
-                "name": "detection",
-                "lvl": 2
-            },
-            {
                 "name": "minecraft:sweeping",
                 "lvl": 3
             }
         ],
         "num": 5,
-        "nacenka": 400000
+        "nacenka": 300000
     },
     {
         "name": "netherite_boots",
@@ -118,7 +114,7 @@
             }
         ],
         "num": 3,
-        "nacenka": 400000
+        "nacenka": 300000
     },
     {
         "name": "netherite_boots",
@@ -194,7 +190,7 @@
             }
         ],
         "num": 3,
-        "nacenka": 400000
+        "nacenka": 300000
     },
     {
         "name": "netherite_helmet",
@@ -250,7 +246,7 @@
             }
         ],
         "num": 3,
-        "nacenka": 400000
+        "nacenka": 300000
     },
     {
         "name": "netherite_leggings",
@@ -310,6 +306,30 @@
             }
         ],
         "num": 3,
-        "nacenka": 400000
+        "nacenka": 300000
+    },
+    {
+        "name": "netherite_chestplate",
+        "id": "нагрудник_позорный",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:protection",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:projectile_protection",
+                "lvl": 4 
+            },
+            {
+                "name": "minecraft:fire_protection",
+                "lvl": 4 
+            }
+        ],
+        "num": 1,
+        "nacenka": 300000
     }
 ]

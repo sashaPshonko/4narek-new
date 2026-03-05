@@ -116,9 +116,9 @@ function runWorker(bot) {
 
       if (!bot.isManualStop) {
         setTimeout(() => {
-          console.log(`🔁 Перезапуск бота ${bot.username} через 20 секунд`);
+          console.log(`🔁 Перезапуск бота ${bot.username} через 60 секунд`);
           runWorker(bot);
-        }, 20000);
+        }, 60000);
       }
     };
 
