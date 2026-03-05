@@ -12,7 +12,7 @@ let items = JSON.parse(itemsJson);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const token = '8302357529:AAHBBALm7Gylu-ZFza2FVRWqpAKukOX0eUM';
+const token = '7433279544:AAEdja0YjZxwRPcw0zbf6lRh-6ouKHettAU';
 
 const tgBot = new TelegramBot(token, { polling: true });
 
@@ -21,9 +21,9 @@ const alertChatID = -4763690917
 const pomoikaChatID = -4896488855
 
 const bots = [
-    { username: 'valamirsgorbom', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.0.57', itemID: "нагрудник_починка" },
-  { username: 'cringegorb1337', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник" },
-  { username: 'bezgorbanihuya', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник_позорный" },
+  { username: 'valamirsgorbom', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite pickaxe', ip: '192.168.0.57', itemID: "нагрудник_починка" },
+  { username: 'cringegorb1337', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite pickaxe', ip: '192.168.0.57', itemID: "нагрудник" },
+  { username: 'bezgorbanihuya', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite pickaxe', ip: '192.168.0.57', itemID: "нагрудник_позорный" },
 ];
 
 

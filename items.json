@@ -58,7 +58,7 @@
             },
             {
                 "name": "minecraft:looting",
-                "lvl": 2
+                "lvl": 3
             },
             {
                 "name": "minecraft:sweeping",
@@ -211,5 +211,89 @@
         ],
         "num": 2,
         "nacenka": 300000
+    },
+    {
+        "name": "netherite_pickaxe",
+        "id": "кирка",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:efficiency",
+                "lvl": 6
+            },
+            {
+                "name": "minecraft:fortune",
+                "lvl": 3
+            }
+        ],
+        "num": 1,
+        "nacenka": 300000
+    },
+    {
+        "name": "netherite_pickaxe",
+        "id": "кирка_починка",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:efficiency",
+                "lvl": 7
+            },
+            {
+                "name": "minecraft:fortune",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:mending",
+                "lvl": 1
+            }
+        ],
+        "num": 2,
+        "nacenka": 300000
+    },
+    {
+        "name": "netherite_pickaxe",
+        "id": "кирка_крутая",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:efficiency",
+                "lvl": 7
+            },
+            {
+                "name": "minecraft:fortune",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:mending",
+                "lvl": 1
+            },
+            {
+                "name": "buldozing",
+                "lvl": 2
+            },
+            {
+                "name": "web",
+                "lvl": 1
+            },
+            {
+                "name": "magnet",
+                "lvl": 1
+            },
+            {
+                "name": "smelting",
+                "lvl": 1
+            }
+        ],
+        "num": 3,
+        "nacenka": 400000
     }
 ]

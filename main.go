@@ -217,6 +217,33 @@ var (
 			MaxPrice:     9900017,
 			Type:         "netherite_sword",
 		},
+		"кирка": {
+			BasePrice:    1500018,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200018,
+			MaxPrice:     9900018,
+			Type:         "netherite_pickaxe",
+		},
+		"кирка_починка": {
+			BasePrice:    1500019,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200019,
+			MaxPrice:     9900019,
+			Type:         "netherite_pickaxe",
+		},
+		"кирка_крутая": {
+			BasePrice:    1500020,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200020,
+			MaxPrice:     9900020,
+			Type:         "netherite_pickaxe",
+		},
 	}
 )
 
@@ -980,7 +1007,7 @@ func adjustPrice(item string) {
 		if sales > cfg.NormalSales {
 			salesLeader = sales
 		}
-		if float64(totalStock) > float64(salesLeader)*3.5 {
+		if float64(totalStock) > float64(salesLeader)*2 {
 			newPrice -= cfg.PriceStep
 			if newPrice < cfg.MinPrice {
 				newPrice = cfg.MinPrice

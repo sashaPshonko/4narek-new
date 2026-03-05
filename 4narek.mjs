@@ -288,6 +288,7 @@ bot.on('windowOpen', async () => {
             break;
 
         case analysisAH:
+            if (workerData.item == 'netherite pickaxe') saveToJsonFile('kirka.json', bot.currentWindow.slots)
             logger.info(`${name} - ${bot.menu}`);
             bot.timeActive = Date.now();
             generateRandomKey(bot);
@@ -326,7 +327,7 @@ bot.on('windowOpen', async () => {
                     break;
 
                 case false:
-                    if (count >= 23) {
+                    if (count >= 36-bot.count) {
                         bot.inventoryFull = true
                         if (bot.ahFull) {
                             await longWalk(bot, itemPrices);
@@ -1061,6 +1062,12 @@ function itemMatchesConfig(item, configItem) {
 
     if (!areEnchantsValid) return false;
     if (allEnchants.some(en => missingEnchantsNames.includes(en.name))) return false;
+    if (item.name === 'netherite_pickaxe' &&
+        allEnchants.some(en => en.name === 'minecraft:silk_touch') &&
+        !allEnchants.some(en => en.name === 'melting')
+    ) {
+        return false
+    }
 
     // Проверка прочности
     if (item.maxDurability) {
