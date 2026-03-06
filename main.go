@@ -222,7 +222,7 @@ var (
 			NormalSales:  4,
 			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     600018,
+			MinPrice:     800018,
 			MaxPrice:     9900018,
 			Type:         "netherite_pickaxe",
 		},
