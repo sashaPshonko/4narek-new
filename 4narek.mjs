@@ -288,6 +288,7 @@ bot.on('windowOpen', async () => {
             break;
 
         case analysisAH:
+            // if (workerData.item == 'netherite sword') saveToJsonFile('sword.json', bot.currentWindow.slots)
             logger.info(`${name} - ${bot.menu}`);
             bot.timeActive = Date.now();
             generateRandomKey(bot);
@@ -1298,12 +1299,12 @@ async function walk(bot) {
 }
 
 async function safeClickBuy(bot, slot, time, key) {
+    await delay(time);
     if (bot.key != key) {
         console.log('твари ах обновили и теперь так')
         return
     }
     if (slot === 52) bot.timeReset = Date.now();
-    await delay(time);
 
     if (bot.currentWindow) {
         bot.timeActive = Date.now();
