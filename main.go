@@ -79,7 +79,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700001,
-			MaxPrice:     7000001,
+			MaxPrice:     2000001,
 			Type:         "netherite_sword",
 		},
 		"sword5": {
@@ -88,7 +88,7 @@ var (
 			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     600002,
-			MaxPrice:     5000002,
+			MaxPrice:     1800002,
 			Type:         "netherite_sword",
 		},
 		"megasword": {
@@ -97,7 +97,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     1600003,
-			MaxPrice:     9900003,
+			MaxPrice:     6000003,
 			Type:         "netherite_sword",
 		},
 		"ботинки":{

@@ -130,7 +130,6 @@ async function launchBookBuyer(name, password, anarchy) {
         bot.timeReset = Date.now()
         bot.login = true;
         bot.timeActive = Date.now();
-        bot.inventoryFull = false;
         bot.timeLogin = Date.now()
         bot.prices = []
         bot.count = 0
@@ -316,60 +315,40 @@ bot.on('windowOpen', async () => {
             for (let i = firstInventorySlot; i <= lastInventorySlot; i++) {
                 if (bot.inventory.slots[i]) count++
             }
-            switch (bot.inventoryFull) {
-                case true:
-                    if (bot.ahFull) {
-                        await longWalk(bot, itemPrices);
-                        break
-                    }
-                    logger.error('Инвентарь заполнен')
-                    await sellItems(bot, itemPrices)
+                    
+            if (count >= 36-bot.count) {
+                logger.error('Инвентарь заполнен')
+                await sellItems(bot, itemPrices)
+
+                break;
+            }
+            logger.info(`${name} - поиск лучшего предмета`);
+            let slotToBuy = await getBestAHSlot(bot, itemPrices);
+
+            switch (slotToBuy) {
+                case null:
+                    bot.menu = analysisAH;
+                    await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500));
 
                     break;
-
-                case false:
-                    if (count >= 36-bot.count) {
-                        bot.inventoryFull = true
-                        if (bot.ahFull) {
-                            await longWalk(bot, itemPrices);
-                            break
-                        }
-                        logger.error('Инвентарь заполнен')
-                        await sellItems(bot, itemPrices)
-
-                        break;
+                default:
+                    if (bot.netakbistro) {
+                        bot.netakbistro = false;
+                        await safeClickBuy(bot, slotToBuy, 1655, key);
+                    } else if (slotToBuy < 9) {
+                        await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(100, 150)*(slotToBuy+1), key);
+                    } else {
+                        await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500));
                     }
-                    logger.info(`${name} - поиск лучшего предмета`);
-                    let slotToBuy = await getBestAHSlot(bot, itemPrices);
-
-                    switch (slotToBuy) {
-                        case null:
-                            logger.info('не найден')
-                            bot.menu = analysisAH;
-                            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500));
-
-                            break;
-                        default:
-                            if (bot.netakbistro) {
-                                bot.netakbistro = false;
-                                await safeClickBuy(bot, slotToBuy, 1655, key);
-                            } else if (slotToBuy < 9) {
-                                await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(100, 150)*(slotToBuy+1), key);
-                            } else {
-                                await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500));
-                            }
-
-
-
-                            break;
-                    }
+                break;
+                  
             }
 
             break;
 
         case myItems:
             generateRandomKey(bot)
-            bot.ahFull = false
+            
             key = bot.key
             if (bot.currentWindow.slots[27]) {
                 logger.error('суки обновили аукцион')
@@ -398,6 +377,7 @@ bot.on('windowOpen', async () => {
                 // ФИКС 2: Проверяем, совпадает ли цена в конфиге с ценой на аукционе
                 if (priceSell !== priceOnAH) {
                     logger.error(`chnge ${priceSell} ${priceOnAH}`)
+                    bot.ahFull = false
                     slot = i;
                     break;
                 }
@@ -468,6 +448,7 @@ bot.on('windowOpen', async () => {
                 const slot = findFirstMatchingSlotInWindow(bot, itemPrices)
                 if (slot) {
                     logger.info(`${bot.username} забрал`)
+                    bot.needSell = true
                     await safeClickBuy(bot, slot, 500, bot.key)
                     
                 }
@@ -523,7 +504,6 @@ bot.on('message', async (message) => {
         bot.timeReset = Date.now() - 60000;
         bot.login = true;
         bot.timeActive = Date.now();
-        bot.inventoryFull = false;
         bot.timeLogin = Date.now()
         bot.prices = []
         bot.count = 0
@@ -554,7 +534,6 @@ bot.on('message', async (message) => {
             const msg = { name: 'try-sell', id: bot.typeSell }
             parentPort.postMessage(msg);
         }
-        bot.inventoryFull = false
         bot.count++
         return
     }
@@ -628,11 +607,6 @@ bot.on('message', async (message) => {
     //     bot.chat(shopCommand)
     //     return
     // }
-
-    if (messageText.includes('[☃] У Вас полный инвентарь и Хранилище!')) {
-        bot.inventoryFull = true;
-        return
-    }
 
     if (messageText.includes('[$] Ваш баланс:')) {
         let balanceStr = messageText
