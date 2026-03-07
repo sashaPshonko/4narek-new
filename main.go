@@ -160,7 +160,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     900011,
-			MaxPrice:     9900011,
+			MaxPrice:     1600011,
 			Type:         "netherite_leggings",
 		},
 		// "штаны_починка":{
@@ -178,7 +178,7 @@ var (
 			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500013,
-			MaxPrice:     9900013,
+			MaxPrice:     1600013,
 			Type:         "netherite_leggings",
 		},
 		"нагрудник":{

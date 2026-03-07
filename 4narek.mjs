@@ -573,6 +573,10 @@ bot.on('message', async (message) => {
     if (messageText.includes('[☃] Не удалось выставить')) {
         bot.ahFull = true;
         return
+    }//[✘] Ошибка! У Вас переполнено Хранилище!
+    if (messageText.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
+        bot.ahFull = true;
+        return
     }
 
      if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
