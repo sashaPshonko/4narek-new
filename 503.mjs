@@ -37,7 +37,7 @@ let isSocketOpen = false;
 function runWorker(bot) {
   // Если уже есть активный воркер для этого бота — не запускаем повторно
   workers
-    .filter(w => w.workerData?.username === bot.username)
+    .filter(w => w.workerData.username === bot.username)
     .forEach(w => {
       try { w.terminate(); } catch (e) {}
     });
