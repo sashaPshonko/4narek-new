@@ -92,24 +92,24 @@ async function launchBookBuyer(name, password, anarchy) {
         username: name,
         password: password,
         version: '1.16.5',
-        connect: (client) => {
-            // Создаём сокет, привязанный к IP модема
-            const socket = net.createConnection({
-                host: 'mc.funtime.su',
-                port: 25565,
-                localAddress: workerData.ip
-            });
+        // connect: (client) => {
+        //     // Создаём сокет, привязанный к IP модема
+        //     const socket = net.createConnection({
+        //         host: 'mc.funtime.su',
+        //         port: 25565,
+        //         localAddress: workerData.ip
+        //     });
             
-            socket.on('connect', () => {
-                console.log(`✅ Бот подключён через IP ${socket.localAddress}`);
-                client.setSocket(socket);
-                client.emit('connect');
-            });
+        //     socket.on('connect', () => {
+        //         console.log(`✅ Бот подключён через IP ${socket.localAddress}`);
+        //         client.setSocket(socket);
+        //         client.emit('connect');
+        //     });
             
-            socket.on('error', (err) => {
-                console.error('❌ Ошибка сокета:', err);
-            });
-        },
+        //     socket.on('error', (err) => {
+        //         console.error('❌ Ошибка сокета:', err);
+        //     });
+        // },
         chatLengthLimit: 256,  // Добавь это
         viewDistance: 'tiny'    // И это
     });

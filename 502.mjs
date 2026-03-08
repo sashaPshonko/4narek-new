@@ -126,13 +126,11 @@ function runWorker(bot) {
       bot.success = false;
       console.error(`❌ Worker error (${bot.username}): ${error}`);
       tgBot.sendMessage(alertChatID, `${bot.username} вырубился с ошибкой`);
-      handleRestart();
     });
 
     worker.on('exit', () => {
       bot.success = false;
       console.warn(`⚠️ Worker ${bot.username} завершился`);
-      tgBot.sendMessage(alertChatID, `${bot.username} вырубился`);
       handleRestart();
     });
   });
