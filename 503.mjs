@@ -1,6 +1,5 @@
 import { Worker } from 'worker_threads';
 import { readFile, writeFile } from 'fs/promises';
-import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import TelegramBot from 'node-telegram-bot-api';
