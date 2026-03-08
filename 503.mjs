@@ -1,10 +1,9 @@
-import { Worker } from 'worker_threads';
-import { readFile, writeFile } from 'fs/promises';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { exec } from 'node:child_process';
 import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
-import { exec } from 'child_process';
 
 const itemsJson = readFile('items.json');
 let items = JSON.parse(itemsJson);
