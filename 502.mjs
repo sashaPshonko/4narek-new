@@ -26,6 +26,7 @@ const bots = [
   { username: 'tobolsksugar', password: 'ggggg', anarchy: 5002, type: '4narek', inventoryPort: 3002, balance: undefined, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.0.57', itemID: "megasword"  },
 ];
 
+
 let workers = [];
 let botItems = new Map
 let botInventory = new Map

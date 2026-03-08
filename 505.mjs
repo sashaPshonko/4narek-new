@@ -24,7 +24,9 @@ const bots = [
   { username: 'bugulmark2', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны" },
   { username: 'otstalyibolvan', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны_починка" },
   { username: 'zbnennabite', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны_позорные" },
-
+  { username: 'sashapshonkoumer', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник_починка" },
+  { username: 'ahahaetopravda', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник" },
+  { username: 'ochenlubludashu', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник_позорный" },
 ];
 
 

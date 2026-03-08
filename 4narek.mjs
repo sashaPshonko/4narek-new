@@ -485,6 +485,17 @@ bot.on('message', async (message) => {
         parentPort.postMessage(msg);
         return
     }//[✘] Ошибка! По такой цене
+    //BotFilter >> Введите номер с картинки в чат
+
+    if (messageText.includes('BotFilter >> Введите номер с картинки в чат')) {
+        parentPort.postMessage(`${workerData.username} - ввести капчу`)
+        return
+    }
+
+    if (messageText.includes('вы забанены')) {
+        parentPort.postMessage(`${workerData.username} - забанен`)
+        return
+    }
 
     if (messageText.includes('[✘] Ошибка! По такой цене')) {
         console.log('[✘] Ошибка! По такой цене ', workerData.itemID)
