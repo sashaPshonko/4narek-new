@@ -1,14 +1,32 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { exec } from 'node:child_process';
+import { Worker } from 'worker_threads';
+import { readFile, writeFile } from 'fs/promises';
+import { existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
+import { exec } from 'child_process';
 
-const itemsJson = readFile('items.json');
-let items = JSON.parse(itemsJson);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Проверяем существование файла items.json
+const itemsPath = join(__dirname, 'items.json');
+let items = [];
+
+try {
+  if (existsSync(itemsPath)) {
+    const itemsJson = await readFile(itemsPath, 'utf-8');
+    items = JSON.parse(itemsJson);
+    console.log('✅ items.json успешно загружен');
+  } else {
+    console.warn('⚠️ items.json не найден, используем пустой массив');
+    items = [];
+  }
+} catch (error) {
+  console.error('❌ Ошибка загрузки items.json:', error.message);
+  items = [];
+}
 
 const token = '7256193231:AAG5rgzcK5kc2JH6HMvVbn2zEIJIBOC3Q9Q';
 
@@ -22,8 +40,10 @@ const bots = [
   { username: 'krabyi_rot666', password: 'ggggg', anarchy: 5003, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots', ip: '192.168.8.117', itemID: "ботинки" },
   { username: 'bolvaneblan22', password: 'ggggg', anarchy: 5003, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots', ip: '192.168.8.117', itemID: "ботинки_починка" },
   { username: 'krivoigorb', password: 'ggggg', anarchy: 5003, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite boots', ip: '192.168.8.117', itemID: "ботинки_позорные" },
+  { username: 'dolbatyirotgorba', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.117', itemID: "шлем" },
+  { username: 'lesnoiopesdolgpt', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.117', itemID: "шлем_починка" },
+  { username: 'tormoznabite', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.117', itemID: "шлем_позорный" },
 ];
-
 
 let workers = [];
 let botItems = new Map
@@ -35,11 +55,11 @@ let isSocketOpen = false;
 function runWorker(bot) {
   // Если уже есть активный воркер для этого бота — не запускаем повторно
   workers
-    .filter(w => w.workerData.username === bot.username)
+    .filter(w => w.workerData?.username === bot.username)
     .forEach(w => {
       try { w.terminate(); } catch (e) {}
     });
-  workers = workers.filter(w => w.workerData.username !== bot.username);
+  workers = workers.filter(w => w.workerData?.username !== bot.username);
 
   return new Promise((resolve, reject) => {
     const workerScriptPath = join(__dirname, `${bot.type}.mjs`);
@@ -63,51 +83,51 @@ function runWorker(bot) {
     }, 30000)
 
 
-       worker.on('message', async (message) => {
-     try {
-       if (message.name === 'success') {
-         const botToUpdate = bots.find(b => b.username === message.username);
-         if (botToUpdate) {
-           botToUpdate.success = true;
-           console.log(`✅ ${message.username} успешно запущен`);
-         }
-       } else if (message.name === "buy") {
-         socket.send(JSON.stringify({ action: 'buy', type: message.id, price: message.price }));
-       } else if (message.name === "sell") {
-         socket.send(JSON.stringify({ action: 'sell', type: message.id, price: message.price }));
-       } else if (message.name === "items") {
-         botItems.set(message.username, message.items);
-       } else if (message.name === "try-sell") {
-         try {
-           socket.send(JSON.stringify({ action: "try-sell", type: message.id }));
-         } catch (socketError) {
-           console.error(`❌ Ошибка отправки try-sell: ${socketError.message}`);
-         }
-       } else if (message.name === "inventory") {
-         botInventory.set(message.username, message.data);
-       } else if (message.name === "buying") {
-         try {
-           socket.send(JSON.stringify({ action: "add", json_data: message.data }));
-         } catch (socketError) {
-           console.error(`❌ Ошибка отправки buying: ${socketError.message}`);
-         }
-       } else {
-         try {
-           // await tgBot.sendMessage(alertChatID, message);
-         } catch (tgError) {
-           console.error(`❌ Ошибка отправки в Telegram: ${tgError.message}`);
-         }
-       }
-     } catch (error) {
-       console.error(`❌ Критическая ошибка в обработчике сообщений: ${error.message}`);
-       // Можно добавить отправку в Telegram об ошибке
-       try {
-         await tgBot.sendMessage(alertChatID, `❌ Ошибка в main: ${error.message}`);
-       } catch (e) {
-         // Игнорируем, если Telegram тоже недоступен
-       }
-     }
-   });
+    worker.on('message', async (message) => {
+  try {
+    if (message.name === 'success') {
+      const botToUpdate = bots.find(b => b.username === message.username);
+      if (botToUpdate) {
+        botToUpdate.success = true;
+        console.log(`✅ ${message.username} успешно запущен`);
+      }
+    } else if (message.name === "buy") {
+      socket?.send(JSON.stringify({ action: 'buy', type: message.id, price: message.price }));
+    } else if (message.name === "sell") {
+      socket?.send(JSON.stringify({ action: 'sell', type: message.id, price: message.price }));
+    } else if (message.name === "items") {
+      botItems.set(message.username, message.items);
+    } else if (message.name === "try-sell") {
+      try {
+        socket?.send(JSON.stringify({ action: "try-sell", type: message.id }));
+      } catch (socketError) {
+        console.error(`❌ Ошибка отправки try-sell: ${socketError.message}`);
+      }
+    } else if (message.name === "inventory") {
+      botInventory.set(message.username, message.data);
+    } else if (message.name === "buying") {
+      try {
+        socket?.send(JSON.stringify({ action: "add", json_data: message.data }));
+      } catch (socketError) {
+        console.error(`❌ Ошибка отправки buying: ${socketError.message}`);
+      }
+    } else {
+      try {
+        // await tgBot.sendMessage(alertChatID, message);
+      } catch (tgError) {
+        console.error(`❌ Ошибка отправки в Telegram: ${tgError.message}`);
+      }
+    }
+  } catch (error) {
+    console.error(`❌ Критическая ошибка в обработчике сообщений: ${error.message}`);
+    // Можно добавить отправку в Telegram об ошибке
+    try {
+      await tgBot.sendMessage(alertChatID, `❌ Ошибка в main: ${error.message}`);
+    } catch (e) {
+      // Игнорируем, если Telegram тоже недоступен
+    }
+  }
+});
 
     const handleRestart = () => {
       // Удалить воркер из списка
@@ -125,17 +145,16 @@ function runWorker(bot) {
       bot.success = false;
       console.error(`❌ Worker error (${bot.username}): ${error}`);
       tgBot.sendMessage(alertChatID, `${bot.username} вырубился с ошибкой`);
-      handleRestart();
     });
 
     worker.on('exit', () => {
       bot.success = false;
       console.warn(`⚠️ Worker ${bot.username} завершился`);
-      tgBot.sendMessage(alertChatID, `${bot.username} вырубился`);
       handleRestart();
     });
   });
 }
+
 function stopWorkers() {
   bots.forEach(bot => {
     bot.isManualStop = true;
@@ -164,7 +183,7 @@ async function startBots() {
   bots.forEach(bot => bot.itemPrices = items);
   const botPromises = bots.map(bot => runWorker(bot));
   try {
-    setTimeout(() => socket.send(JSON.stringify({ action: "info" })), 1000);
+    setTimeout(() => socket?.send(JSON.stringify({ action: "info" })), 1000);
     const results = await Promise.all(botPromises);
     console.log('All bots finished:', results);
   } catch (error) {
@@ -176,7 +195,7 @@ async function restartBots() {
   bots.forEach(bot => bot.itemPrices = items);
   const botPromises = bots.map(bot => runWorker(bot));
   try {
-    setTimeout(() => socket.send(JSON.stringify({ action: "info" })), 3000);
+    setTimeout(() => socket?.send(JSON.stringify({ action: "info" })), 3000);
     const results = await Promise.all(botPromises);
     console.log('All bots finished:', results);
   } catch (error) {
