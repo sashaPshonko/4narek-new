@@ -106,7 +106,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700005,
-			MaxPrice:     9900005,
+			MaxPrice:     2000005,
 			Type:         "netherite_boots",
 		},
 		// "ботинки_починка":{
@@ -124,7 +124,7 @@ var (
 			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500007,
-			MaxPrice:     9900007,
+			MaxPrice:     2000007,
 			Type:         "netherite_boots",
 		},
 		"шлем":{
@@ -133,7 +133,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700008,
-			MaxPrice:     9900008,
+			MaxPrice:     3500008,
 			Type:         "netherite_helmet",
 		},
 		// "шлем_починка":{
@@ -151,7 +151,7 @@ var (
 			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500010,
-			MaxPrice:     9900010,
+			MaxPrice:     2000010,
 			Type:         "netherite_helmet",
 		},
 		"штаны":{
@@ -160,7 +160,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     900011,
-			MaxPrice:     1600011,
+			MaxPrice:     2500011,
 			Type:         "netherite_leggings",
 		},
 		// "штаны_починка":{
@@ -187,7 +187,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700014,
-			MaxPrice:     9900014,
+			MaxPrice:     3000014,
 			Type:         "netherite_chestplate",
 		},
 		// "нагрудник_починка":{
@@ -205,7 +205,7 @@ var (
 			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     600016,
-			MaxPrice:     9900016,
+			MaxPrice:     2500016,
 			Type:         "netherite_chestplate",
 		},
 		"farm-sword": {
@@ -214,7 +214,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     1200017,
-			MaxPrice:     9900017,
+			MaxPrice:     5000017,
 			Type:         "netherite_sword",
 		},
 		"кирка": {
@@ -223,7 +223,7 @@ var (
 			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     800018,
-			MaxPrice:     9900018,
+			MaxPrice:     3000018,
 			Type:         "netherite_pickaxe",
 		},
 		"кирка_починка": {
@@ -232,7 +232,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     900019,
-			MaxPrice:     9900019,
+			MaxPrice:     5000019,
 			Type:         "netherite_pickaxe",
 		},
 		"кирка_крутая": {
