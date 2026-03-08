@@ -41,7 +41,7 @@ function runWorker(bot) {
     .forEach(w => {
       try { w.terminate(); } catch (e) {}
     });
-  workers = workers.filter(w => w.workerData?.username !== bot.username);
+  workers = workers.filter(w => w.workerData.username !== bot.username);
 
   return new Promise((resolve, reject) => {
     const workerScriptPath = join(__dirname, `${bot.type}.mjs`);
@@ -74,14 +74,14 @@ function runWorker(bot) {
            console.log(`✅ ${message.username} успешно запущен`);
          }
        } else if (message.name === "buy") {
-         socket?.send(JSON.stringify({ action: 'buy', type: message.id, price: message.price }));
+         socket.send(JSON.stringify({ action: 'buy', type: message.id, price: message.price }));
        } else if (message.name === "sell") {
-         socket?.send(JSON.stringify({ action: 'sell', type: message.id, price: message.price }));
+         socket.send(JSON.stringify({ action: 'sell', type: message.id, price: message.price }));
        } else if (message.name === "items") {
          botItems.set(message.username, message.items);
        } else if (message.name === "try-sell") {
          try {
-           socket?.send(JSON.stringify({ action: "try-sell", type: message.id }));
+           socket.send(JSON.stringify({ action: "try-sell", type: message.id }));
          } catch (socketError) {
            console.error(`❌ Ошибка отправки try-sell: ${socketError.message}`);
          }
@@ -89,7 +89,7 @@ function runWorker(bot) {
          botInventory.set(message.username, message.data);
        } else if (message.name === "buying") {
          try {
-           socket?.send(JSON.stringify({ action: "add", json_data: message.data }));
+           socket.send(JSON.stringify({ action: "add", json_data: message.data }));
          } catch (socketError) {
            console.error(`❌ Ошибка отправки buying: ${socketError.message}`);
          }
@@ -166,7 +166,7 @@ async function startBots() {
   bots.forEach(bot => bot.itemPrices = items);
   const botPromises = bots.map(bot => runWorker(bot));
   try {
-    setTimeout(() => socket?.send(JSON.stringify({ action: "info" })), 1000);
+    setTimeout(() => socket.send(JSON.stringify({ action: "info" })), 1000);
     const results = await Promise.all(botPromises);
     console.log('All bots finished:', results);
   } catch (error) {
@@ -178,7 +178,7 @@ async function restartBots() {
   bots.forEach(bot => bot.itemPrices = items);
   const botPromises = bots.map(bot => runWorker(bot));
   try {
-    setTimeout(() => socket?.send(JSON.stringify({ action: "info" })), 3000);
+    setTimeout(() => socket.send(JSON.stringify({ action: "info" })), 3000);
     const results = await Promise.all(botPromises);
     console.log('All bots finished:', results);
   } catch (error) {
