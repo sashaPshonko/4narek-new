@@ -867,13 +867,17 @@ async function sellItems(bot, itemPrices) {
 
         // Проверяем, подходит ли предмет под какую-либо категорию
         const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
+        let needDrop = true
         for (const configItem of sortedConfig) {
             if (itemMatchesConfig(slotData, configItem)) {
+                needDrop = false
                 continue
             }
+        }
+         if (needDrop) {
             await bot.tossStack(slotData)
             await delay(300)
-        }
+         }
         }
 
         bot.chat('/balance');
