@@ -121,7 +121,6 @@ async function launchBookBuyer(name, password, anarchy) {
     console.warn = () => { };
 
     bot.once('login', async () => {
-        parentPort.postMessage(msg);
         bot.loadPlugin(autoEat)
         bot.mu = false;
         bot.startTime = Date.now() - 55000;

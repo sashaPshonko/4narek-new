@@ -21,5 +21,6 @@
 nohup node 503.mjs > bot.log 2>&1 &
 ps aux | grep 503.mjs
 tail -f bot.log
+pkill -f "503.mjs"
 
 sshuttle -r root@193.222.62.77 0.0.0.0/0 
