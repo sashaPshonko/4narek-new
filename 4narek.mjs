@@ -862,18 +862,18 @@ async function sellItems(bot, itemPrices) {
         await delay(300)
 
         for (let i = firstAHSlot; i < lastInventorySlot; i++) {
-        const slotData = bot.inventory.slots[i];
-        if (!slotData) continue; // пустой слот
+            const slotData = bot.inventory.slots[i];
+            if (!slotData) continue; // пустой слот
 
-        // Проверяем, подходит ли предмет под какую-либо категорию
-        const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
-        let needDrop = true
-        for (const configItem of sortedConfig) {
-            if (itemMatchesConfig(slotData, configItem)) {
-                needDrop = false
-                continue
+            // Проверяем, подходит ли предмет под какую-либо категорию
+            const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
+            let needDrop = true
+            for (const configItem of sortedConfig) {
+                if (itemMatchesConfig(slotData, configItem)) {
+                    needDrop = false
+                    continue
+                }
             }
-        }
          if (needDrop) {
             await bot.tossStack(slotData)
             await delay(300)
