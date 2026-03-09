@@ -1544,7 +1544,7 @@ async function safeClickBuy(bot, slot, time, key) {
         bot.updateWindow = false
         bot.startClickTime = Date.now()
     } else {
-        timeDelay = time - (time.now() - bot.startClickTime)
+        timeDelay = time - (Date.now() - bot.startClickTime)
         if (timeDelay <= 0) timeDelay = 0
     }
             
