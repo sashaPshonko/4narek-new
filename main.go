@@ -286,7 +286,7 @@ var (
 	// Кэш для json_data
 	jsonCache    = make(map[string]time.Time)
 	jsonCacheMu  sync.RWMutex
-	jsonCacheTTL = 2 * time.Second
+	jsonCacheTTL = 5 * time.Second
 )
 
 func main() {
