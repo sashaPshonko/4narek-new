@@ -112,7 +112,16 @@ worker.on('message', async (message) => {
         console.error(`❌ Ошибка отправки buying: ${socketError.message}`);
       }
     } 
-    // 👇 НОВЫЕ ОБРАБОТЧИКИ
+    // 👇 НОВЫЙ ОБРАБОТЧИК ДЛЯ КАПЧИ
+    else if (typeof message === 'string' && message.includes('ввести капчу')) {
+      try {
+        await tgBot.sendMessage(alertChatID, `⚠️ ${message}`);
+        console.log(`📨 Капча: ${message}`);
+      } catch (tgError) {
+        console.error(`❌ Ошибка отправки капчи: ${tgError.message}`);
+      }
+    }
+    // 👇 НОВЫЕ ОБРАБОТЧИКИ ЦЕН
     else if (message.name === "set_min_price") {
       try {
         socket?.send(JSON.stringify({ 
@@ -137,22 +146,21 @@ worker.on('message', async (message) => {
         console.error(`❌ Ошибка отправки set_max_price: ${socketError.message}`);
       }
     }
-    // 👆 НОВЫЕ ОБРАБОТЧИКИ
     else {
-      try {
-        // await tgBot.sendMessage(alertChatID, message);
-      } catch (tgError) {
-        console.error(`❌ Ошибка отправки в Telegram: ${tgError.message}`);
+      // Если это просто строка - тоже отправляем в Telegram?
+      if (typeof message === 'string') {
+        try {
+          await tgBot.sendMessage(alertChatID, `📝 ${message}`);
+        } catch (tgError) {
+          console.error(`❌ Ошибка отправки в Telegram: ${tgError.message}`);
+        }
       }
     }
   } catch (error) {
     console.error(`❌ Критическая ошибка в обработчике сообщений: ${error.message}`);
-    // Можно добавить отправку в Telegram об ошибке
     try {
       await tgBot.sendMessage(alertChatID, `❌ Ошибка в main: ${error.message}`);
-    } catch (e) {
-      // Игнорируем, если Telegram тоже недоступен
-    }
+    } catch (e) {}
   }
 });
 
