@@ -135,7 +135,6 @@ async function launchBookBuyer(name, password, anarchy) {
         bot.ah = []
         bot.needSell = false
         bot.startClickTime = null
-        bot.endClickTime = null
         bot.updateWindow = false
         setInterval(() => {
             const inv = []
@@ -1544,9 +1543,8 @@ async function safeClickBuy(bot, slot, time, key) {
     if (bot.updateWindow) {
         bot.updateWindow = false
         bot.startClickTime = Date.now()
-        bot.endClickTime = Date.now()+time
     } else {
-        timeDelay = time - (bot.endClickTime - bot.startClickTime)
+        timeDelay = time - (time.now() - bot.startClickTime)
         if (timeDelay <= 0) timeDelay = 0
     }
             
