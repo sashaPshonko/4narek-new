@@ -134,6 +134,9 @@ async function launchBookBuyer(name, password, anarchy) {
         bot.netakbistro = true
         bot.ah = []
         bot.needSell = false
+        bot.startClickTime = null
+        bot.endClickTime = null
+        bot.updateWindow = false
         setInterval(() => {
             const inv = []
             const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
@@ -296,7 +299,7 @@ bot.on('windowOpen', async () => {
                 logger.info(`${name} - ресет`);
                 await delay(500);
                 bot.menu = myItems;
-                await safeClick(bot, 46, getRandomDelayInRange(700, 1300))
+                await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key)
 
                 break;
             }
@@ -326,7 +329,7 @@ bot.on('windowOpen', async () => {
             switch (slotToBuy) {
                 case null:
                     bot.menu = analysisAH;
-                    await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500));
+                    await safeClickBuy(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500), key);
 
                     break;
                 default:
@@ -336,7 +339,7 @@ bot.on('windowOpen', async () => {
                     } else if (slotToBuy < 9) {
                         await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(100, 150)*(slotToBuy+1), key);
                     } else {
-                        await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500));
+                        await safeClickBuy(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500), key);
                     }
                 break;
                   
@@ -967,6 +970,7 @@ async function safeAH(bot) {
     let key = bot.key;
     bot.timeActive = Date.now();
     bot.menu = analysisAH
+    bot.updateWindow = true
     while (key === bot.key) {
         bot.chat(ahCommand);
         await delay(1000);
@@ -1536,13 +1540,23 @@ async function walk(bot) {
 }
 
 async function safeClickBuy(bot, slot, time, key) {
-    await delay(time);
+    let timeDelay = time
+    if (bot.updateWindow) {
+        bot.updateWindow = false
+        bot.startClickTime = Date.now()
+        bot.endClickTime = Date.now()+time
+    } else {
+        timeDelay = time - (bot.endClickTime - bot.startClickTime)
+        if (timeDelay <= 0) timeDelay = 0
+    }
+            
+    await delay(timeDelay);
     if (bot.key != key) {
         console.log('твари ах обновили и теперь так')
         return
     }
     if (slot === 52) bot.timeReset = Date.now();
-
+    bot.updateWindow = true
     if (bot.currentWindow) {
         bot.timeActive = Date.now();
         await bot.clickWindow(slot, leftMouseButton, 1);
