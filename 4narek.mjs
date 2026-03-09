@@ -862,7 +862,7 @@ async function sellItems(bot, itemPrices) {
         await delay(300)
 
         for (let i = firstAHSlot; i < lastInventorySlot; i++) {
-        const slotData = bot.currentWindow.slots[i];
+        const slotData = bot.inventory.slots[i];
         if (!slotData) continue; // пустой слот
 
         // Проверяем, подходит ли предмет под какую-либо категорию
