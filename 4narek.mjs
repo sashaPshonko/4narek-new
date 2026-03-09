@@ -121,7 +121,6 @@ async function launchBookBuyer(name, password, anarchy) {
     console.warn = () => { };
 
     bot.once('login', async () => {
-        const msg = `${bot.username} запущен!`
         parentPort.postMessage(msg);
         bot.loadPlugin(autoEat)
         bot.mu = false;
@@ -533,6 +532,7 @@ bot.on('message', async (message) => {
         balanceStr = balanceStr.replace(/\D/g, '')
         const balance = parseInt(balanceStr);
         const id = getIdBySellPrice(itemPrices, balance)
+
         const msg = { name: 'sell', id: id, price: balance }
         parentPort.postMessage(msg);
         bot.needSell = true
@@ -641,6 +641,85 @@ bot.on('message', async (message) => {
         }
         return
     }
+    if (messageText.includes('[☃] Максимальная цена')) {
+        let balanceStr = messageText;
+        
+        // Убираем точки (тысячные разделители)
+        if (messageText.includes('.')) {
+            balanceStr = balanceStr.slice(0, -3);
+        }
+        
+        // Оставляем только цифры
+        balanceStr = balanceStr.replace(/\D/g, '');
+        const balance = parseInt(balanceStr);
+        
+        // Получаем информацию о предмете
+        const slotHotBar = bot.quickBarSlot;
+        const slot = transform(slotHotBar);
+        const currentPrice = getPriceByEnchantments(bot.inventory.slots[slot], itemPrices);
+        const id = getIDByEnchantments(bot.inventory.slots[slot], itemPrices);
+        
+        // Округляем до десятков тысяч в меньшую сторону
+        const basePrice = Math.floor(balance / 10000) * 10000;
+        
+        // Маркер предмета (последние 2 цифры)
+        const marker = currentPrice % 100;
+        
+        // Финальная цена = базовая + маркер, но не больше баланса
+        let finalPrice = basePrice + marker;
+        
+        // Если получилось больше баланса, отнимаем 100 (переходим на следующий десяток тысяч)
+        if (finalPrice > balance) {
+            finalPrice = basePrice - 100 + marker; // или basePrice - (100 - marker)
+        }
+        
+        // Отправляем на сервер
+        parentPort.postMessage({
+            name: "set_max_price", 
+            type: id, 
+            price: finalPrice
+        });
+        
+        return;
+    }
+
+    if (messageText.includes('[☃] Минимальная цена')) {
+        let balanceStr = messageText;
+        
+        // Убираем точки (тысячные разделители)
+        if (messageText.includes('.')) {
+            balanceStr = balanceStr.slice(0, -3);
+        }
+        
+        // Оставляем только цифры
+        balanceStr = balanceStr.replace(/\D/g, '');
+        const balance = parseInt(balanceStr);
+        
+        // Получаем информацию о предмете
+        const slotHotBar = bot.quickBarSlot;
+        const slot = transform(slotHotBar);
+        const currentPrice = getPriceByEnchantments(bot.inventory.slots[slot], itemPrices);
+        const id = getIDByEnchantments(bot.inventory.slots[slot], itemPrices);
+        const nacenka = getNacenkaByEnchantments(bot.inventory.slots[slot], itemPrices)
+        
+        // Округляем до десятков тысяч в большую сторону
+        const basePrice = Math.ceil(balance / 10000) * 10000;
+        
+        // Маркер предмета (последние 2 цифры)
+        const marker = currentPrice % 100;
+        
+        // Финальная цена = базовая + маркер
+        let finalPrice = basePrice + marker + nacenka;
+        
+        // Отправляем на сервер
+        parentPort.postMessage({
+            name: "set_min_price", 
+            type: id, 
+            price: finalPrice
+        });
+        
+        return;
+    }
 })
 }
 
@@ -649,7 +728,7 @@ function getIdBySellPrice(itemPrices, val) {
     const foundItem = itemPrices.find(item => item.priceSell % 100 === val % 100);
 
     // Если нашли - возвращаем id, иначе null
-    return foundItem ? foundItem.id : null;
+    return foundItem ? foundItem.id : "";
 }
 
 function countTotalItemsInWindow(bot, itemPrices) {
@@ -781,6 +860,23 @@ async function sellItems(bot, itemPrices) {
         logger.info(`${bot.username} - продажа завершена`);
         await delay(500);
 
+        await delay(300)
+
+        for (let i = firstAHSlot; i < lastInventorySlot; i++) {
+        const slotData = bot.currentWindow.slots[i];
+        if (!slotData) continue; // пустой слот
+
+        // Проверяем, подходит ли предмет под какую-либо категорию
+        const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
+        for (const configItem of sortedConfig) {
+            if (itemMatchesConfig(slotData, configItem)) {
+                continue
+            }
+            await bot.tossStack(slotData)
+            await delay(300)
+        }
+        }
+
         bot.chat('/balance');
         await delay(500);
 
@@ -788,6 +884,11 @@ async function sellItems(bot, itemPrices) {
         bot.menu = 'clan'
         bot.chat('/clan storage')
     }
+}
+
+function transform(num) {
+    if (num < 0 || num > 8) return num; // защита от некорректных значений
+    return 44 - (8 - num); // или 36 + num
 }
 
 /**
@@ -869,38 +970,6 @@ async function safeAH(bot) {
     }
 }
 
-async function checkStorage(bot, itemPrices) {
-    if (!bot.currentWindow?.slots) return null;
-
-    const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
-
-    for (let slot = firstAHSlot; slot <= 7; slot++) {
-        const slotData = bot.currentWindow.slots[slot];
-        if (!slotData) continue;
-
-        for (const configItem of sortedConfig) {
-            if (!itemMatchesConfig(slotData, configItem)) continue;
-
-            try {
-                const price = await getBuyPrice(slotData);
-                if (!price || price === configItem.priceSell) continue;
-
-                // const count = bot.ah.filter(name => name === configItem.id).length;
-                // if (count >= 4) {
-                //     logger.info(`уже есть 4 ` + configItem.id)
-                //     return null;
-                // }
-
-                return slotData.slot;
-            } catch (error) {
-                console.error(error)
-                continue;
-            }
-        }
-    }
-    return null;
-}
-
 async function getAHSlotsIDs(bot, itemPrices) {
     if (!bot.currentWindow?.slots) return [];
     const ids = []
@@ -919,46 +988,71 @@ async function getBestAHSlot(bot, itemPrices) {
 
     for (let slot = firstAHSlot; slot <= 17; slot++) {
         const slotData = bot.currentWindow.slots[slot];
-    //  if (itemsBuying.some(it => {
-    //         const parsed = JSON.parse(it);
-    //         return JSON.stringify(normalizeItemData(parsed)) === JSON.stringify(normalizeItemData(slotData)) &&
-    //                extractTimeToSeconds(parsed) - extractTimeToSeconds(slotData) >= 0 &&
-    //                extractTimeToSeconds(parsed) - extractTimeToSeconds(slotData) <= 2;
-    //     })) {
-    //         continue;
-    //     }
+        
+        // Получаем UUID текущего предмета
+        const currentUUID = getItemUUID(slotData);
+        
+        // Проверяем, не покупает ли уже кто-то этот лот по UUID
+        if (currentUUID && itemsBuying && itemsBuying.length > 0) {
+            const alreadyBuying = itemsBuying.some(it => {
+                try {
+                    const parsed = JSON.parse(it);
+                    const parsedUUID = getItemUUID(parsed);
+                    return parsedUUID === currentUUID;
+                } catch (e) {
+                    return false;
+                }
+            });
+            
+            if (alreadyBuying) {
+                console.log(`⏭️ Пропускаем лот ${currentUUID}, уже в очереди на покупку`);
+                continue;
+            }
+        }
         
         if (!slotData) continue;
 
         for (const configItem of sortedConfig) {
             if (!itemMatchesConfig(slotData, configItem)) continue;
-            // if (configItem.id != workerData.itemID) break
+            
             try {
                 const price = await getBuyPrice(slotData);
                 if (!price || price >= configItem.priceSell - configItem.nacenka) continue;
                 if (!configItem.priceSell) {
-                    continue
+                    continue;
                 }
-
-                // const count = bot.ah.filter(name => name === configItem.id).length;
-                // if (count >= 4) {
-                //     logger.info(`уже есть 4 ` + configItem.id)
-                //     return null;
-                // }
 
                 bot.type = configItem.id;
                 if (!bot.type) logger.error('id undefined');
-                // return null
-                const message = {name: 'buying', data: JSON.stringify(slotData)}
-                parentPort.postMessage(message)
+                
+                // Отправляем UUID предмета вместо полного объекта
+                const message = {name: 'buying', data: currentUUID};
+                parentPort.postMessage(message);
+                
                 return slotData.slot;
             } catch (error) {
-                console.error(error)
+                console.error(error);
                 continue;
             }
         }
     }
     return null;
+}
+
+// Вспомогательная функция для получения UUID
+function getItemUUID(item) {
+    if (!item || !item.nbt?.value?.PublicBukkitValues?.value?.['auctions:if-uuid']?.value) {
+        return null;
+    }
+    
+    try {
+        const uuidArray = item.nbt.value.PublicBukkitValues.value['auctions:if-uuid'].value;
+        // Преобразуем byteArray в строку для удобства сравнения
+        return uuidArray.join(',');
+    } catch (e) {
+        console.error('Ошибка получения UUID:', e);
+        return null;
+    }
 }
 
 function findFirstMatchingSlotInWindow(bot, itemPrices) {
@@ -1099,6 +1193,53 @@ function getIDByEnchantments(slotData, itemPrices) {
     }
     
     return "";
+}
+
+function getNacenkaByEnchantments(slotData, itemPrices) {
+    if (!slotData) return null;
+    
+    // Получаем все зачарования предмета
+    const enchantments = slotData.nbt?.value?.Enchantments?.value?.value || [];
+    const customEnchantments = slotData.nbt?.value?.['custom-enchantments']?.value?.value || [];
+    
+    const itemEnchants = [
+        ...enchantments.map(e => ({ 
+            name: e.id?.value, 
+            lvl: e.lvl?.value 
+        })),
+        ...customEnchantments.map(e => ({ 
+            name: e.type?.value, 
+            lvl: e.level?.value 
+        }))
+    ];
+    
+    // Сортируем конфиги по num (приоритету)
+    const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
+    
+    // Ищем подходящий конфиг
+    for (const configItem of sortedConfig) {
+        // Проверяем название предмета
+        if (slotData.name !== configItem.name) continue;
+        
+        // Проверяем, что все зачарования из конфига есть в предмете
+        const allEffectsMatch = configItem.effects?.every(required => {
+            const foundEnchant = itemEnchants.find(e => e.name === required.name);
+            return foundEnchant && foundEnchant.lvl >= required.lvl;
+        });
+        
+        if (!allEffectsMatch) continue;
+        
+        // Проверяем, нет ли лишних "запрещённых" зачарований
+        const hasMissingEnchants = itemEnchants.some(en => 
+            missingEnchantsNames?.includes(en.name)
+        );
+        if (hasMissingEnchants) continue;
+        
+        
+        return configItem.nacenka
+    }
+    
+    return 0;
 }
 
 function removeSlotAndTime(obj) {

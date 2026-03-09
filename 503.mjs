@@ -83,7 +83,7 @@ function runWorker(bot) {
     }, 30000)
 
 
-    worker.on('message', async (message) => {
+worker.on('message', async (message) => {
   try {
     if (message.name === 'success') {
       const botToUpdate = bots.find(b => b.username === message.username);
@@ -111,7 +111,34 @@ function runWorker(bot) {
       } catch (socketError) {
         console.error(`❌ Ошибка отправки buying: ${socketError.message}`);
       }
-    } else {
+    } 
+    // 👇 НОВЫЕ ОБРАБОТЧИКИ
+    else if (message.name === "set_min_price") {
+      try {
+        socket?.send(JSON.stringify({ 
+          action: 'set_min_price', 
+          type: message.type, 
+          price: message.price 
+        }));
+        console.log(`📉 Установка минимальной цены для ${message.type}: ${message.price}`);
+      } catch (socketError) {
+        console.error(`❌ Ошибка отправки set_min_price: ${socketError.message}`);
+      }
+    }
+    else if (message.name === "set_max_price") {
+      try {
+        socket?.send(JSON.stringify({ 
+          action: 'set_max_price', 
+          type: message.type, 
+          price: message.price 
+        }));
+        console.log(`📈 Установка максимальной цены для ${message.type}: ${message.price}`);
+      } catch (socketError) {
+        console.error(`❌ Ошибка отправки set_max_price: ${socketError.message}`);
+      }
+    }
+    // 👆 НОВЫЕ ОБРАБОТЧИКИ
+    else {
       try {
         // await tgBot.sendMessage(alertChatID, message);
       } catch (tgError) {

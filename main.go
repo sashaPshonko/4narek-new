@@ -67,8 +67,10 @@ type DailyData struct {
 	SellStats    map[string]int     `json:"sell_stats"`
 	TrySellStats map[string]int     `json:"try_sell_stats"`
 	MessageID    int                `json:"message_id"`
-	BuySum       map[string]int   // новая
-    SellSum      map[string]int   // новая
+	BuySum       map[string]int     `json:"buy_sum"`
+    SellSum      map[string]int     `json:"sell_sum"`
+	MinPrices    map[string]int     `json:"min_prices"`    // новая
+    MaxPrices    map[string]int     `json:"max_prices"`
 }
 
 var (
@@ -262,6 +264,8 @@ type Data struct {
 	TradeHistory map[string][]TradeLog
 	BuySum       map[string]int   // новая
     SellSum      map[string]int   // новая
+	MinPrices    map[string]int     // новая
+    MaxPrices    map[string]int  
 }
 
 var (
@@ -310,6 +314,17 @@ func main() {
 	data.Ratios = make(map[string]float64)
 	data.BuySum = make(map[string]int)
 	data.SellSum = make(map[string]int)
+	data.MinPrices = make(map[string]int)
+	data.MaxPrices = make(map[string]int)
+
+	for item, cfg := range itemsConfig {
+    if _, exists := data.MinPrices[item]; !exists {
+        data.MinPrices[item] = cfg.MinPrice
+    }
+    if _, exists := data.MaxPrices[item]; !exists {
+        data.MaxPrices[item] = cfg.MaxPrice
+    }
+}
 
 	// Загрузка данных за сегодня
 	loadDailyData(loc)
@@ -408,6 +423,8 @@ func loadDailyData(loc *time.Location) {
 		Ratios:       make(map[string]float64),
 		BuySum:       make(map[string]int),   // добавить
     	SellSum:      make(map[string]int),   // добавить
+		MinPrices:    make(map[string]int),   // добавить
+        MaxPrices:    make(map[string]int),   // добавить
 	}
 
 	if file, err := os.ReadFile(filename); err == nil {
@@ -439,6 +456,19 @@ func loadDailyData(loc *time.Location) {
 			for item, ratio := range dailyData.Ratios {
 				data.Ratios[item] = ratio
 			}
+			 if dailyData.MinPrices == nil {
+                dailyData.MinPrices = make(map[string]int)
+            }
+            if dailyData.MaxPrices == nil {
+                dailyData.MaxPrices = make(map[string]int)
+            }
+            
+            for item, price := range dailyData.MinPrices {
+                data.MinPrices[item] = price
+            }
+            for item, price := range dailyData.MaxPrices {
+                data.MaxPrices[item] = price
+            }
 			log.Println("Данные успешно загружены из файла")
 		}
 	}
@@ -453,6 +483,17 @@ func loadDailyData(loc *time.Location) {
 			dailyData.Ratios[item] = 0.8
 		}
 	}
+
+	for item, cfg := range itemsConfig {
+        if _, exists := data.MinPrices[item]; !exists {
+            data.MinPrices[item] = cfg.MinPrice
+            dailyData.MinPrices[item] = cfg.MinPrice
+        }
+        if _, exists := data.MaxPrices[item]; !exists {
+            data.MaxPrices[item] = cfg.MaxPrice
+            dailyData.MaxPrices[item] = cfg.MaxPrice
+        }
+    }
 
 	for item := range itemsConfig {
 		swordTimes[item] = time.Now().Add(-itemsConfig[item].AnalysisTime)
@@ -541,6 +582,8 @@ func saveDailyDataNoMessageUpdate() {
 	dailyData.Ratios = data.Ratios
 	dailyData.BuySum = data.BuySum
 	dailyData.SellSum = data.SellSum
+	dailyData.MinPrices = data.MinPrices    // добавить
+    dailyData.MaxPrices = data.MaxPrices 
 
 	file, err := json.MarshalIndent(dailyData, "", "  ")
 	if err != nil {
@@ -663,6 +706,8 @@ func saveDailyData() {
 	dailyData.Ratios = data.Ratios
 	dailyData.BuySum = data.BuySum
 	dailyData.SellSum = data.SellSum
+	dailyData.MinPrices = data.MinPrices    // добавить
+    dailyData.MaxPrices = data.MaxPrices    // добавить
 
 	file, err := json.MarshalIndent(dailyData, "", "  ")
 	if err != nil {
@@ -823,6 +868,73 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			saveDailyData()
 			mutex.Unlock()
 
+		case "set_min_price":
+			if msg.Type == "" || msg.Price == 0 {
+				mutex.Unlock()
+				continue
+			}
+			
+			// Проверяем существование предмета
+			if _, exists := itemsConfig[msg.Type]; !exists {
+				mutex.Unlock()
+				continue
+			}
+			
+			data.MinPrices[msg.Type] = msg.Price
+			dailyData.MinPrices[msg.Type] = msg.Price
+			
+			log.Printf("[CONFIG] %s: минимальная цена установлена %d", msg.Type, msg.Price)
+			
+			mutex.Unlock()
+			
+			// Сохраняем в файл
+			mutex.Lock()
+			saveDailyData()
+			mutex.Unlock()
+			
+			// Отправляем подтверждение
+			select {
+			case broadcast <- map[string]interface{}{
+				"action": "price_config_updated",
+				"type": msg.Type,
+				"min_price": msg.Price,
+			}:
+			default:
+			}
+
+		case "set_max_price":
+			if msg.Type == "" || msg.Price == 0 {
+				mutex.Unlock()
+				continue
+			}
+			
+			// Проверяем существование предмета
+			if _, exists := itemsConfig[msg.Type]; !exists {
+				mutex.Unlock()
+				continue
+			}
+			
+			data.MaxPrices[msg.Type] = msg.Price
+			dailyData.MaxPrices[msg.Type] = msg.Price
+			
+			log.Printf("[CONFIG] %s: максимальная цена установлена %d", msg.Type, msg.Price)
+			
+			mutex.Unlock()
+			
+			// Сохраняем в файл
+			mutex.Lock()
+			saveDailyData()
+			mutex.Unlock()
+    
+    // Отправляем подтверждение
+    select {
+    case broadcast <- map[string]interface{}{
+        "action": "price_config_updated",
+        "type": msg.Type,
+        "max_price": msg.Price,
+    }:
+    default:
+    }
 		default:
 			mutex.Unlock()
 		}
@@ -941,6 +1053,19 @@ func adjustPrice(item string) {
 	priceBefore := newPrice
 	ratioBefore := data.Ratios[item]
 
+	// Используем сохраненные мин/макс цены
+    minPrice := data.MinPrices[item]
+    maxPrice := data.MaxPrices[item]
+    
+    // Если по какой-то причине их нет, берем из конфига
+    if minPrice == 0 {
+        minPrice = cfg.MinPrice
+    }
+    if maxPrice == 0 {
+        maxPrice = cfg.MaxPrice
+    }
+
+
 	// --- 📊 СБОР СТАТИСТИКИ ---
 	ahCounts := make(map[string]int)  // Только аукцион
 	invCounts := make(map[string]int) // Только инвентарь
@@ -982,22 +1107,22 @@ func adjustPrice(item string) {
 
 	if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 {
 		newPrice += cfg.PriceStep
-		if newPrice > cfg.MaxPrice {
-			newPrice = cfg.MaxPrice
+		if newPrice > maxPrice {
+			newPrice = maxPrice
 		}
 
 	// 2. Снижение при плохих продажах (Для всех) — смотрим ТОЛЬКО аукцион
 	} else if (onAH > sales && onAH > cfg.NormalSales) && sales < cfg.NormalSales {
 		newPrice -= cfg.PriceStep
-		if newPrice < cfg.MinPrice {
-			newPrice = cfg.MinPrice
+		if newPrice < minPrice {
+			newPrice = minPrice
 		}
 
 	// 3. Снижение при избытке покупок (Для всех) — смотрим ТОЛЬКО аукцион
 	} else if float64(buys) > float64(sales)*2 && totalStock > cfg.NormalSales {
 		newPrice -= cfg.PriceStep
-		if newPrice < cfg.MinPrice {
-			newPrice = cfg.MinPrice
+		if newPrice < minPrice {
+			newPrice = minPrice
 		}
 
 	// 4. 🔥 Снижение при перенасыщении 3 к 1 (ТОЛЬКО ДЛЯ ЛИДЕРА)
@@ -1009,8 +1134,8 @@ func adjustPrice(item string) {
 		}
 		if float64(totalStock) > float64(salesLeader)*3 {
 			newPrice -= cfg.PriceStep
-			if newPrice < cfg.MinPrice {
-				newPrice = cfg.MinPrice
+			if newPrice < minPrice {
+				newPrice = minPrice
 			}
 		}
 	}
