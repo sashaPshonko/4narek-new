@@ -54,7 +54,7 @@ const ahCommand = `/ah search ${workerData.item}`
 
 let type = ""
 
-const missingEnchantsNames = ["minecraft:knockback", "heavy", "unstable", "minecraft:thorns", "minecraft:binding_curse"]
+const missingEnchantsNames = ["minecraft:knockback", "heavy", "unstable", "minecraft:thorns", "minecraft:binding_curse", "minecraft:mending"]
 
 const minBalance = 10000000
 
@@ -701,12 +701,6 @@ bot.on('message', async (message) => {
         // Получаем информацию о предмете
         const slotHotBar = bot.quickBarSlot;
         const slot = transform(slotHotBar);
-        if (hasMendingIfApplicable(bot.inventory.slots[slot], itemPrices)) {
-            const command = `/ah sell ${balance}`
-            await bot.chat(command)
-            bot.chat(command)
-            return
-        }
         const currentPrice = getPriceByEnchantments(bot.inventory.slots[slot], itemPrices);
         const id = getIDByEnchantments(bot.inventory.slots[slot], itemPrices);
         const nacenka = getNacenkaByEnchantments(bot.inventory.slots[slot], itemPrices)
@@ -1116,185 +1110,151 @@ function findFirstMatchingSlotInInventory(bot, itemPrices) {
 }
 
 function getPriceByEnchantments(slotData, itemPrices) {
-    if (!slotData) return null;
+    if (!slotData) return 0;
     
-    // Получаем все зачарования предмета
     const enchantments = slotData.nbt?.value?.Enchantments?.value?.value || [];
     const customEnchantments = slotData.nbt?.value?.['custom-enchantments']?.value?.value || [];
     
     const itemEnchants = [
-        ...enchantments.map(e => ({ 
-            name: e.id?.value, 
-            lvl: e.lvl?.value 
-        })),
-        ...customEnchantments.map(e => ({ 
-            name: e.type?.value, 
-            lvl: e.level?.value 
-        }))
+        ...enchantments.map(e => ({ name: e.id?.value, lvl: e.lvl?.value })),
+        ...customEnchantments.map(e => ({ name: e.type?.value, lvl: e.level?.value }))
     ];
     
-    // Сортируем конфиги по num (приоритету)
     const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
     
-    // Ищем подходящий конфиг
     for (const configItem of sortedConfig) {
-        // Проверяем название предмета
         if (slotData.name !== configItem.name) continue;
         
-        // Проверяем, что все зачарования из конфига есть в предмете
         const allEffectsMatch = configItem.effects?.every(required => {
             const foundEnchant = itemEnchants.find(e => e.name === required.name);
             return foundEnchant && foundEnchant.lvl >= required.lvl;
         });
-        
         if (!allEffectsMatch) continue;
         
-        // Проверяем, нет ли лишних "запрещённых" зачарований
-        const hasMissingEnchants = itemEnchants.some(en => 
-            missingEnchantsNames?.includes(en.name)
-        );
+        const hasMissingEnchants = itemEnchants.some(en => {
+            if (!missingEnchantsNames.includes(en.name)) return false;
+            const isRequiredByConfig = configItem.effects?.some(ef => ef.name === en.name);
+            return !isRequiredByConfig;
+        });
         if (hasMissingEnchants) continue;
         
+        // Спецпроверка для кирки
+        if (slotData.name === 'netherite_pickaxe' &&
+            itemEnchants.some(en => en.name === 'minecraft:silk_touch') &&
+            !itemEnchants.some(en => en.name === 'melting')
+        ) {
+            continue;
+        }
         
-        return configItem.priceSell
+        // Проверка прочности
+        if (slotData.maxDurability) {
+            let coefficient = 0.9;
+            if (itemEnchants.some(en => en.name === 'minecraft:mending')) coefficient = 0.75;
+            const damage = slotData.nbt?.value?.Damage?.value || 0;
+            const durabilityLeft = slotData.maxDurability - damage;
+            if (durabilityLeft < slotData.maxDurability * coefficient) continue;
+        }
+        
+        return configItem.priceSell;
     }
-    
     return 0;
 }
 
 function getIDByEnchantments(slotData, itemPrices) {
-    if (!slotData) return null;
+    if (!slotData) return "";
     
-    // Получаем все зачарования предмета
     const enchantments = slotData.nbt?.value?.Enchantments?.value?.value || [];
     const customEnchantments = slotData.nbt?.value?.['custom-enchantments']?.value?.value || [];
     
     const itemEnchants = [
-        ...enchantments.map(e => ({ 
-            name: e.id?.value, 
-            lvl: e.lvl?.value 
-        })),
-        ...customEnchantments.map(e => ({ 
-            name: e.type?.value, 
-            lvl: e.level?.value 
-        }))
+        ...enchantments.map(e => ({ name: e.id?.value, lvl: e.lvl?.value })),
+        ...customEnchantments.map(e => ({ name: e.type?.value, lvl: e.level?.value }))
     ];
     
-    // Сортируем конфиги по num (приоритету)
     const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
     
-    // Ищем подходящий конфиг
     for (const configItem of sortedConfig) {
-        // Проверяем название предмета
         if (slotData.name !== configItem.name) continue;
         
-        // Проверяем, что все зачарования из конфига есть в предмете
         const allEffectsMatch = configItem.effects?.every(required => {
             const foundEnchant = itemEnchants.find(e => e.name === required.name);
             return foundEnchant && foundEnchant.lvl >= required.lvl;
         });
-        
         if (!allEffectsMatch) continue;
         
-        // Проверяем, нет ли лишних "запрещённых" зачарований
-        const hasMissingEnchants = itemEnchants.some(en => 
-            missingEnchantsNames?.includes(en.name)
-        );
+        const hasMissingEnchants = itemEnchants.some(en => {
+            if (!missingEnchantsNames.includes(en.name)) return false;
+            const isRequiredByConfig = configItem.effects?.some(ef => ef.name === en.name);
+            return !isRequiredByConfig;
+        });
         if (hasMissingEnchants) continue;
         
+        if (slotData.name === 'netherite_pickaxe' &&
+            itemEnchants.some(en => en.name === 'minecraft:silk_touch') &&
+            !itemEnchants.some(en => en.name === 'melting')
+        ) {
+            continue;
+        }
         
-        return configItem.id
+        if (slotData.maxDurability) {
+            let coefficient = 0.9;
+            if (itemEnchants.some(en => en.name === 'minecraft:mending')) coefficient = 0.75;
+            const damage = slotData.nbt?.value?.Damage?.value || 0;
+            const durabilityLeft = slotData.maxDurability - damage;
+            if (durabilityLeft < slotData.maxDurability * coefficient) continue;
+        }
+        
+        return configItem.id;
     }
-    
     return "";
 }
 
-function hasMendingIfApplicable(slotData, itemPrices) {
-    if (!slotData) return false;
-    
-    // Получаем все зачарования предмета
-    const enchantments = slotData.nbt?.value?.Enchantments?.value?.value || [];
-    const customEnchantments = slotData.nbt?.value?.['custom-enchantments']?.value?.value || [];
-    
-    const itemEnchants = [
-        ...enchantments.map(e => ({ 
-            name: e.id?.value, 
-            lvl: e.lvl?.value 
-        })),
-        ...customEnchantments.map(e => ({ 
-            name: e.type?.value, 
-            lvl: e.level?.value 
-        }))
-    ];
-    
-    // Определяем тип предмета по названию
-    const itemName = slotData.name?.toLowerCase() || '';
-    
-    // Проверяем, является ли предмет исключением (меч/кирка/элитры)
-    const isExcluded = 
-        itemName.includes('sword') || 
-        itemName.includes('меч') ||
-        itemName.includes('pickaxe') || 
-        itemName.includes('кирка') ||
-        itemName.includes('elytra');
-    
-    // Если предмет в списке исключений — всегда возвращаем false
-    if (isExcluded) {
-        return false;
-    }
-    
-    // Для остальных предметов (ботинки, шлемы и т.д.) проверяем наличие починки
-    return itemEnchants.some(enchant => 
-        enchant.name === 'minecraft:mending' || 
-        enchant.name === 'mending' ||
-        enchant.name?.includes('mending')
-    );
-}
-
 function getNacenkaByEnchantments(slotData, itemPrices) {
-    if (!slotData) return null;
+    if (!slotData) return 0;
     
-    // Получаем все зачарования предмета
     const enchantments = slotData.nbt?.value?.Enchantments?.value?.value || [];
     const customEnchantments = slotData.nbt?.value?.['custom-enchantments']?.value?.value || [];
     
     const itemEnchants = [
-        ...enchantments.map(e => ({ 
-            name: e.id?.value, 
-            lvl: e.lvl?.value 
-        })),
-        ...customEnchantments.map(e => ({ 
-            name: e.type?.value, 
-            lvl: e.level?.value 
-        }))
+        ...enchantments.map(e => ({ name: e.id?.value, lvl: e.lvl?.value })),
+        ...customEnchantments.map(e => ({ name: e.type?.value, lvl: e.level?.value }))
     ];
     
-    // Сортируем конфиги по num (приоритету)
     const sortedConfig = [...itemPrices].sort((a, b) => b.num - a.num);
     
-    // Ищем подходящий конфиг
     for (const configItem of sortedConfig) {
-        // Проверяем название предмета
         if (slotData.name !== configItem.name) continue;
         
-        // Проверяем, что все зачарования из конфига есть в предмете
         const allEffectsMatch = configItem.effects?.every(required => {
             const foundEnchant = itemEnchants.find(e => e.name === required.name);
             return foundEnchant && foundEnchant.lvl >= required.lvl;
         });
-        
         if (!allEffectsMatch) continue;
         
-        // Проверяем, нет ли лишних "запрещённых" зачарований
-        const hasMissingEnchants = itemEnchants.some(en => 
-            missingEnchantsNames?.includes(en.name)
-        );
+        const hasMissingEnchants = itemEnchants.some(en => {
+            if (!missingEnchantsNames.includes(en.name)) return false;
+            const isRequiredByConfig = configItem.effects?.some(ef => ef.name === en.name);
+            return !isRequiredByConfig;
+        });
         if (hasMissingEnchants) continue;
         
+        if (slotData.name === 'netherite_pickaxe' &&
+            itemEnchants.some(en => en.name === 'minecraft:silk_touch') &&
+            !itemEnchants.some(en => en.name === 'melting')
+        ) {
+            continue;
+        }
         
-        return configItem.nacenka
+        if (slotData.maxDurability) {
+            let coefficient = 0.9;
+            if (itemEnchants.some(en => en.name === 'minecraft:mending')) coefficient = 0.75;
+            const damage = slotData.nbt?.value?.Damage?.value || 0;
+            const durabilityLeft = slotData.maxDurability - damage;
+            if (durabilityLeft < slotData.maxDurability * coefficient) continue;
+        }
+        
+        return configItem.nacenka;
     }
-    
     return 0;
 }
 
@@ -1351,7 +1311,18 @@ function itemMatchesConfig(item, configItem) {
     });
 
     if (!areEnchantsValid) return false;
-    if (allEnchants.some(en => missingEnchantsNames.includes(en.name))) return false;
+    const hasMissingEnchants = allEnchants.some(en => {
+        // Если зачарования нет в списке запрещённых — пропускаем
+    if (!missingEnchantsNames.includes(en.name)) return false;
+        
+        // Проверяем, требуется ли это зачарование конфигом
+        const isRequiredByConfig = configItem.effects?.some(ef => ef.name === en.name);
+        
+        // Возвращаем true только если зачарование запрещено И не требуется конфигом
+        return !isRequiredByConfig;
+    });
+    if (hasMissingEnchants) return false;
+
     if (item.name === 'netherite_pickaxe' &&
         allEnchants.some(en => en.name === 'minecraft:silk_touch') &&
         !allEnchants.some(en => en.name === 'melting')
