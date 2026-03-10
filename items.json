@@ -422,5 +422,41 @@
         ],
         "num": 3,
         "nacenka": 400000
+    },
+    {
+        "name": "elytra",
+        "id": "elytra",
+        "effects": [
+        ],
+        "num": 1,
+        "nacenka": 300000
+    },
+    {
+        "name": "elytra",
+        "id": "elytra3",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 3
+            }
+        ],
+        "num": 2,
+        "nacenka": 300000
+    },
+    {
+        "name": "elytra",
+        "id": "elytra-mend",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:mending",
+                "lvl": 1
+            }
+        ],
+        "num": 3,
+        "nacenka": 400000
     }
 ]

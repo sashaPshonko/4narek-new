@@ -246,6 +246,33 @@ var (
 			MaxPrice:     9900020,
 			Type:         "netherite_pickaxe",
 		},
+		"elytra": {
+			BasePrice:    600021,
+			NormalSales:  4,
+			PriceStep:    50000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     600021,
+			MaxPrice:     3000021,
+			Type:         "elytra",
+		},
+		"elytra3": {
+			BasePrice:    700022,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     900022,
+			MaxPrice:     5000022,
+			Type:         "elytra",
+		},
+		"elytra-mend": {
+			BasePrice:    1500023,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			MinPrice:     1200023,
+			MaxPrice:     9900023,
+			Type:         "elytra",
+		},
 	}
 )
 
