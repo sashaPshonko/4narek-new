@@ -54,7 +54,7 @@ const ahCommand = `/ah search ${workerData.item}`
 
 let type = ""
 
-const missingEnchantsNames = ["minecraft:knockback", "heavy", "unstable", "minecraft:thorns", "minecraft:binding_curse", "minecraft:mending"]
+const missingEnchantsNames = ["minecraft:knockback", "heavy", "unstable", "minecraft:thorns", "minecraft:binding_curse"]
 
 const minBalance = 10000000
 
