@@ -1311,10 +1311,12 @@ function itemMatchesConfig(item, configItem) {
 
     // Проверка прочности
     if (item.maxDurability) {
+        let coefficient = 0.9
+        if (allEnchants.some(en => en.name === 'minecraft:mending')) coefficient = 0.75
         const damage = item.nbt?.value?.Damage?.value || 0;
         const durabilityLeft = item.maxDurability - damage;
-        if (durabilityLeft < item.maxDurability * 0.9) return false;
-    } else return false
+        if (durabilityLeft < item.maxDurability * coefficient) return false;
+    }
     if (configItem.count && configItem.count != item.count) return false;
 
     return true;

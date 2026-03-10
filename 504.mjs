@@ -26,6 +26,7 @@ const bots = [
   { username: 'tormoznabite', password: 'ggggg', anarchy: 5004, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite helmet', ip: '192.168.8.117', itemID: "шлем_позорный" },
 ];
 
+
 let workers = [];
 let botItems = new Map
 let botInventory = new Map
@@ -87,6 +88,7 @@ worker.on('message', async (message) => {
     } else if (message.name === "inventory") {
       botInventory.set(message.username, message.data);
     } else if (message.name === "buying") {
+      broadcastBuyingLocally(message.data);
       try {
         socket?.send(JSON.stringify({ action: "add", json_data: message.data }));
       } catch (socketError) {
@@ -168,6 +170,40 @@ worker.on('message', async (message) => {
       console.warn(`⚠️ Worker ${bot.username} завершился`);
       handleRestart();
     });
+  });
+}
+
+// Функция для локальной синхронизации покупаемых предметов
+async function broadcastBuyingLocally(uuid) {
+  return new Promise((resolve, reject) => {
+    try {
+      // Создаём обновлённый массив (текущий + новый UUID)
+      const updatedBuying = [...itemsBuying, uuid];
+      
+      // Отправляем всем воркерам (ботам)
+      workers.forEach(w => {
+        w.postMessage({ 
+          type: 'items_buying', 
+          data: updatedBuying 
+        });
+      });
+      
+      // Обновляем локальный массив
+      itemsBuying = updatedBuying;
+      
+      // Таймер для автоочистки через 2 секунды (как на сервере)
+      setTimeout(() => {
+        itemsBuying = itemsBuying.filter(id => id !== uuid);
+        // Не рассылаем очистку - сервер сам разошлёт через json_update
+        console.log(`🧹 UUID удалён из локального списка: ${uuid}`);
+      }, 2000);
+      
+      resolve();  // 👈 ВАЖНО: разрешаем промис сразу после рассылки
+      
+    } catch (localError) {
+      console.error(`❌ Ошибка локальной рассылки: ${localError.message}`);
+      reject(localError);
+    }
   });
 }
 
