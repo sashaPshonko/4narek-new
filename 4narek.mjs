@@ -695,10 +695,18 @@ bot.on('message', async (message) => {
         // Оставляем только цифры
         balanceStr = balanceStr.replace(/\D/g, '');
         const balance = parseInt(balanceStr);
+
+        
         
         // Получаем информацию о предмете
         const slotHotBar = bot.quickBarSlot;
         const slot = transform(slotHotBar);
+        if (hasMendingIfApplicable(bot.inventory.slots[slot], itemPrices)) {
+            const command = `/ah sell ${balance}`
+            await bot.chat(command)
+            bot.chat(command)
+            return
+        }
         const currentPrice = getPriceByEnchantments(bot.inventory.slots[slot], itemPrices);
         const id = getIDByEnchantments(bot.inventory.slots[slot], itemPrices);
         const nacenka = getNacenkaByEnchantments(bot.inventory.slots[slot], itemPrices)
@@ -1201,6 +1209,48 @@ function getIDByEnchantments(slotData, itemPrices) {
     return "";
 }
 
+function hasMendingIfApplicable(slotData, itemPrices) {
+    if (!slotData) return false;
+    
+    // Получаем все зачарования предмета
+    const enchantments = slotData.nbt?.value?.Enchantments?.value?.value || [];
+    const customEnchantments = slotData.nbt?.value?.['custom-enchantments']?.value?.value || [];
+    
+    const itemEnchants = [
+        ...enchantments.map(e => ({ 
+            name: e.id?.value, 
+            lvl: e.lvl?.value 
+        })),
+        ...customEnchantments.map(e => ({ 
+            name: e.type?.value, 
+            lvl: e.level?.value 
+        }))
+    ];
+    
+    // Определяем тип предмета по названию
+    const itemName = slotData.name?.toLowerCase() || '';
+    
+    // Проверяем, является ли предмет исключением (меч/кирка/элитры)
+    const isExcluded = 
+        itemName.includes('sword') || 
+        itemName.includes('меч') ||
+        itemName.includes('pickaxe') || 
+        itemName.includes('кирка') ||
+        itemName.includes('elytra');
+    
+    // Если предмет в списке исключений — всегда возвращаем false
+    if (isExcluded) {
+        return false;
+    }
+    
+    // Для остальных предметов (ботинки, шлемы и т.д.) проверяем наличие починки
+    return itemEnchants.some(enchant => 
+        enchant.name === 'minecraft:mending' || 
+        enchant.name === 'mending' ||
+        enchant.name?.includes('mending')
+    );
+}
+
 function getNacenkaByEnchantments(slotData, itemPrices) {
     if (!slotData) return null;
     
@@ -1317,7 +1367,6 @@ function itemMatchesConfig(item, configItem) {
         const durabilityLeft = item.maxDurability - damage;
         if (durabilityLeft < item.maxDurability * coefficient) return false;
     }
-    if (configItem.count && configItem.count != item.count) return false;
 
     return true;
 }
