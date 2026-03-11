@@ -9,7 +9,7 @@
             },
             {
                 "name": "minecraft:fire_aspect",
-                "lvl": 2
+                "lvl": 1
             },
             {
                 "name": "minecraft:sharpness",
@@ -25,7 +25,7 @@
         "effects": [
             {
                 "name": "minecraft:unbreaking",
-                "lvl": 4
+                "lvl": 3
             },
             {
                 "name": "minecraft:sharpness",
@@ -33,7 +33,7 @@
             },
             {
                 "name": "minecraft:fire_aspect",
-                "lvl": 2
+                "lvl": 1
             },
             {
                 "name": "poison",
@@ -65,7 +65,7 @@
             },
             {
                 "name": "minecraft:fire_aspect",
-                "lvl": 2
+                "lvl": 1
             },
             {
                 "name": "minecraft:looting",
