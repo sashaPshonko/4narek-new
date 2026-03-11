@@ -89,7 +89,7 @@
             },
             {
                 "name": "minecraft:looting",
-                "lvl": 3
+                "lvl": 5
             }
         ],
         "num": 4,
