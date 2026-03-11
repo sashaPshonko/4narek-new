@@ -170,14 +170,6 @@
             {
                 "name": "minecraft:protection",
                 "lvl": 4
-            },
-            {
-                "name": "minecraft:projectile_protection",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:fire_protection",
-                "lvl": 4
             }
         ],
         "num": 1,
@@ -209,14 +201,6 @@
             },
             {
                 "name": "minecraft:protection",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:projectile_protection",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:fire_protection",
                 "lvl": 4
             }
         ],
