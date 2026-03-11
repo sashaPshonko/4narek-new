@@ -37,7 +37,7 @@
             },
             {
                 "name": "poison",
-                "lvl": 3
+                "lvl": 2
             },
             {
                 "name": "vampirism",
@@ -45,7 +45,7 @@
             },
             {
                 "name": "detection",
-                "lvl": 3
+                "lvl": 2
             }
         ],
         "num": 5,
@@ -69,10 +69,6 @@
             },
             {
                 "name": "minecraft:looting",
-                "lvl": 3
-            },
-            {
-                "name": "minecraft:sweeping",
                 "lvl": 3
             }
         ],
@@ -261,7 +257,7 @@
             },
             {
                 "name": "minecraft:efficiency",
-                "lvl": 7
+                "lvl": 6
             },
             {
                 "name": "minecraft:fortune",
