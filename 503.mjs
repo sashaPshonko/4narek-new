@@ -211,13 +211,6 @@ async function broadcastBuyingLocally(uuid) {
       // Обновляем локальный массив
       itemsBuying = updatedBuying;
       
-      // Таймер для автоочистки через 2 секунды (как на сервере)
-      setTimeout(() => {
-        itemsBuying = itemsBuying.filter(id => id !== uuid);
-        // Не рассылаем очистку - сервер сам разошлёт через json_update
-        console.log(`🧹 UUID удалён из локального списка: ${uuid}`);
-      }, 2000);
-      
       resolve();  // 👈 ВАЖНО: разрешаем промис сразу после рассылки
       
     } catch (localError) {

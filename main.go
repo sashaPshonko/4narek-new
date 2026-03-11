@@ -292,7 +292,8 @@ type Data struct {
 	BuySum       map[string]int   // новая
     SellSum      map[string]int   // новая
 	MinPrices    map[string]int     // новая
-    MaxPrices    map[string]int  
+    MaxPrices    map[string]int
+	NeedPriceIncrease   map[string]bool 
 }
 
 var (
@@ -343,6 +344,7 @@ func main() {
 	data.SellSum = make(map[string]int)
 	data.MinPrices = make(map[string]int)
 	data.MaxPrices = make(map[string]int)
+	data.NeedPriceIncrease = make(map[string]bool)
 
 	for item, cfg := range itemsConfig {
     if _, exists := data.MinPrices[item]; !exists {
@@ -907,10 +909,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			
+			// Сохраняем минимальную цену и ставим флаг
 			data.MinPrices[msg.Type] = msg.Price
-			dailyData.MinPrices[msg.Type] = msg.Price
+			data.NeedPriceIncrease[msg.Type] = true
+
+			lastPriceUpdate[msg.Type] = time.Now().Add(-itemsConfig[msg.Type].AnalysisTime)
 			
-			log.Printf("[CONFIG] %s: минимальная цена установлена %d", msg.Type, msg.Price)
+			log.Printf("[CONFIG] %s: минимальная цена установлена %d (флаг поднят)", msg.Type, msg.Price)
 			
 			mutex.Unlock()
 			
@@ -927,7 +932,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				"min_price": msg.Price,
 			}:
 			default:
-			}
+    }
 
 		case "set_max_price":
 			if msg.Type == "" || msg.Price == 0 {
@@ -1131,42 +1136,27 @@ func adjustPrice(item string) {
 	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ (ПОЛНОСТЬЮ ИЗ СТАРОГО КОДА) ---
 	ratio := ratioBefore
 
-	if totalStock <= cfg.NormalSales && newPrice >= maxPrice && sales >= cfg.NormalSales {
-    
-		// Динамический шаг расширения
-		increaseAmount := 300000
-		
-		// Новый максимум
-		newMaxPrice := maxPrice + increaseAmount
-		
-		// Обновляем
-		data.MaxPrices[item] = newMaxPrice
-		maxPrice = newMaxPrice
-		newPrice = newMaxPrice
-		
-		log.Printf("🚀 MAXPRICE повышен для %s: %d -> %d (на складе: %d, продажи: %d/%d)",
-			item, newMaxPrice-increaseAmount, newMaxPrice, totalStock, sales, cfg.NormalSales)
-	} else if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 {
+	if data.NeedPriceIncrease[item] {
+        targetPrice := data.MinPrices[item]
+        if targetPrice > 0 && targetPrice > newPrice {
+            newPrice = targetPrice
+            log.Printf("🚀 Принудительное повышение %s по флагу: %d -> %d", 
+                item, priceBefore, newPrice)
+        }
+        // Сбрасываем флаг
+        data.NeedPriceIncrease[item] = false
+    } else if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 {
 		newPrice += cfg.PriceStep
-		if newPrice > maxPrice {
-			newPrice = maxPrice
-		}
 		log.Printf("📈 Повышение %s: мало товара (%d < %d*2)", item, totalStock, cfg.NormalSales)
 
 	// 2. Снижение при плохих продажах (Для всех) — смотрим ТОЛЬКО аукцион
 	} else if (onAH > sales && onAH > cfg.NormalSales) && sales < cfg.NormalSales {
 		newPrice -= cfg.PriceStep
-		if newPrice < minPrice {
-			newPrice = minPrice
-		}
 		log.Printf("📉 Снижение %s: плохие продажи (на АХ: %d, продажи: %d)", item, onAH, sales)
 
 	// 3. Снижение при избытке покупок (Для всех) — смотрим ТОЛЬКО аукцион
 	} else if float64(buys) > float64(sales)*2 && totalStock > cfg.NormalSales {
 		newPrice -= cfg.PriceStep
-		if newPrice < minPrice {
-			newPrice = minPrice
-		}
 		log.Printf("📉 Снижение %s: перекупка (покупки: %d, продажи: %d)", item, buys, sales)
 
 	// 4. 🔥 Снижение при перенасыщении 3 к 1 (ТОЛЬКО ДЛЯ ЛИДЕРА)
@@ -1177,9 +1167,6 @@ func adjustPrice(item string) {
 		}
 		if float64(totalStock) > float64(salesLeader)*3 {
 			newPrice -= cfg.PriceStep
-			if newPrice < minPrice {
-				newPrice = minPrice
-			}
 			log.Printf("🔥 Демпинг лидера %s: переполнение %d > %d*3", item, totalStock, salesLeader)
 		}
 	}
