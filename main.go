@@ -104,7 +104,7 @@ var (
 		},
 		"ботинки":{
 			BasePrice:    1000005,
-			NormalSales:  5,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700005,
@@ -131,7 +131,7 @@ var (
 		},
 		"шлем":{
 			BasePrice:    1000008,
-			NormalSales:  5,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700008,
@@ -158,7 +158,7 @@ var (
 		},
 		"штаны":{
 			BasePrice:    1000011,
-			NormalSales:  5,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     900011,
@@ -176,7 +176,7 @@ var (
 		// },
 		"штаны_позорные":{
 			BasePrice:    800013,
-			NormalSales:  5,
+			NormalSales:  4,
 			PriceStep:    50000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500013,
@@ -185,7 +185,7 @@ var (
 		},
 		"нагрудник":{
 			BasePrice:    1000014,
-			NormalSales:  5,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     700014,
