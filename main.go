@@ -1080,20 +1080,19 @@ func adjustPrice(item string) {
 	priceBefore := newPrice
 	ratioBefore := data.Ratios[item]
 
-	// Используем сохраненные мин/макс цены
-    minPrice := data.MinPrices[item]
-    maxPrice := data.MaxPrices[item]
-    
-    // Если по какой-то причине их нет, берем из конфига
-    if minPrice == 0 {
-        minPrice = cfg.MinPrice
-    }
-    if maxPrice == 0 {
-        maxPrice = cfg.MaxPrice
-    }
+	// Используем сохраненные мин/макс цены (динамические!)
+	minPrice := data.MinPrices[item]
+	maxPrice := data.MaxPrices[item]
+	
+	// Если по какой-то причине их нет, берем из конфига
+	if minPrice == 0 {
+		minPrice = cfg.MinPrice
+	}
+	if maxPrice == 0 {
+		maxPrice = cfg.MaxPrice
+	}
 
-
-	// --- 📊 СБОР СТАТИСТИКИ ---
+	// --- 📊 СБОР СТАТИСТИКИ (как в старом добром коде) ---
 	ahCounts := make(map[string]int)  // Только аукцион
 	invCounts := make(map[string]int) // Только инвентарь
 	
@@ -1122,21 +1121,23 @@ func adjustPrice(item string) {
 	for name := range itemsConfig {
 		if itemsConfig[name].Type == cfg.Type {
 			total := ahCounts[name] + invCounts[name]
-			if total > maxTotal || (total == maxTotal && name < leaderID) {
+			if total > maxTotal {
 				maxTotal = total
 				leaderID = name
 			}
 		}
 	}
 
-	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ ---
+	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ (ПОЛНОСТЬЮ ИЗ СТАРОГО КОДА) ---
 	ratio := ratioBefore
 
+	// 1. Повышение цены (Для всех) — смотрим ТОЛЬКО аукцион
 	if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 {
 		newPrice += cfg.PriceStep
 		if newPrice > maxPrice {
 			newPrice = maxPrice
 		}
+		log.Printf("📈 Повышение %s: мало товара (%d < %d*2)", item, totalStock, cfg.NormalSales)
 
 	// 2. Снижение при плохих продажах (Для всех) — смотрим ТОЛЬКО аукцион
 	} else if (onAH > sales && onAH > cfg.NormalSales) && sales < cfg.NormalSales {
@@ -1144,6 +1145,7 @@ func adjustPrice(item string) {
 		if newPrice < minPrice {
 			newPrice = minPrice
 		}
+		log.Printf("📉 Снижение %s: плохие продажи (на АХ: %d, продажи: %d)", item, onAH, sales)
 
 	// 3. Снижение при избытке покупок (Для всех) — смотрим ТОЛЬКО аукцион
 	} else if float64(buys) > float64(sales)*2 && totalStock > cfg.NormalSales {
@@ -1151,9 +1153,9 @@ func adjustPrice(item string) {
 		if newPrice < minPrice {
 			newPrice = minPrice
 		}
+		log.Printf("📉 Снижение %s: перекупка (покупки: %d, продажи: %d)", item, buys, sales)
 
 	// 4. 🔥 Снижение при перенасыщении 3 к 1 (ТОЛЬКО ДЛЯ ЛИДЕРА)
-	// Здесь проверяем сумму AH + INV, как ты и просил в самом начале
 	} else if item == leaderID {
 		salesLeader := cfg.NormalSales
 		if sales > cfg.NormalSales {
@@ -1164,6 +1166,7 @@ func adjustPrice(item string) {
 			if newPrice < minPrice {
 				newPrice = minPrice
 			}
+			log.Printf("🔥 Демпинг лидера %s: переполнение %d > %d*3", item, totalStock, salesLeader)
 		}
 	}
 

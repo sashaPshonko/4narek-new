@@ -1002,17 +1002,7 @@ async function getBestAHSlot(bot, itemPrices) {
         
         // Проверяем, не покупает ли уже кто-то этот лот по UUID
         if (currentUUID && itemsBuying && itemsBuying.length > 0) {
-            const alreadyBuying = itemsBuying.some(it => {
-                try {
-                    const parsed = JSON.parse(it);
-                    const parsedUUID = getItemUUID(parsed);
-                    return parsedUUID === currentUUID;
-                } catch (e) {
-                    return false;
-                }
-            });
-            
-            if (alreadyBuying) {
+            if (itemsBuying.includes(currentUUID)) {
                 console.log(`⏭️ Пропускаем лот ${currentUUID}, уже в очереди на покупку`);
                 continue;
             }
