@@ -1168,6 +1168,21 @@ func adjustPrice(item string) {
 			}
 			log.Printf("🔥 Демпинг лидера %s: переполнение %d > %d*3", item, totalStock, salesLeader)
 		}
+	} else if totalStock <= cfg.NormalSales && newPrice >= maxPrice && sales >= cfg.NormalSales {
+    
+		// Динамический шаг расширения
+		increaseAmount := 300000
+		
+		// Новый максимум
+		newMaxPrice := maxPrice + increaseAmount
+		
+		// Обновляем
+		data.MaxPrices[item] = newMaxPrice
+		maxPrice = newMaxPrice
+		newPrice = newMaxPrice
+		
+		log.Printf("🚀 MAXPRICE повышен для %s: %d -> %d (на складе: %d, продажи: %d/%d)",
+			item, newMaxPrice-increaseAmount, newMaxPrice, totalStock, sales, cfg.NormalSales)
 	}
 
 	// --- ✅ ЗАВЕРШЕНИЕ ---
