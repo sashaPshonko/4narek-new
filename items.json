@@ -122,6 +122,14 @@
             {
                 "name": "minecraft:protection",
                 "lvl": 4
+            },
+            {
+                "name": "minecraft:feather_falling",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:projectile_protection",
+                "lvl": 4
             }
         ],
         "num": 1,
@@ -138,6 +146,14 @@
             {
                 "name": "minecraft:protection",
                 "lvl": 5
+            },
+            {
+                "name": "minecraft:respiration",
+                "lvl": 2
+            },
+            {
+                "name": "minecraft:aqua_affinity",
+                "lvl": 1
             }
         ],
         "num": 2,
@@ -153,6 +169,10 @@
             },
             {
                 "name": "minecraft:protection",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:projectile_protection",
                 "lvl": 4
             }
         ],
@@ -186,6 +206,10 @@
             {
                 "name": "minecraft:protection",
                 "lvl": 4
+            },
+            {
+                "name": "minecraft:projectile_protection",
+                "lvl": 4
             }
         ],
         "num": 1,
@@ -217,6 +241,10 @@
             },
             {
                 "name": "minecraft:protection",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:projectile_protection",
                 "lvl": 4
             }
         ],

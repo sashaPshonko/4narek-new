@@ -111,7 +111,7 @@ var (
 			MaxPrice:     2000005,
 			Type:         "netherite_boots",
 		},
-		// "ботинки_починка":{
+		// "ботинки_крутые":{
 		// 	BasePrice:    3000006,
 		// 	NormalSales:  4,
 		// 	PriceStep:    100000,
@@ -138,8 +138,8 @@ var (
 			MaxPrice:     3500008,
 			Type:         "netherite_helmet",
 		},
-		// "шлем_починка":{
-		// 	BasePrice:    2500009,
+		// "шлем_крутой":{
+		// 	BasePrice:    1600009,
 		// 	NormalSales:  4,
 		// 	PriceStep:    100000,
 		// 	AnalysisTime: 10 * time.Minute,
