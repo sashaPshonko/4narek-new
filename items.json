@@ -1,5 +1,5 @@
 [
-        {
+    {
         "name": "netherite_sword",
         "id": "sword5",
         "effects": [
@@ -210,6 +210,10 @@
             {
                 "name": "minecraft:projectile_protection",
                 "lvl": 4
+            },
+            {
+                "name": "minecraft:fire_protection",
+                "lvl": 4
             }
         ],
         "num": 1,
@@ -245,6 +249,10 @@
             },
             {
                 "name": "minecraft:projectile_protection",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:fire_protection",
                 "lvl": 4
             }
         ],
@@ -365,6 +373,102 @@
             }
         ],
         "num": 3,
+        "nacenka": 300000
+    },
+     {
+        "name": "netherite_sword",
+        "id": "sword5-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 5
+            }
+        ],
+        "num": 1,
+        "nacenka": 300000
+    },
+    {
+        "name": "netherite_sword",
+        "id": "sword7-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 7
+            }
+        ],
+        "num": 3,
+        "nacenka": 300000
+    },
+    {
+        "name": "netherite_sword",
+        "id": "megasword-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 3
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 7
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "poison",
+                "lvl": 2
+            },
+            {
+                "name": "vampirism",
+                "lvl": 2
+            },
+            {
+                "name": "detection",
+                "lvl": 2
+            }
+        ],
+        "num": 5,
+        "nacenka": 400000
+    },
+    {
+        "name": "netherite_sword",
+        "id": "farm-sword-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 7
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "minecraft:looting",
+                "lvl": 5
+            }
+        ],
+        "num": 4,
         "nacenka": 300000
     }
 ]

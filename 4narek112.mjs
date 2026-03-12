@@ -91,7 +91,7 @@ async function launchBookBuyer(name, password, anarchy) {
         port: 25565,
         username: name,
         password: password,
-        version: '1.16.5',
+        version: '1.21.8',
         // connect: (client) => {
         //     // Создаём сокет, привязанный к IP модема
         //     const socket = net.createConnection({
@@ -137,19 +137,19 @@ async function launchBookBuyer(name, password, anarchy) {
         bot.startClickTime = null
         bot.updateWindow = false
         setInterval(() => {
-        const inv = []
-        for (let i = 0; i <= lastInventorySlot; i++) {
-            const slotData = bot.inventory.slots[i];
-            if (!slotData) continue;
-            
-            const config = findMatchingConfigItem(slotData, itemPrices);
-            if (config) {
-                inv.push(config.id);
-            }
-        }
-        const msg = {name: "inventory", data: inv, username: bot.username}
-        parentPort.postMessage(msg)
-        }, 10000)
+                const inv = []
+                for (let i = 0; i <= lastInventorySlot; i++) {
+                    const slotData = bot.inventory.slots[i];
+                    if (!slotData) continue;
+                    
+                    const config = findMatchingConfigItem(slotData, itemPrices);
+                    if (config) {
+                        inv.push(config.id);
+                    }
+                }
+                const msg = {name: "inventory", data: inv, username: bot.username}
+                parentPort.postMessage(msg)
+            }, 10000)
 
     logger.info(`${name} успешно проник на сервер.`);
     await delay(5000);
@@ -295,7 +295,7 @@ bot.on('windowOpen', async () => {
                 logger.info(`${name} - ресет`);
                 await delay(500);
                 bot.menu = myItems;
-                await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key)
+                await safeClickBuy(bot, 45, getRandomDelayInRange(700, 1300), key)
 
                 break;
             }
@@ -415,7 +415,7 @@ bot.on('windowOpen', async () => {
                 await safeClickBuy(bot, 52, getRandomDelayInRange(700, 1300), key);
             } else {
                 bot.menu = analysisAH;
-                await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
+                await safeClickBuy(bot, 45, getRandomDelayInRange(700, 1300), key);
             }
             break;
 
@@ -425,7 +425,7 @@ bot.on('windowOpen', async () => {
             logger.info(`${name} - ${bot.menu}`);
             bot.menu = analysisAH;
 
-            await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key)
+            await safeClickBuy(bot, 45, getRandomDelayInRange(700, 1300), key)
 
             break;
 
@@ -1083,7 +1083,6 @@ function removeSlotAndTime(obj) {
 
 
 /**
-/**
  * Централизованная функция для поиска подходящего конфига предмета
  * @param {Object} item - Предмет (из inventory.slots или window.slots)
  * @param {Array} itemPrices - Конфиг с шаблонами цен
@@ -1095,13 +1094,13 @@ function removeSlotAndTime(obj) {
 function findMatchingConfigItem(item, itemPrices, options = { checkDurability: true, checkMissingEnchants: true }) {
     if (!item || !itemPrices?.length) return null;
 
-    // Фильтруем конфиг: исключаем те, у которых ID заканчивается на "1.21"
-    const filteredConfig = itemPrices.filter(config => !config.id.endsWith('1.21'));
+    // Сначала фильтруем конфиг: оставляем только те, у которых ID заканчивается на "1.21"
+    const filteredConfig = itemPrices.filter(config => config.id.endsWith('1.21'));
     
     // Если после фильтрации ничего не осталось, возвращаем null
     if (filteredConfig.length === 0) return null;
     
-    // Сортируем отфильтрованный конфиг по num
+    // Сортируем отфильтрованный конфиг по num (как и раньше)
     const sortedConfig = [...filteredConfig].sort((a, b) => b.num - a.num);
     
     // Получаем все зачарования предмета

@@ -80,8 +80,6 @@ var (
 			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     700001,
-			MaxPrice:     2000001,
 			Type:         "netherite_sword",
 		},
 		"sword5": {
@@ -89,8 +87,6 @@ var (
 			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     600002,
-			MaxPrice:     1800002,
 			Type:         "netherite_sword",
 		},
 		"megasword": {
@@ -98,116 +94,62 @@ var (
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     1600003,
-			MaxPrice:     6000003,
 			Type:         "netherite_sword",
 		},
-		"ботинки":{
+		"ботинки": {
 			BasePrice:    1000005,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     700005,
-			MaxPrice:     2000005,
 			Type:         "netherite_boots",
 		},
-		// "ботинки_крутые":{
-		// 	BasePrice:    3000006,
-		// 	NormalSales:  4,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	MinPrice:     1000006,
-		// 	MaxPrice:     9900006,
-		// 	Type:         "netherite_boots",
-		// },
-		"ботинки_позорные":{
+		"ботинки_позорные": {
 			BasePrice:    800007,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     500007,
-			MaxPrice:     2000007,
 			Type:         "netherite_boots",
 		},
-		"шлем":{
+		"шлем": {
 			BasePrice:    1000008,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     700008,
-			MaxPrice:     3500008,
 			Type:         "netherite_helmet",
 		},
-		// "шлем_крутой":{
-		// 	BasePrice:    1600009,
-		// 	NormalSales:  4,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	MinPrice:     900009,
-		// 	MaxPrice:     9900009,
-		// 	Type:         "netherite_helmet",
-		// },
-		"шлем_позорный":{
+		"шлем_позорный": {
 			BasePrice:    800010,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     500010,
-			MaxPrice:     2000010,
 			Type:         "netherite_helmet",
 		},
-		"штаны":{
+		"штаны": {
 			BasePrice:    1000011,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     900011,
-			MaxPrice:     2500011,
 			Type:         "netherite_leggings",
 		},
-		// "штаны_починка":{
-		// 	BasePrice:    2000012,
-		// 	NormalSales:  4,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	MinPrice:     1500012,
-		// 	MaxPrice:     9900012,
-		// 	Type:         "netherite_leggings",
-		// },
-		"штаны_позорные":{
+		"штаны_позорные": {
 			BasePrice:    800013,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     500013,
-			MaxPrice:     1600013,
 			Type:         "netherite_leggings",
 		},
-		"нагрудник":{
+		"нагрудник": {
 			BasePrice:    1000014,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     700014,
-			MaxPrice:     3000014,
 			Type:         "netherite_chestplate",
 		},
-		// "нагрудник_починка":{
-		// 	BasePrice:    2000015,
-		// 	NormalSales:  4,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	MinPrice:     1000015,
-		// 	MaxPrice:     9900015,
-		// 	Type:         "netherite_chestplate",
-		// },
-		"нагрудник_позорный":{
+		"нагрудник_позорный": {
 			BasePrice:    800016,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     600016,
-			MaxPrice:     2500016,
 			Type:         "netherite_chestplate",
 		},
 		"farm-sword": {
@@ -215,8 +157,6 @@ var (
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     1200017,
-			MaxPrice:     5000017,
 			Type:         "netherite_sword",
 		},
 		"кирка": {
@@ -224,8 +164,6 @@ var (
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     800018,
-			MaxPrice:     3000018,
 			Type:         "netherite_pickaxe",
 		},
 		"кирка_починка": {
@@ -233,8 +171,6 @@ var (
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     900019,
-			MaxPrice:     5000019,
 			Type:         "netherite_pickaxe",
 		},
 		"кирка_крутая": {
@@ -242,8 +178,6 @@ var (
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     1200020,
-			MaxPrice:     9900020,
 			Type:         "netherite_pickaxe",
 		},
 		"elytra": {
@@ -251,8 +185,6 @@ var (
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     600021,
-			MaxPrice:     3000021,
 			Type:         "elytra",
 		},
 		"elytra3": {
@@ -260,8 +192,6 @@ var (
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     900022,
-			MaxPrice:     5000022,
 			Type:         "elytra",
 		},
 		"elytra-mend": {
@@ -269,9 +199,35 @@ var (
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			MinPrice:     1200023,
-			MaxPrice:     9900023,
 			Type:         "elytra",
+		},
+		"sword7-1.21": {
+			BasePrice:    1000024,
+			NormalSales:  7,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_sword-1.21",
+		},
+		"sword5-1.21": {
+			BasePrice:    800025,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_sword-1.21",
+		},
+		"megasword-1.21": {
+			BasePrice:    1500026,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_sword-1.21",
+		},
+		"farm-sword-1.21": {
+			BasePrice:    1100027,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_sword-1.21",
 		},
 	}
 )
@@ -1279,8 +1235,8 @@ func adjustPrice(item string) {
 func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales, expectedSales, buyCount, trySellCount,
     oldPrice, oldRatio, newPrice, newRatio float64) {
 
-    // Случайная задержка от 100 до 700 мс
-    time.Sleep(time.Duration(rand.Intn(600)+100) * time.Millisecond)
+	// Мега-костыль: рандомная задержка от 3 до 7 секунд
+    time.Sleep(time.Duration(rand.Intn(4000)+3000) * time.Millisecond)
 
     status := "✅"
     if actualSales < expectedSales {
