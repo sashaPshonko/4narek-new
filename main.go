@@ -1014,7 +1014,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				Ratios: ratiosCopy,
 			}:
 			default:
-			}
 			
 			// Сохраняем в файл
 			mutex.Lock()
