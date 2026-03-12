@@ -87,7 +87,7 @@ var (
 		"sword5": {
 			BasePrice:    800002,
 			NormalSales:  5,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     600002,
 			MaxPrice:     1800002,
@@ -123,7 +123,7 @@ var (
 		"ботинки_позорные":{
 			BasePrice:    800007,
 			NormalSales:  4,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500007,
 			MaxPrice:     2000007,
@@ -150,7 +150,7 @@ var (
 		"шлем_позорный":{
 			BasePrice:    800010,
 			NormalSales:  4,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500010,
 			MaxPrice:     2000010,
@@ -177,7 +177,7 @@ var (
 		"штаны_позорные":{
 			BasePrice:    800013,
 			NormalSales:  4,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     500013,
 			MaxPrice:     1600013,
@@ -204,7 +204,7 @@ var (
 		"нагрудник_позорный":{
 			BasePrice:    800016,
 			NormalSales:  4,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     600016,
 			MaxPrice:     2500016,
@@ -222,7 +222,7 @@ var (
 		"кирка": {
 			BasePrice:    500018,
 			NormalSales:  4,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     800018,
 			MaxPrice:     3000018,
@@ -249,7 +249,7 @@ var (
 		"elytra": {
 			BasePrice:    600021,
 			NormalSales:  4,
-			PriceStep:    50000,
+			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			MinPrice:     600021,
 			MaxPrice:     3000021,

@@ -313,7 +313,7 @@
         "effects": [
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 200000
     },
     {
         "name": "elytra",
@@ -325,7 +325,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 300000
+        "nacenka": 200000
     },
     {
         "name": "elytra",
@@ -341,6 +341,6 @@
             }
         ],
         "num": 3,
-        "nacenka": 400000
+        "nacenka": 300000
     }
 ]
