@@ -17,7 +17,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_sword",
@@ -313,7 +313,7 @@
         "effects": [
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "elytra",
@@ -325,7 +325,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "elytra",

@@ -294,6 +294,7 @@ type Data struct {
 	MinPrices    map[string]int     // новая
     MaxPrices    map[string]int
 	NeedPriceIncrease   map[string]bool 
+	NeedPriceDecrease   map[string]bool 
 }
 
 var (
@@ -345,6 +346,7 @@ func main() {
 	data.MinPrices = make(map[string]int)
 	data.MaxPrices = make(map[string]int)
 	data.NeedPriceIncrease = make(map[string]bool)
+	data.NeedPriceDecrease = make(map[string]bool)
 
 	for item, cfg := range itemsConfig {
     if _, exists := data.MinPrices[item]; !exists {
@@ -946,8 +948,19 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			
+			// Сохраняем максимальную цену
 			data.MaxPrices[msg.Type] = msg.Price
 			dailyData.MaxPrices[msg.Type] = msg.Price
+			
+			// ЕСЛИ новая максимальная цена меньше текущей — ставим флаг на понижение
+			if msg.Price < data.Prices[msg.Type] {
+				data.NeedPriceDecrease[msg.Type] = true
+				log.Printf("[CONFIG] %s: максимальная цена %d (флаг понижения, текущая %d)", 
+					msg.Type, msg.Price, data.Prices[msg.Type])
+			}
+			
+			// Сбрасываем таймер, чтобы цена пересчиталась быстрее
+			lastPriceUpdate[msg.Type] = time.Now().Add(-itemsConfig[msg.Type].AnalysisTime)
 			
 			log.Printf("[CONFIG] %s: максимальная цена установлена %d", msg.Type, msg.Price)
 			
@@ -957,8 +970,18 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			mutex.Lock()
 			saveDailyData()
 			mutex.Unlock()
+
+			// Отправляем подтверждение
+			select {
+			case broadcast <- map[string]interface{}{
+				"action": "price_config_updated",
+				"type": msg.Type,
+				"max_price": msg.Price,
+			}:
+			default:
+    }
     
-    // Отправляем подтверждение
+			// Отправляем подтверждение
     select {
     case broadcast <- map[string]interface{}{
         "action": "price_config_updated",
@@ -1136,7 +1159,16 @@ func adjustPrice(item string) {
 	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ (ПОЛНОСТЬЮ ИЗ СТАРОГО КОДА) ---
 	ratio := ratioBefore
 
-	if data.NeedPriceIncrease[item] {
+	if data.NeedPriceDecrease[item] {
+		targetPrice := data.MaxPrices[item]
+		if targetPrice > 0 && targetPrice < newPrice {
+			newPrice = targetPrice
+			log.Printf("📉 Принудительное понижение %s по флагу: %d -> %d", 
+				item, priceBefore, newPrice)
+		}
+		// Сбрасываем флаг
+		data.NeedPriceDecrease[item] = false
+	} else if data.NeedPriceIncrease[item] {
         targetPrice := data.MinPrices[item]
         if targetPrice > 0 && targetPrice > newPrice {
             newPrice = targetPrice
