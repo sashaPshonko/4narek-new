@@ -295,6 +295,7 @@ type Data struct {
     MaxPrices    map[string]int
 	NeedPriceIncrease   map[string]bool 
 	NeedPriceDecrease   map[string]bool 
+	LastManualUpdate    map[string]time.Time
 }
 
 var (
@@ -347,6 +348,7 @@ func main() {
 	data.MaxPrices = make(map[string]int)
 	data.NeedPriceIncrease = make(map[string]bool)
 	data.NeedPriceDecrease = make(map[string]bool)
+	data.LastManualUpdate = make(map[string]time.Time)
 
 	for item, cfg := range itemsConfig {
     if _, exists := data.MinPrices[item]; !exists {
@@ -915,6 +917,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				mutex.Unlock()
 				continue
 			}
+			data.LastManualUpdate[msg.Type] = time.Now()
 			
 			// Сохраняем минимальную цену
 			data.MinPrices[msg.Type] = msg.Price
@@ -973,6 +976,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				mutex.Unlock()
 				continue
 			}
+
+			data.LastManualUpdate[msg.Type] = time.Now()
 			
 			// Сохраняем максимальную цену
 			oldMaxPrice := data.MaxPrices[msg.Type]
@@ -1019,7 +1024,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			mutex.Lock()
 			saveDailyData()
 			mutex.Unlock()
-    }
     
 			// Отправляем подтверждение
     select {
@@ -1141,12 +1145,12 @@ func adjustPrice(item string) {
 	swordTimes[item] = now
 	lastUpdate := now.Add(-cfg.AnalysisTime)
 
-	if time.Since(lastPriceUpdate[item]) < cfg.AnalysisTime+time.Minute {
-        log.Printf("[SKIP] %s: цена обновлялась %v назад, пропускаем анализ (нужно %v)", 
-            item, time.Since(lastPriceUpdate[item]), cfg.AnalysisTime)
-        mutex.Unlock()
-        return
-    }
+	if time.Since(data.LastManualUpdate[item]) < cfg.AnalysisTime {
+		log.Printf("[SKIP] %s: ручное изменение %v назад, пропускаем анализ", 
+			item, time.Since(data.LastManualUpdate[item]))
+		mutex.Unlock()
+		return
+	}
 
 	sales := countRecentSales(item, lastUpdate)
 	buys := countRecentBuys(item, lastUpdate)
