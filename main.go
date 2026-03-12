@@ -910,6 +910,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				mutex.Unlock()
 				continue
 			}
+
+			  if data.Prices[msg.Type] == msg.Price {
+				log.Printf("[CONFIG] %s: цена уже %d, пропускаем", msg.Type, msg.Price)
+				mutex.Unlock()
+				continue
+			}
 			
 			// Сохраняем минимальную цену и ставим флаг
 			data.MinPrices[msg.Type] = msg.Price
@@ -944,6 +950,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			
 			// Проверяем существование предмета
 			if _, exists := itemsConfig[msg.Type]; !exists {
+				mutex.Unlock()
+				continue
+			}
+
+			  if data.Prices[msg.Type] == msg.Price {
+				log.Printf("[CONFIG] %s: цена уже %d, пропускаем", msg.Type, msg.Price)
 				mutex.Unlock()
 				continue
 			}
