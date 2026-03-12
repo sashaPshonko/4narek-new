@@ -310,7 +310,7 @@ var (
 	lastPriceUpdate = make(map[string]time.Time)
 
 	// Новый: канал рассылки
-	broadcast = make(chan interface{}, 100)
+	broadcast = make(chan interface{}, 1000)
 
 	// Кэш для json_data
 	jsonCache    = make(map[string]time.Time)
