@@ -905,42 +905,57 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			
-			// Проверяем существование предмета
 			if _, exists := itemsConfig[msg.Type]; !exists {
 				mutex.Unlock()
 				continue
 			}
 
-			  if data.Prices[msg.Type] == msg.Price {
+			if data.Prices[msg.Type] == msg.Price {
 				log.Printf("[CONFIG] %s: цена уже %d, пропускаем", msg.Type, msg.Price)
 				mutex.Unlock()
 				continue
 			}
 			
-			// Сохраняем минимальную цену и ставим флаг
+			// Сохраняем минимальную цену
 			data.MinPrices[msg.Type] = msg.Price
-			data.NeedPriceIncrease[msg.Type] = true
-
-			lastPriceUpdate[msg.Type] = time.Now().Add(-itemsConfig[msg.Type].AnalysisTime)
 			
-			log.Printf("[CONFIG] %s: минимальная цена установлена %d (флаг поднят)", msg.Type, msg.Price)
+			// 1. СРАЗУ МЕНЯЕМ ЦЕНУ
+			oldPrice := data.Prices[msg.Type]
+			data.Prices[msg.Type] = msg.Price
 			
+			// 2. СБРАСЫВАЕМ ФЛАГИ, чтобы плановое изменение ничего не делало
+			data.NeedPriceIncrease[msg.Type] = false
+			data.NeedPriceDecrease[msg.Type] = false
+			
+			// 3. СТАВИМ "ЗАМОРОЗКУ" - плановое изменение пропустит этот цикл
+			lastPriceUpdate[msg.Type] = time.Now()
+			
+			log.Printf("[CONFIG] %s: цена мгновенно изменена %d -> %d", 
+				msg.Type, oldPrice, msg.Price)
+			
+			// Отправляем всем клиентам
+			pricesCopy := make(map[string]int)
+			ratiosCopy := make(map[string]float64)
+			for k, v := range data.Prices {
+				pricesCopy[k] = v
+			}
+			for k, v := range data.Ratios {
+				ratiosCopy[k] = v
+			}
 			mutex.Unlock()
+			
+			select {
+			case broadcast <- PriceAndRatio{
+				Prices: pricesCopy,
+				Ratios: ratiosCopy,
+			}:
+			default:
+			}
 			
 			// Сохраняем в файл
 			mutex.Lock()
 			saveDailyData()
 			mutex.Unlock()
-			
-			// Отправляем подтверждение
-			select {
-			case broadcast <- map[string]interface{}{
-				"action": "price_config_updated",
-				"type": msg.Type,
-				"min_price": msg.Price,
-			}:
-			default:
-    }
 
 		case "set_max_price":
 			if msg.Type == "" || msg.Price == 0 {
@@ -948,49 +963,63 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			
-			// Проверяем существование предмета
 			if _, exists := itemsConfig[msg.Type]; !exists {
 				mutex.Unlock()
 				continue
 			}
 
-			  if data.Prices[msg.Type] == msg.Price {
+			if data.Prices[msg.Type] == msg.Price {
 				log.Printf("[CONFIG] %s: цена уже %d, пропускаем", msg.Type, msg.Price)
 				mutex.Unlock()
 				continue
 			}
 			
 			// Сохраняем максимальную цену
+			oldMaxPrice := data.MaxPrices[msg.Type]
 			data.MaxPrices[msg.Type] = msg.Price
-			dailyData.MaxPrices[msg.Type] = msg.Price
 			
-			// ЕСЛИ новая максимальная цена меньше текущей — ставим флаг на понижение
-			if msg.Price < data.Prices[msg.Type] {
-				data.NeedPriceDecrease[msg.Type] = true
-				log.Printf("[CONFIG] %s: максимальная цена %d (флаг понижения, текущая %d)", 
-					msg.Type, msg.Price, data.Prices[msg.Type])
+			// 1. СРАЗУ МЕНЯЕМ ЦЕНУ (только если она выше текущей)
+			oldPrice := data.Prices[msg.Type]
+			if msg.Price < oldPrice {  // только если максимальная цена ниже текущей
+				data.Prices[msg.Type] = msg.Price
+				
+				// 2. СБРАСЫВАЕМ ФЛАГИ
+				data.NeedPriceIncrease[msg.Type] = false
+				data.NeedPriceDecrease[msg.Type] = false
+				
+				// 3. СТАВИМ "ЗАМОРОЗКУ"
+				lastPriceUpdate[msg.Type] = time.Now()
+				
+				log.Printf("[CONFIG] %s: цена мгновенно понижена %d -> %d (макс: %d)", 
+					msg.Type, oldPrice, msg.Price, msg.Price)
+			} else {
+				log.Printf("[CONFIG] %s: макс цена обновлена %d -> %d (текущая %d, изменение не требуется)", 
+					msg.Type, oldMaxPrice, msg.Price, oldPrice)
 			}
 			
-			// Сбрасываем таймер, чтобы цена пересчиталась быстрее
-			lastPriceUpdate[msg.Type] = time.Now().Add(-itemsConfig[msg.Type].AnalysisTime)
-			
-			log.Printf("[CONFIG] %s: максимальная цена установлена %d", msg.Type, msg.Price)
-			
+			// Отправляем всем клиентам
+			pricesCopy := make(map[string]int)
+			ratiosCopy := make(map[string]float64)
+			for k, v := range data.Prices {
+				pricesCopy[k] = v
+			}
+			for k, v := range data.Ratios {
+				ratiosCopy[k] = v
+			}
 			mutex.Unlock()
+			
+			select {
+			case broadcast <- PriceAndRatio{
+				Prices: pricesCopy,
+				Ratios: ratiosCopy,
+			}:
+			default:
+			}
 			
 			// Сохраняем в файл
 			mutex.Lock()
 			saveDailyData()
 			mutex.Unlock()
-
-			// Отправляем подтверждение
-			select {
-			case broadcast <- map[string]interface{}{
-				"action": "price_config_updated",
-				"type": msg.Type,
-				"max_price": msg.Price,
-			}:
-			default:
     }
     
 			// Отправляем подтверждение
@@ -1112,6 +1141,13 @@ func adjustPrice(item string) {
 	now := time.Now()
 	swordTimes[item] = now
 	lastUpdate := now.Add(-cfg.AnalysisTime)
+
+	if time.Since(lastPriceUpdate[item]) < cfg.AnalysisTime {
+        log.Printf("[SKIP] %s: цена обновлялась %v назад, пропускаем анализ (нужно %v)", 
+            item, time.Since(lastPriceUpdate[item]), cfg.AnalysisTime)
+        mutex.Unlock()
+        return
+    }
 
 	sales := countRecentSales(item, lastUpdate)
 	buys := countRecentBuys(item, lastUpdate)
