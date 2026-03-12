@@ -1141,7 +1141,7 @@ func adjustPrice(item string) {
 	swordTimes[item] = now
 	lastUpdate := now.Add(-cfg.AnalysisTime)
 
-	if time.Since(lastPriceUpdate[item]) < cfg.AnalysisTime {
+	if time.Since(lastPriceUpdate[item]) < cfg.AnalysisTime+time.Minute {
         log.Printf("[SKIP] %s: цена обновлялась %v назад, пропускаем анализ (нужно %v)", 
             item, time.Since(lastPriceUpdate[item]), cfg.AnalysisTime)
         mutex.Unlock()
