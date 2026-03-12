@@ -1033,7 +1033,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
         "max_price": msg.Price,
     }:
     default:
-    }
+    
 		default:
 			mutex.Unlock()
 		}
