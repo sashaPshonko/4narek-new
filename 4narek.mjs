@@ -651,7 +651,7 @@ bot.on('message', async (message) => {
         }
         
         // Оставляем только цифры
-        balanceStr = balanceStr.replace(/\D/g, '');
+        balanceStr = messageText.replace(/\./g, '').replace(/\D/g, '');
         const balance = parseInt(balanceStr);
         
         // Получаем информацию о предмете
@@ -693,7 +693,7 @@ bot.on('message', async (message) => {
         }
         
         // Оставляем только цифры
-        balanceStr = balanceStr.replace(/\D/g, '');
+        balanceStr = messageText.replace(/\./g, '').replace(/\D/g, '');
         const balance = parseInt(balanceStr);
 
         
