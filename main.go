@@ -166,13 +166,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe",
 		},
-		"кирка_починка": {
-			BasePrice:    700019,
-			NormalSales:  4,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_pickaxe",
-		},
+		// "кирка_починка": {
+		// 	BasePrice:    700019,
+		// 	NormalSales:  4,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "netherite_pickaxe",
+		// },
 		"кирка_крутая": {
 			BasePrice:    1500020,
 			NormalSales:  4,
