@@ -161,7 +161,7 @@ var (
 		},
 		"кирка": {
 			BasePrice:    500018,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe",
@@ -175,21 +175,21 @@ var (
 		// },
 		"кирка_крутая": {
 			BasePrice:    1500020,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe",
 		},
 		"elytra": {
 			BasePrice:    600021,
-			NormalSales:  4,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "elytra",
 		},
 		"elytra3": {
 			BasePrice:    700022,
-			NormalSales:  4,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "elytra",
