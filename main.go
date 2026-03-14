@@ -126,7 +126,7 @@ var (
 		},
 		"штаны": {
 			BasePrice:    1000011,
-			NormalSales:  6,
+			NormalSales:  7,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_leggings",
@@ -140,7 +140,7 @@ var (
 		},
 		"нагрудник": {
 			BasePrice:    1000014,
-			NormalSales:  6,
+			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_chestplate",
