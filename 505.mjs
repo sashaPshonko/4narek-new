@@ -167,7 +167,7 @@ worker.on('message', async (message) => {
     worker.on('error', (error) => {
       bot.success = false;
       console.error(`❌ Worker error (${bot.username}): ${error}`);
-      tgBot.sendMessage(alertChatID, `${bot.username} вырубился с ошибкой`);
+      tgBot.sendMessage(alertChatID, `${bot.username} вырубился с ошибкой ${error}`);
     });
 
     worker.on('exit', () => {
@@ -299,7 +299,7 @@ function connectWebSocket() {
     socket.send(JSON.stringify({ action: "info" }));
   });
 
-socket.on('message', (data) => {
+socket.on('message', async (data) => {  // добавил async
   try {
     const dataObj = JSON.parse(data);
     
@@ -313,19 +313,53 @@ socket.on('message', (data) => {
     } 
     // Обрабатываем обновление цен
     else if (dataObj.prices) {
-      items = items.map(item => ({
-        ...item,
-        priceSell: dataObj.prices[item.id],
-        ratio: dataObj.ratios[item.id]
-      }));
+      // 1. ЧИТАЕМ items.json ЗАНОВО
+      let freshItems = [];
+      try {
+        if (existsSync(itemsPath)) {
+          const itemsJson = await readFile(itemsPath, 'utf-8');
+          freshItems = JSON.parse(itemsJson);
+          console.log('✅ items.json перечитан заново');
+        } else {
+          console.warn('⚠️ items.json не найден');
+          freshItems = [];
+        }
+      } catch (error) {
+        console.error('❌ Ошибка чтения items.json:', error.message);
+        freshItems = [];
+      }
+      
+      // 2. ОБНОВЛЯЕМ ЦЕНЫ И ФИЛЬТРУЕМ
+      const itemsWithPrice = freshItems
+        .map(item => ({
+          ...item,
+          priceSell: dataObj.prices[item.id],
+          ratio: dataObj.ratios?.[item.id] || item.ratio || 0.8
+        }))
+        .filter(item => item.priceSell !== undefined && item.priceSell !== null);
+      
+      // 3. ЛОГИРУЕМ, ЧТО ОТБРОСИЛИ
+      const itemsWithoutPrice = freshItems.filter(item => 
+        dataObj.prices[item.id] === undefined || dataObj.prices[item.id] === null
+      );
+      
+      if (itemsWithoutPrice.length > 0) {
+        console.log('⚠️ Предметы без цен (удалены):', itemsWithoutPrice.map(i => i.id).join(', '));
+      }
+      
+      // 4. СОХРАНЯЕМ НОВЫЙ МАССИВ
+      items = itemsWithPrice;
+      
+      // 5. ОБНОВЛЯЕМ ЦЕНЫ У БОТОВ
       bots.forEach(bot => bot.itemPrices = items);
 
-      console.log('📦 Обновлены цены:', items.map(i => `${i.id}: ${i.priceSell}`));
+      console.log('📦 Обновлены цены для', items.length, 'предметов:', items.map(i => `${i.id}: ${i.priceSell}`));
 
+      // 6. ОТПРАВЛЯЕМ ОБНОВЛЕНИЯ ВОРКЕРАМ
       workers.forEach(w => w.postMessage({ type: 'price', data: items }));
 
-      // Если первый раз получили цены — запускаем ботов
-      if (!botsStarted && items.every(i => i.priceSell)) {
+      // 7. ЗАПУСКАЕМ БОТОВ, ЕСЛИ ЕЩЁ НЕ ЗАПУЩЕНЫ
+      if (!botsStarted && items.length > 0) {
         botsStarted = true;
         startBots();
       }

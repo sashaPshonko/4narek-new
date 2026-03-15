@@ -17,7 +17,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_sword",
@@ -37,7 +37,7 @@
             }
         ],
         "num": 3,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_sword",
@@ -69,7 +69,7 @@
             }
         ],
         "num": 5,
-        "nacenka": 400000
+        "nacenka": 600000
     },
     {
         "name": "netherite_sword",
@@ -93,7 +93,7 @@
             }
         ],
         "num": 4,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_boots",
@@ -109,7 +109,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_boots",
@@ -133,7 +133,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_helmet",
@@ -157,7 +157,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_helmet",
@@ -177,7 +177,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_leggings",
@@ -193,7 +193,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_leggings",
@@ -217,7 +217,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_chestplate",
@@ -233,7 +233,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_pickaxe",
@@ -253,7 +253,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "netherite_pickaxe",
@@ -289,7 +289,7 @@
             }
         ],
         "num": 3,
-        "nacenka": 400000
+        "nacenka": 700000
     },
     {
         "name": "elytra",
@@ -297,7 +297,7 @@
         "effects": [
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "elytra",
@@ -309,7 +309,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 300000
+        "nacenka": 400000
     },
     {
         "name": "elytra",
@@ -325,102 +325,6 @@
             }
         ],
         "num": 3,
-        "nacenka": 300000
-    },
-     {
-        "name": "netherite_sword",
-        "id": "sword5-1.21",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:fire_aspect",
-                "lvl": 1
-            },
-            {
-                "name": "minecraft:sharpness",
-                "lvl": 5
-            }
-        ],
-        "num": 1,
-        "nacenka": 300000
-    },
-    {
-        "name": "netherite_sword",
-        "id": "sword7-1.21",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:fire_aspect",
-                "lvl": 1
-            },
-            {
-                "name": "minecraft:sharpness",
-                "lvl": 7
-            }
-        ],
-        "num": 3,
-        "nacenka": 300000
-    },
-    {
-        "name": "netherite_sword",
-        "id": "megasword-1.21",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 3
-            },
-            {
-                "name": "minecraft:sharpness",
-                "lvl": 7
-            },
-            {
-                "name": "minecraft:fire_aspect",
-                "lvl": 1
-            },
-            {
-                "name": "poison",
-                "lvl": 2
-            },
-            {
-                "name": "vampirism",
-                "lvl": 2
-            },
-            {
-                "name": "detection",
-                "lvl": 2
-            }
-        ],
-        "num": 5,
         "nacenka": 400000
-    },
-    {
-        "name": "netherite_sword",
-        "id": "farm-sword-1.21",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:sharpness",
-                "lvl": 7
-            },
-            {
-                "name": "minecraft:fire_aspect",
-                "lvl": 1
-            },
-            {
-                "name": "minecraft:looting",
-                "lvl": 5
-            }
-        ],
-        "num": 4,
-        "nacenka": 300000
     }
 ]
