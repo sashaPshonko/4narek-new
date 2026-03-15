@@ -113,6 +113,8 @@ async function launchBookBuyer(name, password, anarchy) {
         chatLengthLimit: 256,  // Добавь это
         viewDistance: 'tiny'    // И это
     });
+    bot.mu = false;
+
 
     const loginCommand = `/l ${name}`;
     const anarchyCommand = `/an${anarchy}`;
@@ -122,7 +124,6 @@ async function launchBookBuyer(name, password, anarchy) {
 
     bot.once('login', async () => {
         bot.loadPlugin(autoEat)
-        bot.mu = false;
         bot.startTime = Date.now() - 55000;
         bot.ahFull = false;
         bot.timeReset = Date.now()
@@ -177,9 +178,9 @@ async function launchBookBuyer(name, password, anarchy) {
         });
 bot.on('physicsTick', async () => {
     if (Date.now() - bot.timeActive > 90000) {
+        bot.mu = false
         bot.timeActive = Date.now();
         bot.menu = analysisAH
-        bot.mu = false;
         await safeAH(bot);
     }
 })
