@@ -229,6 +229,20 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_sword-1.21",
 		},
+		"штаны-1.21": {
+			BasePrice:    500028,
+			NormalSales:  7,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_leggings-1.21",
+		},
+		"штаны_позорные-1.21": {
+			BasePrice:    400029,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_leggings-1.21",
+		},
 	}
 )
 
