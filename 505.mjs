@@ -16,7 +16,7 @@ const botsPath = join(__dirname, '505.json');
 let items = []
 let bots = [];
 
-const token = '7256193231:AAG5rgzcK5kc2JH6HMvVbn2zEIJIBOC3Q9Q';
+const token = '8321775652:AAFs6ZYxyb820LkCG_oq2fy6F9D4_XzVW3U';
 
 const tgBot = new TelegramBot(token, { polling: true });
 
