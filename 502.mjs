@@ -14,6 +14,7 @@ const __dirname = dirname(__filename);
 const itemsPath = join(__dirname, 'items.json');
 const botsPath = join(__dirname, '502.json');
 let items = []
+let bots = [];
 
 const token = '8053905786:AAFHZ91Df2hex-zVteBmBPK2m4tk9iI7gAs';
 
