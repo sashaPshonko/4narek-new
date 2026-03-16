@@ -354,6 +354,22 @@ func main() {
 	select {}
 }
 
+func filterPrices() PriceAndRatio {
+    filteredPrices := make(map[string]int)
+    filteredRatios := make(map[string]float64)
+    for k, v := range data.Prices {
+        if _, ok := itemsConfig[k]; ok {
+            filteredPrices[k] = v
+        }
+    }
+    for k, v := range data.Ratios {
+        if _, ok := itemsConfig[k]; ok {
+            filteredRatios[k] = v
+        }
+    }
+    return PriceAndRatio{Prices: filteredPrices, Ratios: filteredRatios}
+}
+
 func broadcastBroker() {
 	for msg := range broadcast {
 		mutex.Lock()
@@ -759,8 +775,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	mutex.Unlock()
 
 	select {
-	case broadcast <- priceData:
-	default:
+		case broadcast <- filterPrices():
+		default:
+	}
 	}
 	select {
 	case broadcast <- map[string]interface{}{
@@ -834,7 +851,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			mutex.Unlock()
 
 			select {
-			case broadcast <- priceData:
+			case broadcast <- filterPrices():
 			default:
 			}
 
@@ -1239,7 +1256,7 @@ func adjustPrice(item string) {
 			item, priceBefore, newPrice, onAH, sales, cfg.NormalSales, leaderID)
 
 		select {
-		case broadcast <- PriceAndRatio{Prices: data.Prices, Ratios: data.Ratios}:
+		case broadcast <- filterPrices()
 		default:
 		}
 	} else {
