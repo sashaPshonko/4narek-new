@@ -12,7 +12,8 @@ const __dirname = dirname(__filename);
 
 // Проверяем существование файла items.json
 const itemsPath = join(__dirname, 'items.json');
-let items = [];
+let items = []
+
 
 try {
   if (existsSync(itemsPath)) {

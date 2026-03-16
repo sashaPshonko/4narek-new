@@ -7,10 +7,12 @@ import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
 
-const itemsJson = await readFile('items.json');
-let items = JSON.parse(itemsJson);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Проверяем существование файла items.json
+const itemsPath = join(__dirname, 'items.json');
+let items = [];
 
 const token = '8302357529:AAHBBALm7Gylu-ZFza2FVRWqpAKukOX0eUM';
 
@@ -25,8 +27,6 @@ const bots = [
   { username: 'ahahaetopravda', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник" },
   { username: 'ochenlubludashu', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник_позорный" },
 ];
-
-
 
 let workers = [];
 let botItems = new Map

@@ -7,10 +7,12 @@ import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
 
-const itemsJson = await readFile('items.json');
-let items = JSON.parse(itemsJson);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Проверяем существование файла items.json
+const itemsPath = join(__dirname, 'items.json');
+let items = []
 
 const token = '8053905786:AAFHZ91Df2hex-zVteBmBPK2m4tk9iI7gAs';
 
