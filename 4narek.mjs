@@ -52,6 +52,8 @@ const slotToTryBuying = 0;
 
 const ahCommand = `/ah search ${workerData.item}`
 
+let mu = false
+
 let type = ""
 
 const missingEnchantsNames = ["minecraft:knockback", "heavy", "unstable", "minecraft:thorns", "minecraft:binding_curse"]
