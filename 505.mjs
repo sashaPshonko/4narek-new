@@ -13,9 +13,9 @@ const __dirname = dirname(__filename);
 // Проверяем существование файла items.json
 const itemsPath = join(__dirname, 'items.json');
 const botsPath = join(__dirname, '505.json');
-let items = [];
+let items = []
 
-const token = '8321775652:AAGTnWNOmXSR6utk9Q7KoLJLOG55KdH2zwY';
+const token = '7256193231:AAG5rgzcK5kc2JH6HMvVbn2zEIJIBOC3Q9Q';
 
 const tgBot = new TelegramBot(token, { polling: true });
 
@@ -23,24 +23,59 @@ const infoChatID = -4709535234
 const alertChatID = -4763690917
 const pomoikaChatID = -4896488855
 
-const bots = [
-  { username: 'bugulmark2', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны" },
-  { username: 'otstalyibolvan', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны_починка" },
-  { username: 'zbnennabite', password: 'ggggg', anarchy: 5005, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite leggings', ip: '192.168.100.254', itemID: "штаны_позорные" },
-  { username: 'sashapshonkoumer', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник_починка" },
-  { username: 'ahahaetopravda', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник" },
-  { username: 'ochenlubludashu', password: 'ggggg', anarchy: 5006, type: '4narek', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite chestplate', ip: '192.168.100.254', itemID: "нагрудник_позорный" },
-];
-
-
-
 let workers = [];
-let botItems = new Map
-let botInventory = new Map
-let itemsBuying = []; 
-
+let botItems = new Map();
+let botInventory = new Map();
+let itemsBuying = [];
 let socket;
 let isSocketOpen = false;
+let botsStarted = false;
+
+// Функция загрузки конфигурации ботов
+async function loadBotsConfig() {
+  try {
+    if (existsSync(botsPath)) {
+      const botsJson = await readFile(botsPath, 'utf-8');
+      const loadedBots = JSON.parse(botsJson);
+      
+      // Добавляем динамические поля к каждому боту
+      bots = loadedBots.map(bot => ({
+        ...bot,
+        itemPrices: items,
+        msgID: 0,
+        msgTime: null,
+        isManualStop: false,
+        success: false
+      }));
+      
+      console.log(`✅ bots.json успешно загружен (${bots.length} ботов)`);
+    }
+  } catch (error) {
+    console.error('❌ Ошибка загрузки bots.json:', error.message);
+    bots = [];
+  }
+}
+
+// Функция загрузки предметов
+async function loadItemsConfig() {
+  try {
+    if (existsSync(itemsPath)) {
+      const itemsJson = await readFile(itemsPath, 'utf-8');
+      items = JSON.parse(itemsJson);
+      console.log(`✅ items.json успешно загружен (${items.length} предметов)`);
+    } else {
+      console.warn('⚠️ items.json не найден');
+      items = [];
+    }
+  } catch (error) {
+    console.error('❌ Ошибка загрузки items.json:', error.message);
+    items = [];
+  }
+}
+
+// Инициализация конфигураций
+await loadItemsConfig();
+await loadBotsConfig();
 
 function runWorker(bot) {
   // Если уже есть активный воркер для этого бота — не запускаем повторно
@@ -70,93 +105,84 @@ function runWorker(bot) {
         console.warn(`⏱ ${bot.username} не ответил успехом за 30 секунд. Убиваем.`);
         worker.terminate();
       }
-    }, 30000)
+    }, 30000);
 
-
-worker.on('message', async (message) => {
-  try {
-    if (message.name === 'success') {
-      const botToUpdate = bots.find(b => b.username === message.username);
-      if (botToUpdate) {
-        botToUpdate.success = true;
-        console.log(`✅ ${message.username} успешно запущен`);
-      }
-    } else if (message.name === "buy") {
-      socket?.send(JSON.stringify({ action: 'buy', type: message.id, price: message.price }));
-    } else if (message.name === "sell") {
-      socket?.send(JSON.stringify({ action: 'sell', type: message.id, price: message.price }));
-    } else if (message.name === "items") {
-      botItems.set(message.username, message.items);
-    } else if (message.name === "try-sell") {
+    worker.on('message', async (message) => {
       try {
-        socket?.send(JSON.stringify({ action: "try-sell", type: message.id }));
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки try-sell: ${socketError.message}`);
-      }
-    } else if (message.name === "inventory") {
-      botInventory.set(message.username, message.data);
-    } else if (message.name === "buying") {
-      broadcastBuyingLocally(message.data);
-      try {
-        socket?.send(JSON.stringify({ action: "add", json_data: message.data }));
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки buying: ${socketError.message}`);
-      }
-    } 
-    // 👇 НОВЫЙ ОБРАБОТЧИК ДЛЯ КАПЧИ
-    else if (typeof message === 'string' && message.includes('ввести капчу')) {
-      try {
-        await tgBot.sendMessage(alertChatID, `⚠️ ${message}`);
-        console.log(`📨 Капча: ${message}`);
-      } catch (tgError) {
-        console.error(`❌ Ошибка отправки капчи: ${tgError.message}`);
-      }
-    }
-    // 👇 НОВЫЕ ОБРАБОТЧИКИ ЦЕН
-    else if (message.name === "set_min_price") {
-      try {
-        socket?.send(JSON.stringify({ 
-          action: 'set_min_price', 
-          type: message.type, 
-          price: message.price 
-        }));
-        console.log(`📉 Установка минимальной цены для ${message.type}: ${message.price}`);
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки set_min_price: ${socketError.message}`);
-      }
-    }
-    else if (message.name === "set_max_price") {
-      try {
-        socket?.send(JSON.stringify({ 
-          action: 'set_max_price', 
-          type: message.type, 
-          price: message.price 
-        }));
-        console.log(`📈 Установка максимальной цены для ${message.type}: ${message.price}`);
-      } catch (socketError) {
-        console.error(`❌ Ошибка отправки set_max_price: ${socketError.message}`);
-      }
-    }
-    else {
-      // Если это просто строка - тоже отправляем в Telegram?
-      if (typeof message === 'string') {
-        try {
-          await tgBot.sendMessage(alertChatID, `📝 ${message}`);
-        } catch (tgError) {
-          console.error(`❌ Ошибка отправки в Telegram: ${tgError.message}`);
+        if (message.name === 'success') {
+          const botToUpdate = bots.find(b => b.username === message.username);
+          if (botToUpdate) {
+            botToUpdate.success = true;
+            console.log(`✅ ${message.username} успешно запущен`);
+          }
+        } else if (message.name === "buy") {
+          socket?.send(JSON.stringify({ action: 'buy', type: message.id, price: message.price }));
+        } else if (message.name === "sell") {
+          socket?.send(JSON.stringify({ action: 'sell', type: message.id, price: message.price }));
+        } else if (message.name === "items") {
+          botItems.set(message.username, message.items);
+        } else if (message.name === "try-sell") {
+          try {
+            socket?.send(JSON.stringify({ action: "try-sell", type: message.id }));
+          } catch (socketError) {
+            console.error(`❌ Ошибка отправки try-sell: ${socketError.message}`);
+          }
+        } else if (message.name === "inventory") {
+          botInventory.set(message.username, message.data);
+        } else if (message.name === "buying") {
+          broadcastBuyingLocally(message.data);
+          try {
+            socket?.send(JSON.stringify({ action: "add", json_data: message.data }));
+          } catch (socketError) {
+            console.error(`❌ Ошибка отправки buying: ${socketError.message}`);
+          }
+        } else if (typeof message === 'string' && message.includes('ввести капчу')) {
+          try {
+            await tgBot.sendMessage(alertChatID, `⚠️ ${message}`);
+            console.log(`📨 Капча: ${message}`);
+          } catch (tgError) {
+            console.error(`❌ Ошибка отправки капчи: ${tgError.message}`);
+          }
+        } else if (message.name === "set_min_price") {
+          try {
+            socket?.send(JSON.stringify({ 
+              action: 'set_min_price', 
+              type: message.type, 
+              price: message.price 
+            }));
+            console.log(`📉 Установка минимальной цены для ${message.type}: ${message.price}`);
+          } catch (socketError) {
+            console.error(`❌ Ошибка отправки set_min_price: ${socketError.message}`);
+          }
+        } else if (message.name === "set_max_price") {
+          try {
+            socket?.send(JSON.stringify({ 
+              action: 'set_max_price', 
+              type: message.type, 
+              price: message.price 
+            }));
+            console.log(`📈 Установка максимальной цены для ${message.type}: ${message.price}`);
+          } catch (socketError) {
+            console.error(`❌ Ошибка отправки set_max_price: ${socketError.message}`);
+          }
+        } else {
+          if (typeof message === 'string') {
+            try {
+              await tgBot.sendMessage(alertChatID, `📝 ${message}`);
+            } catch (tgError) {
+              console.error(`❌ Ошибка отправки в Telegram: ${tgError.message}`);
+            }
+          }
         }
+      } catch (error) {
+        console.error(`❌ Критическая ошибка в обработчике сообщений: ${error.message}`);
+        try {
+          await tgBot.sendMessage(alertChatID, `❌ Ошибка в main: ${error.message}`);
+        } catch (e) {}
       }
-    }
-  } catch (error) {
-    console.error(`❌ Критическая ошибка в обработчике сообщений: ${error.message}`);
-    try {
-      await tgBot.sendMessage(alertChatID, `❌ Ошибка в main: ${error.message}`);
-    } catch (e) {}
-  }
-});
+    });
 
     const handleRestart = () => {
-      // Удалить воркер из списка
       workers = workers.filter(w => w !== worker);
 
       if (!bot.isManualStop) {
@@ -185,10 +211,8 @@ worker.on('message', async (message) => {
 async function broadcastBuyingLocally(uuid) {
   return new Promise((resolve, reject) => {
     try {
-      // Создаём обновлённый массив (текущий + новый UUID)
       const updatedBuying = [...itemsBuying, uuid];
       
-      // Отправляем всем воркерам (ботам)
       workers.forEach(w => {
         w.postMessage({ 
           type: 'items_buying', 
@@ -196,11 +220,8 @@ async function broadcastBuyingLocally(uuid) {
         });
       });
       
-      // Обновляем локальный массив
       itemsBuying = updatedBuying;
-      
-      resolve();  // 👈 ВАЖНО: разрешаем промис сразу после рассылки
-      
+      resolve();
     } catch (localError) {
       console.error(`❌ Ошибка локальной рассылки: ${localError.message}`);
       reject(localError);
@@ -233,24 +254,41 @@ function gitPull() {
 }
 
 async function startBots() {
+  // Перезагружаем конфигурацию ботов перед стартом
+  await loadBotsConfig();
+  
+  // Обновляем цены у ботов
   bots.forEach(bot => bot.itemPrices = items);
+  
   const botPromises = bots.map(bot => runWorker(bot));
   try {
     setTimeout(() => socket?.send(JSON.stringify({ action: "info" })), 1000);
     const results = await Promise.all(botPromises);
-    console.log('All bots finished:', results);
+    console.log('All bots started:', results);
   } catch (error) {
     console.error('Error in bot execution:', error);
   }
 }
 
 async function restartBots() {
+  console.log('🔄 Перезапуск всех ботов...');
+  
+  // Останавливаем текущих ботов
+  await stopWorkers();
+  
+  // Перезагружаем конфигурации
+  await loadItemsConfig();
+  await loadBotsConfig();
+  
+  // Обновляем цены у ботов
   bots.forEach(bot => bot.itemPrices = items);
+  
+  // Запускаем новых ботов
   const botPromises = bots.map(bot => runWorker(bot));
   try {
     setTimeout(() => socket?.send(JSON.stringify({ action: "info" })), 3000);
     const results = await Promise.all(botPromises);
-    console.log('All bots finished:', results);
+    console.log('All bots restarted:', results);
   } catch (error) {
     console.error('Error in bot execution:', error);
   }
@@ -259,118 +297,106 @@ async function restartBots() {
 tgBot.onText(/\/update/, async (msg) => {
   if ((Date.now() / 1000) - msg.date > 10) return;
   try {
+    await tgBot.sendMessage(alertChatID, '🔄 Обновление через git pull...');
     await stopWorkers();
     const pullResult = await gitPull();
-    tgBot.sendMessage(alertChatID, `Git pull выполнен:\n${pullResult}`);
+    await tgBot.sendMessage(alertChatID, `✅ Git pull выполнен:\n${pullResult}`);
     await restartBots();
+    await tgBot.sendMessage(alertChatID, `✅ Боты перезапущены с новой конфигурацией`);
   } catch (error) {
-    tgBot.sendMessage(alertChatID, `Произошла ошибка: ${error.message}`);
+    tgBot.sendMessage(alertChatID, `❌ Произошла ошибка: ${error.message}`);
   }
 });
 
 tgBot.onText(/\/start/, async (msg) => {
   if ((Date.now() / 1000) - msg.date > 10) return;
-  tgBot.sendMessage(alertChatID, 'Перезапуск ботов');
+  tgBot.sendMessage(alertChatID, '🔄 Перезапуск ботов');
   await restartBots();
 });
 
 tgBot.onText(/\/stop/, async (msg) => {
   if ((Date.now() / 1000) - msg.date > 10) return;
-  tgBot.sendMessage(alertChatID, 'Остановка ботов');
+  tgBot.sendMessage(alertChatID, '⏹ Остановка ботов');
   await stopWorkers();
+});
+
+tgBot.onText(/\/reload/, async (msg) => {
+  if ((Date.now() / 1000) - msg.date > 10) return;
+  try {
+    tgBot.sendMessage(alertChatID, '🔄 Перезагрузка конфигурации...');
+    await stopWorkers();
+    await restartBots();
+    tgBot.sendMessage(alertChatID, '✅ Конфигурация перезагружена');
+  } catch (error) {
+    tgBot.sendMessage(alertChatID, `❌ Ошибка: ${error.message}`);
+  }
 });
 
 function connectWebSocket() {
   socket = new WebSocket('ws://85.198.86.42:8080/ws');
 
   socket.on('open', () => {
-    let intervalId;
-
-    socket.onopen = () => {
-      console.log('✅ Подключено к серверу WebSocket');
-      socket.send(JSON.stringify({ action: "info" }));
-
-      // Запускаем периодическую отправку
-    };
-
-    socket.onclose = () => {
-      console.warn('❌ Соединение закрыто');
-      if (intervalId) clearInterval(intervalId);
-    };
     console.log('✅ Подключено к серверу WebSocket');
     isSocketOpen = true;
     socket.send(JSON.stringify({ action: "info" }));
   });
 
-socket.on('message', async (data) => {  // добавил async
-  try {
-    const dataObj = JSON.parse(data);
-    
-    // Проверяем тип сообщения по наличию action
-    if (dataObj.action === "json_update" && Array.isArray(dataObj.data)) {
-      // Обрабатываем JSON-обновления
-      workers.forEach(w => w.postMessage({ 
-        type: 'items_buying', 
-        data: dataObj.data 
-      }));
-    } 
-    // Обрабатываем обновление цен
-    else if (dataObj.prices) {
-      // 1. ЧИТАЕМ items.json ЗАНОВО
-      let freshItems = [];
-      try {
-        if (existsSync(itemsPath)) {
-          const itemsJson = await readFile(itemsPath, 'utf-8');
-          freshItems = JSON.parse(itemsJson);
-          console.log('✅ items.json перечитан заново');
-        } else {
-          console.warn('⚠️ items.json не найден');
+  socket.on('message', async (data) => {
+    try {
+      const dataObj = JSON.parse(data);
+      
+      if (dataObj.action === "json_update" && Array.isArray(dataObj.data)) {
+        workers.forEach(w => w.postMessage({ 
+          type: 'items_buying', 
+          data: dataObj.data 
+        }));
+      } else if (dataObj.prices) {
+        let freshItems = [];
+        try {
+          if (existsSync(itemsPath)) {
+            const itemsJson = await readFile(itemsPath, 'utf-8');
+            freshItems = JSON.parse(itemsJson);
+            console.log('✅ items.json перечитан заново');
+          } else {
+            console.warn('⚠️ items.json не найден');
+            freshItems = [];
+          }
+        } catch (error) {
+          console.error('❌ Ошибка чтения items.json:', error.message);
           freshItems = [];
         }
-      } catch (error) {
-        console.error('❌ Ошибка чтения items.json:', error.message);
-        freshItems = [];
-      }
-      
-      // 2. ОБНОВЛЯЕМ ЦЕНЫ И ФИЛЬТРУЕМ
-      const itemsWithPrice = freshItems
-        .map(item => ({
-          ...item,
-          priceSell: dataObj.prices[item.id],
-          ratio: dataObj.ratios?.[item.id] || item.ratio || 0.8
-        }))
-        .filter(item => item.priceSell !== undefined && item.priceSell !== null);
-      
-      // 3. ЛОГИРУЕМ, ЧТО ОТБРОСИЛИ
-      const itemsWithoutPrice = freshItems.filter(item => 
-        dataObj.prices[item.id] === undefined || dataObj.prices[item.id] === null
-      );
-      
-      if (itemsWithoutPrice.length > 0) {
-        console.log('⚠️ Предметы без цен (удалены):', itemsWithoutPrice.map(i => i.id).join(', '));
-      }
-      
-      // 4. СОХРАНЯЕМ НОВЫЙ МАССИВ
-      items = itemsWithPrice;
-      
-      // 5. ОБНОВЛЯЕМ ЦЕНЫ У БОТОВ
-      bots.forEach(bot => bot.itemPrices = items);
+        
+        const itemsWithPrice = freshItems
+          .map(item => ({
+            ...item,
+            priceSell: dataObj.prices[item.id],
+            ratio: dataObj.ratios?.[item.id] || item.ratio || 0.8
+          }))
+          .filter(item => item.priceSell !== undefined && item.priceSell !== null);
+        
+        const itemsWithoutPrice = freshItems.filter(item => 
+          dataObj.prices[item.id] === undefined || dataObj.prices[item.id] === null
+        );
+        
+        if (itemsWithoutPrice.length > 0) {
+          console.log('⚠️ Предметы без цен (удалены):', itemsWithoutPrice.map(i => i.id).join(', '));
+        }
+        
+        items = itemsWithPrice;
+        bots.forEach(bot => bot.itemPrices = items);
 
-      console.log('📦 Обновлены цены для', items.length, 'предметов:', items.map(i => `${i.id}: ${i.priceSell}`));
+        console.log('📦 Обновлены цены для', items.length, 'предметов');
+        workers.forEach(w => w.postMessage({ type: 'price', data: items }));
 
-      // 6. ОТПРАВЛЯЕМ ОБНОВЛЕНИЯ ВОРКЕРАМ
-      workers.forEach(w => w.postMessage({ type: 'price', data: items }));
-
-      // 7. ЗАПУСКАЕМ БОТОВ, ЕСЛИ ЕЩЁ НЕ ЗАПУЩЕНЫ
-      if (!botsStarted && items.length > 0) {
-        botsStarted = true;
-        startBots();
+        if (!botsStarted && items.length > 0) {
+          botsStarted = true;
+          startBots();
+        }
       }
+    } catch (e) {
+      console.error('Ошибка обработки сообщения от сервера:', e.message);
     }
-  } catch (e) {
-    console.error('Ошибка обработки сообщения от сервера:', e.message);
-  }
-});
+  });
 
   socket.on('close', () => {
     console.log('❌ WebSocket отключён. Реконнект через 5 секунд...');
@@ -385,25 +411,35 @@ socket.on('message', async (data) => {  // добавил async
 
 setInterval(() => {
   if (isSocketOpen) {
-    const itemsCount = new Map
-    const itemsCountInventory = new Map
+    const itemsCount = new Map();
+    const itemsCountInventory = new Map();
+    
     for (let items of Array.from(botItems.values())) {
       for (let item of items) {
-        const count = itemsCount.get(item)
-        if (count) {itemsCount.set(item, count+1)} else itemsCount.set(item, 1)
+        const count = itemsCount.get(item);
+        if (count) {
+          itemsCount.set(item, count + 1);
+        } else {
+          itemsCount.set(item, 1);
+        }
       }
     }  
+    
     for (let items of Array.from(botInventory.values())) {
       for (let item of items) {
-        const count = itemsCountInventory.get(item)
-        if (count) {itemsCountInventory.set(item, count+1)} else itemsCountInventory.set(item, 1)
+        const count = itemsCountInventory.get(item);
+        if (count) {
+          itemsCountInventory.set(item, count + 1);
+        } else {
+          itemsCountInventory.set(item, 1);
+        }
       }
     }
-    const ah = Object.fromEntries(itemsCount)
-    const inv = Object.fromEntries(itemsCountInventory)
-    socket.send(JSON.stringify({ action: "presence", items:ah, inventory: inv}));
+    
+    const ah = Object.fromEntries(itemsCount);
+    const inv = Object.fromEntries(itemsCountInventory);
+    socket.send(JSON.stringify({ action: "presence", items: ah, inventory: inv }));
   }
 }, 30000);
 
-let botsStarted = false;
 connectWebSocket();
