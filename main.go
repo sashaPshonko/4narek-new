@@ -763,14 +763,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Отправляем начальные данные
-	priceData := PriceAndRatio{}
 	var jsonList []string
 
 	mutex.Lock()
-	priceData = PriceAndRatio{
-		Prices: data.Prices,
-		Ratios: data.Ratios,
-	}
 	jsonList = getCurrentJsonList()
 	mutex.Unlock()
 
@@ -843,10 +838,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			mutex.Unlock()
 
 		case "info":
-			priceData := PriceAndRatio{
-				Prices: data.Prices,
-				Ratios: data.Ratios,
-			}
 			mutex.Unlock()
 
 			select {
