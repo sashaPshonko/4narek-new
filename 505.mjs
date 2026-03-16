@@ -12,9 +12,10 @@ const __dirname = dirname(__filename);
 
 // Проверяем существование файла items.json
 const itemsPath = join(__dirname, 'items.json');
+const botsPath = join(__dirname, '505.json');
 let items = [];
 
-const token = '7433279544:AAEdja0YjZxwRPcw0zbf6lRh-6ouKHettAU';
+const token = '8321775652:AAGTnWNOmXSR6utk9Q7KoLJLOG55KdH2zwY';
 
 const tgBot = new TelegramBot(token, { polling: true });
 
