@@ -69,7 +69,7 @@
             }
         ],
         "num": 5,
-        "nacenka": 600000
+        "nacenka": 400000
     },
     {
         "name": "netherite_sword",
@@ -289,7 +289,7 @@
             }
         ],
         "num": 3,
-        "nacenka": 700000
+        "nacenka": 500000
     },
     {
         "name": "elytra",
