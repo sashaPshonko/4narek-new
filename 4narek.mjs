@@ -113,7 +113,6 @@ async function launchBookBuyer(name, password, anarchy) {
         chatLengthLimit: 256,  // Добавь это
         viewDistance: 'tiny'    // И это
     });
-    bot.mu = false;
 
 
     const loginCommand = `/l ${name}`;
@@ -178,7 +177,7 @@ async function launchBookBuyer(name, password, anarchy) {
         });
 bot.on('physicsTick', async () => {
     if (Date.now() - bot.timeActive > 90000) {
-        bot.mu = false
+        mu = false
         bot.timeActive = Date.now();
         bot.menu = analysisAH
         await safeAH(bot);
@@ -457,7 +456,7 @@ bot.on('windowOpen', async () => {
                 bot.closeWindow(bot.currentWindow);
             }
             bot.startTime = Date.now();
-            bot.mu = false;
+            mu = false;
             logger.info(`${bot.username} - мьютекс снят`);
 
             await delay(500);
@@ -507,7 +506,7 @@ bot.on('message', async (message) => {
     }
 
     if (messageText.includes('Сервер заполнен')) {
-        bot.mu = false;
+        mu = false;
         bot.startTime = Date.now() - 240000;
         bot.ahFull = false;
         bot.timeReset = Date.now() - 60000;
@@ -606,21 +605,6 @@ bot.on('message', async (message) => {
         await safeAH()
         return
     }
-
-    // if (messageText.includes('Добро пожаловать на FunTime.su') && bot.login) {
-    //     logger.info(`${name} - зашел на сервер`);
-    //     await delay(5000);
-    //     bot.timeLogin = Date.now()
-    //     bot.chat(anarchyCommand)
-
-    //     bot.ahFull = false;
-    //     bot.mu = true;
-    //     bot.menu = chooseBuying;
-
-    //     await delay(1000);
-    //     bot.chat(shopCommand)
-    //     return
-    // }
 
     if (messageText.includes('[$] Ваш баланс:')) {
         let balanceStr = messageText
@@ -754,13 +738,13 @@ function countTotalItemsInWindow(bot, itemPrices) {
 async function sellItems(bot, itemPrices) {
     bot.needSell = false;
 
-    if (bot.mu) {
+    if (mu) {
         await delay(500);
         await safeAH(bot);
         return;
     }
 
-    bot.mu = true;
+    mu = true;
 
     await walk(bot);
     logger.info(`${bot.username} - прогулка завершена`);
@@ -916,7 +900,7 @@ async function safeClick(bot, slot, time) {
 }
 
 async function safeAH(bot) {
-    if (bot.mu) return
+    if (mu) return
     bot.netakbistro = true
     let key = bot.key;
     bot.timeActive = Date.now();
