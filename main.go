@@ -778,7 +778,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		case broadcast <- filterPrices():
 		default:
 	}
-	}
 	select {
 	case broadcast <- map[string]interface{}{
 		"action": "json_update",
@@ -1256,7 +1255,7 @@ func adjustPrice(item string) {
 			item, priceBefore, newPrice, onAH, sales, cfg.NormalSales, leaderID)
 
 		select {
-		case broadcast <- filterPrices()
+		case broadcast <- filterPrices():
 		default:
 		}
 	} else {
