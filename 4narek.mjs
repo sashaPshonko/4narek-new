@@ -454,7 +454,7 @@ async function launchBookBuyer(name, password, anarchy) {
             return
         }
 
-        if (messageText.includes('вы забанены')) {
+        if (messageText.toLowerCase().includes('вы забанены')) {
             parentPort.postMessage(`${workerData.username} - забанен`)
             return
         }
