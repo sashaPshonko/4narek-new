@@ -1046,91 +1046,39 @@ function getItemConfig(item, itemPrices) {
 
 async function getBuyPrice(slotData) {
     const loreArray = slotData.nbt?.value?.display?.value?.Lore?.value?.value;
-    if (!loreArray) return undefined;
+    if (!loreArray) {
+        return undefined;
+    }
 
-    // Сначала ищем строку, содержащую "Ценa:" или "Цена:"
     for (const jsonString of loreArray) {
         try {
             const parsed = JSON.parse(jsonString);
             
-            // Проверяем, есть ли в этой части упоминание цены
-            if (parsed.text === '$' && parsed.extra) {
-                // Идём по структуре, пока не найдём число
-                let current = parsed;
-                while (current.extra && current.extra[0]) {
-                    current = current.extra[0];
+            // 1. Ищем объект, начинающийся с "$"
+            if (parsed.text === '$' && Array.isArray(parsed.extra)) {
+                // Ожидаемая структура: $ → extra → extra → extra → строка с ценой
+                // Проверяем, что есть как минимум три уровня extra
+                if (parsed.extra[0]?.extra?.[0]?.extra?.[0]) {
+                    const priceStr = parsed.extra[0].extra[0].extra[0];
+                    if (typeof priceStr === 'string') {
+                        const price = parseInt(priceStr.replace(/,/g, '').replace(/\s/g, ''));
+                        if (!isNaN(price) && price > 10000) { // дополнительная проверка
+                            return price;
+                        }
+                    }
                 }
-                // Если дошли до строки с числом
-                if (typeof current === 'string') {
-                    const price = parseInt(current.replace(/,/g, '').replace(/\s/g, ''));
-                    if (!isNaN(price)) return price;
-                }
-            }
-            
-            // Альтернативный поиск по ключевому слову
-            const hasPriceLabel = JSON.stringify(parsed).includes('Ценa:') || 
-                                 JSON.stringify(parsed).includes('Цена:');
-            if (hasPriceLabel) {
-                const priceMatch = JSON.stringify(parsed).match(/[\d,]+/);
-                if (priceMatch) {
-                    const price = parseInt(priceMatch[0].replace(/,/g, ''));
-                    if (!isNaN(price)) return price;
-                }
+                
+                // Если структура не совпала, но объект с "$" есть – логируем
+                parentPort.postMessage(`цевозможно гарантированно извлечь цену ${JSON.stringify(slotData)}`)
+                return undefined;
             }
         } catch (e) {
             continue;
         }
     }
 
-    // Если не нашли через структуру, используем рекурсивный поиск чисел
-    for (const jsonString of loreArray) {
-        try {
-            const parsedData = JSON.parse(jsonString);
-            
-            function findPrice(obj, depth = 0) {
-                if (!obj) return null;
-                
-                if (typeof obj === 'string') {
-                    // Проверяем, похоже ли на цену (длинное число)
-                    const match = obj.match(/[\d,]+/);
-                    if (match) {
-                        const num = parseInt(match[0].replace(/,/g, ''));
-                        // Цены обычно > 10000
-                        if (num > 10000) return match[0];
-                    }
-                }
-                
-                if (obj.extra && Array.isArray(obj.extra)) {
-                    for (const item of obj.extra) {
-                        const found = findPrice(item, depth + 1);
-                        if (found) return found;
-                    }
-                }
-                
-                if (obj.text && typeof obj.text === 'string') {
-                    const match = obj.text.match(/[\d,]+/);
-                    if (match) {
-                        const num = parseInt(match[0].replace(/,/g, ''));
-                        if (num > 10000) return match[0];
-                    }
-                }
-                
-                return null;
-            }
-            
-            const priceStr = findPrice(parsedData);
-            if (priceStr) {
-                const price = parseInt(priceStr.replace(/,/g, ''));
-                if (!isNaN(price)) return price;
-            }
-            
-        } catch (e) {
-            continue;
-        }
-    }
-
-    logger.error('Цена не найдена');
-    saveToJsonFile('error.json', slotData);
+    // 2. Если объект с "$" не найден вообще – ошибка
+    parentPort.postMessage(`цевозможно гарантированно извлечь цену ${JSON.stringify(slotData)}`)
     return undefined;
 }
 
