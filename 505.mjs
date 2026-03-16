@@ -12,7 +12,7 @@ let items = JSON.parse(itemsJson);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const token = '7590462636:AAHmzPTD5kOVTgoQAwEh8mcFN6JaOr1_XsY';
+const token = '7433279544:AAEdja0YjZxwRPcw0zbf6lRh-6ouKHettAU';
 
 const tgBot = new TelegramBot(token, { polling: true });
 
