@@ -12,6 +12,7 @@ import { generateKey } from 'crypto';
 let itemPrices = workerData.itemPrices
 let itemsBuying = []
 let needReset = false
+let netakbistro = true
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
         needReset = true
@@ -133,7 +134,7 @@ async function launchBookBuyer(name, password, anarchy) {
         bot.timeLogin = Date.now()
         bot.prices = []
         bot.count = 0
-        bot.netakbistro = true
+        netakbistro = true
         bot.ah = []
         bot.needSell = false
         bot.startClickTime = null
@@ -331,8 +332,8 @@ bot.on('windowOpen', async () => {
 
                     break;
                 default:
-                    if (bot.netakbistro) {
-                        bot.netakbistro = false;
+                    if (netakbistro) {
+                        netakbistro = false;
                         await safeClickBuy(bot, slotToBuy, 1655, key);
                     } else if (slotToBuy < 9) {
                         await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(100, 150)*(slotToBuy+1), key);
@@ -517,7 +518,7 @@ bot.on('message', async (message) => {
         bot.timeLogin = Date.now()
         bot.prices = []
         bot.count = 0
-        bot.netakbistro = true
+        netakbistro = true
 
         await delay(minDelay);
         bot.chat(anarchyCommand);
@@ -903,7 +904,7 @@ async function safeClick(bot, slot, time) {
 
 async function safeAH(bot) {
     if (mu) return
-    bot.netakbistro = true
+    netakbistro = true
     let key = bot.key;
     bot.timeActive = Date.now();
     bot.menu = analysisAH
