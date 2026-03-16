@@ -20,9 +20,7 @@ const token = '8321775652:AAFs6ZYxyb820LkCG_oq2fy6F9D4_XzVW3U';
 
 const tgBot = new TelegramBot(token, { polling: true });
 
-const infoChatID = -4709535234
-const alertChatID = -4763690917
-const pomoikaChatID = -4896488855
+const alertChatID = -1003827870631;
 
 let workers = [];
 let botItems = new Map();
