@@ -243,6 +243,20 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_leggings-1.21",
 		},
+		"нагрудник-1.21": {
+			BasePrice:    600029,
+			NormalSales:  7,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_chestplate-1.21",
+		},
+		"нагрудник_позорный-1.21": {
+			BasePrice:    500030,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_chestplate-1.21",
+		},
 	}
 )
 
