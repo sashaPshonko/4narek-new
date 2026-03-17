@@ -257,6 +257,34 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_chestplate-1.21",
 		},
+		"ботинки-1.21": {
+			BasePrice:    500031,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_boots-1.21",
+		},
+		"ботинки_позорные-1.21": {
+			BasePrice:    400032,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_boots-1.21",
+		},
+		"шлем-1.21": {
+			BasePrice:    600033,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_helmet-1.21",
+		},
+		"шлем_позорный-1.21": {
+			BasePrice:    500034,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_helmet-1.21",
+		},
 	}
 )
 
