@@ -1047,6 +1047,7 @@ function getItemConfig(item, itemPrices) {
 async function getBuyPrice(slotData) {
     const loreArray = slotData.nbt?.value?.display?.value?.Lore?.value?.value;
     if (!loreArray) {
+        parentPort.postMessage(`нет лора для предмета ${slotData.name}: ${JSON.stringify(slotData)}`);
         return undefined;
     }
 
@@ -1054,22 +1055,28 @@ async function getBuyPrice(slotData) {
         try {
             const parsed = JSON.parse(jsonString);
             
-            // 1. Ищем объект, начинающийся с "$"
             if (parsed.text === '$' && Array.isArray(parsed.extra)) {
-                // Ожидаемая структура: $ → extra → extra → extra → строка с ценой
-                // Проверяем, что есть как минимум три уровня extra
                 if (parsed.extra[0]?.extra?.[0]?.extra?.[0]) {
                     const priceStr = parsed.extra[0].extra[0].extra[0];
                     if (typeof priceStr === 'string') {
                         const price = parseInt(priceStr.replace(/,/g, '').replace(/\s/g, ''));
-                        if (!isNaN(price) && price > 10000) { // дополнительная проверка
-                            return price;
+                        if (!isNaN(price)) {
+                            if (price > 10000) {
+                                return price; // нормальная цена
+                            } else {
+                                // подозрительно низкая цена
+                                parentPort.postMessage(
+                                    `подозрительная цена ${price} для ${slotData.name}: ${JSON.stringify(slotData)}`
+                                );
+                                return undefined;
+                            }
                         }
                     }
                 }
-                
-                // Если структура не совпала, но объект с "$" есть – логируем
-                parentPort.postMessage(`цевозможно гарантированно извлечь цену ${JSON.stringify(slotData)}`)
+                // структура с $ есть, но не удалось извлечь число
+                parentPort.postMessage(
+                    `невозможно извлечь цену из структуры с $ для ${slotData.name}: ${JSON.stringify(slotData)}`
+                );
                 return undefined;
             }
         } catch (e) {
@@ -1077,8 +1084,10 @@ async function getBuyPrice(slotData) {
         }
     }
 
-    // 2. Если объект с "$" не найден вообще – ошибка
-    parentPort.postMessage(`цевозможно гарантированно извлечь цену ${JSON.stringify(slotData)}`)
+    // объект с $ не найден
+    parentPort.postMessage(
+        `не найден объект с $ для ${slotData.name}: ${JSON.stringify(slotData)}`
+    );
     return undefined;
 }
 
