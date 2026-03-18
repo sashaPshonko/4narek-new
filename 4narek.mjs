@@ -1052,7 +1052,7 @@ function getItemConfig(item, itemPrices) {
 async function getBuyPrice(slotData) {
     const loreArray = slotData.nbt?.value?.display?.value?.Lore?.value?.value;
     if (!loreArray) {
-        parentPort.postMessage(`нет лора для предмета ${slotData.name}: ${JSON.stringify(slotData)}`);
+        parentPort.postMessage(`нет лора для предмета ${slotData.name}: ${JSON.stringify(bot.currentWindow)}`);
         return undefined;
     }
 
