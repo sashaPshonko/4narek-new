@@ -140,30 +140,6 @@
         "nacenka": 400000
     },
     {
-        "name": "netherite_boots",
-        "id": "ботинки_позорные",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:protection",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:feather_falling",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:projectile_protection",
-                "lvl": 4
-            }
-        ],
-        "num": 1,
-        "nacenka": 300000
-    },
-    {
         "name": "netherite_helmet",
         "id": "шлем",
         "effects": [
@@ -185,6 +161,34 @@
             }
         ],
         "num": 2,
+        "nacenka": 400000
+    },
+        {
+        "name": "netherite_helmet",
+        "id": "шлем_починка",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:protection",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:respiration",
+                "lvl": 2
+            },
+            {
+                "name": "minecraft:aqua_affinity",
+                "lvl": 1
+            },
+            {
+                "name": "minecraft:mending",
+                "lvl": 1
+            }
+        ],
+        "num": 3,
         "nacenka": 400000
     },
     {
@@ -225,27 +229,23 @@
     },
     {
         "name": "netherite_leggings",
-        "id": "штаны_позорные",
+        "id": "штаны_починка",
         "effects": [
             {
                 "name": "minecraft:unbreaking",
-                "lvl": 4
+                "lvl": 5
             },
             {
                 "name": "minecraft:protection",
-                "lvl": 4
+                "lvl": 5
             },
             {
-                "name": "minecraft:projectile_protection",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:fire_protection",
-                "lvl": 4
+                "name": "minecraft:mending",
+                "lvl": 1        
             }
         ],
-        "num": 1,
-        "nacenka": 300000
+        "num": 3,
+        "nacenka": 400000
     },
     {
         "name": "netherite_chestplate",
@@ -261,6 +261,26 @@
             }
         ],
         "num": 2,
+        "nacenka": 400000
+    },
+        {
+        "name": "netherite_chestplate",
+        "id": "нагрудник_починка",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:protection",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:mending",
+                "lvl": 1
+            }
+        ],
+        "num": 3,
         "nacenka": 400000
     },
     {
@@ -325,7 +345,7 @@
         "effects": [
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 200000
     },
     {
         "name": "elytra",
