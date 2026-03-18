@@ -103,6 +103,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_boots",
 		},
+		"ботинки_починка": {
+			BasePrice:    2000006,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_boots",
+		},
 		"ботинки_позорные": {
 			BasePrice:    800007,
 			NormalSales:  4,
@@ -113,6 +120,13 @@ var (
 		"шлем": {
 			BasePrice:    1000008,
 			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_helmet",
+		},
+		"шлем_починка": {
+			BasePrice:    2000009,
+			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_helmet",
@@ -131,6 +145,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_leggings",
 		},
+		"штаны_починка": {
+			BasePrice:    2000011,
+			NormalSales:  7,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_leggings",
+		},
 		"штаны_позорные": {
 			BasePrice:    800013,
 			NormalSales:  4,
@@ -141,6 +162,13 @@ var (
 		"нагрудник": {
 			BasePrice:    1000014,
 			NormalSales:  8,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_chestplate",
+		},
+		"нагрудник_починка": {
+			BasePrice:    800015,
+			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_chestplate",

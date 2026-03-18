@@ -653,7 +653,7 @@ async function launchBookBuyer(name, password, anarchy) {
             const marker = currentPrice % 100;
             
             let finalPrice = basePrice + marker + nacenka;
-            if (JSON.stringify(bot.currentWindow.slots[slot]).includes('krush')) {
+            if (JSON.stringify(bot.inventory.slots[slot]).includes('krush')) {
                 isKrush = true
                 bot.chat(`ah sell ${finalPrice}`)
                 await delay(100)
