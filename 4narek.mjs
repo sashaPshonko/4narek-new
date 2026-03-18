@@ -298,6 +298,11 @@ async function launchBookBuyer(name, password, anarchy) {
                     await sellItems(bot, itemPrices)
                     break;
                 }
+
+                if (bot.currentWindow.slots[0].name?.includes('stained_glass')) {
+                    await safeClickBuy(bot, 0, getRandomDelayInRange(150-300), key)
+                    break
+                }
                 
                 logger.info(`${name} - поиск лучшего предмета`);
                 let slotToBuy = await getBestAHSlot(bot, itemPrices);
