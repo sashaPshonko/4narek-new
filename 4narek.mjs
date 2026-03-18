@@ -14,6 +14,7 @@ let itemsBuying = []
 let needReset = false
 let netakbistro = true
 let mu = false
+let isKrush = false
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
@@ -652,6 +653,14 @@ async function launchBookBuyer(name, password, anarchy) {
             const marker = currentPrice % 100;
             
             let finalPrice = basePrice + marker + nacenka;
+            if (JSON.stringify(bot.currentWindow.slots[slot]).includes('krush')) {
+                isKrush = true
+                bot.chat(`ah sell ${finalPrice}`)
+                await delay(100)
+                bot.chat(`ah sell ${finalPrice}`)
+                isKrush = false
+                return
+            }
             
             parentPort.postMessage({
                 name: "set_min_price", 
@@ -717,6 +726,7 @@ async function sellItems(bot, itemPrices) {
             let soldAnything = false;
 
             for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
+                while (isKrush) await delay(100)
                 if (botAhFull) break;
 
                 const slotIndex = firstSellSlot + quickSlot;
@@ -752,6 +762,7 @@ async function sellItems(bot, itemPrices) {
 
                 if (freeSlot !== null) {
                     for (let invSlot = 0; invSlot < 27; invSlot++) {
+                        while (isKrush) await delay(100)
                         if (botAhFull) break;
 
                         const item = bot.inventory.slots[invSlot];
