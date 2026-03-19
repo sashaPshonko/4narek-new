@@ -115,30 +115,6 @@
         "num": 2,
         "nacenka": 400000
     },
-     {
-        "name": "netherite_boots",
-        "id": "ботинки_починка",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:protection",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:depth_strider",
-                "lvl": 2
-            },
-            {
-                "name": "minecraft:mending",
-                "lvl": 1
-            }
-        ],
-        "num": 3,
-        "nacenka": 400000
-    },
     {
         "name": "netherite_helmet",
         "id": "шлем",
@@ -161,34 +137,6 @@
             }
         ],
         "num": 2,
-        "nacenka": 400000
-    },
-        {
-        "name": "netherite_helmet",
-        "id": "шлем_починка",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:protection",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:respiration",
-                "lvl": 2
-            },
-            {
-                "name": "minecraft:aqua_affinity",
-                "lvl": 1
-            },
-            {
-                "name": "minecraft:mending",
-                "lvl": 1
-            }
-        ],
-        "num": 3,
         "nacenka": 400000
     },
     {
@@ -228,26 +176,6 @@
         "nacenka": 400000
     },
     {
-        "name": "netherite_leggings",
-        "id": "штаны_починка",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:protection",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:mending",
-                "lvl": 1        
-            }
-        ],
-        "num": 3,
-        "nacenka": 400000
-    },
-    {
         "name": "netherite_chestplate",
         "id": "нагрудник",
         "effects": [
@@ -261,26 +189,6 @@
             }
         ],
         "num": 2,
-        "nacenka": 400000
-    },
-        {
-        "name": "netherite_chestplate",
-        "id": "нагрудник_починка",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:protection",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:mending",
-                "lvl": 1
-            }
-        ],
-        "num": 3,
         "nacenka": 400000
     },
     {

@@ -103,13 +103,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_boots",
 		},
-		"ботинки_починка": {
-			BasePrice:    2000006,
-			NormalSales:  4,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_boots",
-		},
+		// "ботинки_починка": {
+		// 	BasePrice:    2000006,
+		// 	NormalSales:  4,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "netherite_boots",
+		// },
 		// "ботинки_позорные": {
 		// 	BasePrice:    800007,
 		// 	NormalSales:  4,
@@ -124,13 +124,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_helmet",
 		},
-		"шлем_починка": {
-			BasePrice:    2000009,
-			NormalSales:  4,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_helmet",
-		},
+		// "шлем_починка": {
+		// 	BasePrice:    2000009,
+		// 	NormalSales:  4,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "netherite_helmet",
+		// },
 		"шлем_позорный": {
 			BasePrice:    800010,
 			NormalSales:  4,
@@ -166,13 +166,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_chestplate",
 		},
-		"нагрудник_починка": {
-			BasePrice:    800015,
-			NormalSales:  4,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_chestplate",
-		},
+		// "нагрудник_починка": {
+		// 	BasePrice:    800015,
+		// 	NormalSales:  4,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "netherite_chestplate",
+		// },
 		// "нагрудник_позорный": {
 		// 	BasePrice:    800016,
 		// 	NormalSales:  4,
