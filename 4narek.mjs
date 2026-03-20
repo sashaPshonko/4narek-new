@@ -1013,7 +1013,7 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
 
         if (item.name === 'netherite_pickaxe' &&
             allEnchants.some(en => en.name === 'minecraft:silk_touch') &&
-            !allEnchants.some(en => en.name === 'melting')
+            !allEnchants.some(en => en.name === 'smelting')
         ) {
             continue;
         }

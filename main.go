@@ -313,6 +313,48 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_helmet-1.21",
 		},
+		"elytra-1.21": {
+			BasePrice:    300035,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "elytra-1.21",
+		},
+		"elytra3-1.21": {
+			BasePrice:    500036,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "elytra-1.21",
+		},
+		"elytra_mending-1.21": {
+			BasePrice:    600037,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "elytra-1.21",
+		},
+		"кирка-1.21": {
+			BasePrice:    500038,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_pickaxe-1.21",
+		},
+		"кирка_починка-1.21": {
+			BasePrice:    700039,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_pickaxe-1.21",
+		},
+		"кирка_крутая-1.21": {
+			BasePrice:    1200040,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_pickaxe-1.21",
+		},
 	}
 )
 

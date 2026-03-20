@@ -24,3 +24,8 @@ pkill -f "503.mjs"
 ps aux | grep node
 
 sshuttle -r root@193.222.62.77 0.0.0.0/0 
+
+pgrep -f "node.*502.mjs"
+
+# Убить процесс (замени PID на реальный)
+kill PID
