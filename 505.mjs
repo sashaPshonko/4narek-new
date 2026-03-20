@@ -299,12 +299,16 @@ tgBot.onText(/\/update/, async (msg) => {
     await tgBot.sendMessage(alertChatID, '🔄 Обновление через git pull...');
     await stopWorkers();
     const pullResult = await gitPull();
+    await cleanNPM()
     await tgBot.sendMessage(alertChatID, `✅ Git pull выполнен:\n${pullResult}`);
-    await restartBots();
-    await tgBot.sendMessage(alertChatID, `✅ Боты перезапущены с новой конфигурацией`);
+    process.exit(1)
   } catch (error) {
     tgBot.sendMessage(alertChatID, `❌ Произошла ошибка: ${error.message}`);
   }
+});
+
+tgBot.onText(/\/ping/, async (msg) => {
+    tgBot.sendMessage(alertChatID, `✅ работает`);
 });
 
 tgBot.onText(/\/start/, async (msg) => {
