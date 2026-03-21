@@ -28,6 +28,14 @@ let socket;
 let isSocketOpen = false;
 let botsStarted = false;
 
+setInterval(async () => {
+    try {
+        await cleanNPM();
+    } catch (error) {
+        await sendErrorToTelegram(error, 'auto_clean_log');
+    }
+}, 5 * 60 * 60 * 1000);
+
 // ========== УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ОТПРАВКИ ОШИБОК ==========
 async function sendErrorToTelegram(error, context = '', extraData = null) {
     const timestamp = new Date().toLocaleString('ru-RU');
@@ -345,10 +353,16 @@ function stopWorkers() {
 }
 
 function cleanNPM() {
-  return new Promise((resolve, reject) => {
-    exec('npm cache clean --force', (err, stdout, stderr) => {
-      if (err) reject(`Error executing npm clean: ${stderr}`);
-      else resolve(stdout);
+    return new Promise((resolve, reject) => {
+    const logPath = './bot.log';
+    
+    exec(`> ${logPath}`, (err, stdout, stderr) => {
+      if (err) {
+        reject(`Error cleaning bot.log: ${stderr || err.message}`);
+      } else {
+        console.log(`✅ bot.log очищен (${logPath})`);
+        resolve(stdout);
+      }
     });
   });
 }
@@ -436,7 +450,6 @@ tgBot.onText(/\/update/, async (msg) => {
         await tgBot.sendMessage(alertChatID, '🔄 Обновление через git pull...');
         await stopWorkers();
         const pullResult = await gitPull();
-        await cleanNPM();
         await tgBot.sendMessage(alertChatID, `✅ Git pull выполнен:\n${pullResult}`);
     } catch (error) {
         await sendErrorToTelegram(error, 'update_command');

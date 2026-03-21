@@ -33,6 +33,8 @@ let botMenu = 'Выбор скупки ресурсов'
 let botKey = null
 let botType = ""
 let botTypeSell = null
+let enoughItems = false
+let lastWarpTP = Date.now() - 40000
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
@@ -273,7 +275,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 key = botKey
                 
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000)
-                if (resetime > 60 || needReset) {
+                if (resetime > 60 || needReset || enoughItems) {
                     logger.info(`${name} - ресет`);
                     await delay(500);
                     botMenu = myItems;
@@ -352,7 +354,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     const priceOnAH = await getBuyPriceInStorage(currentSlot);
                     const priceSell = await getPriceByEnchantments(currentSlot, itemPrices)
 
-                    if (priceSell !== priceOnAH) {
+                    if (priceSell !== priceOnAH || enoughItems) {
                         logger.error(`chnge ${priceSell} ${priceOnAH}`)
                         botAhFull = false
                         slot = i;
@@ -477,6 +479,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
         if (messageText.includes('Сервер заполнен')) {
             mu = false;
+            enoughItems = false
             botStartTime = Date.now() - 240000;
             botAhFull = false;
             botTimeReset = Date.now() - 60000;
@@ -493,6 +496,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
         if (messageText.includes('[☃] У Вас купили')) {
             botAhFull = false;
+            enoughItems = false
             let balanceStr = messageText
             if (messageText.includes('.')) {
                 balanceStr = balanceStr.slice(0, -3)
@@ -552,14 +556,11 @@ async function launchBookBuyer(name, password, anarchy) {
             return
         }
         
-        if (messageText.includes('[☃] Не удалось выставить')) {
+        if (messageText.includes('[☃] Не удалось выставить') ||
+            messageText.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
+            enoughItems = true
             botAhFull = true;
-            return
-        }
-        
-        if (messageText.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
-            botAhFull = true;
-            return
+            return;
         }
 
         if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
@@ -1185,53 +1186,6 @@ function getRandomElement(array) {
     return array[randomIndex];
 }
 
-async function longWalk(bot) {
-    await delay(500)
-    let timeTP = Date.now()
-    bot.autoEat.enableAuto()
-    botTimeActive = Date.now();
-    logger.info(`${bot.username} - все забито. Гуляем.`);
-    
-    while (botAhFull) {
-        const resetime = Math.floor((Date.now() - botTimeReset) / 1000)
-        if (resetime > 60 || needReset) {
-            await delay(500);
-            ['forward', 'back', 'left', 'right'].forEach(move =>
-                bot.setControlState(move, false)
-            );
-            await delay(500);
-            await safeAH(bot);
-            bot.autoEat.disableAuto()
-            return
-        }
-
-        const movements = ['forward', 'back', 'left', 'right'];
-        const randomMove = movements[Math.floor(Math.random() * movements.length)];
-        bot.setControlState(randomMove, true);
-        await delay(500);
-        bot.setControlState(randomMove, false);
-        
-        if (Date.now() - timeTP > 10000) {
-            await delay(500)
-            timeTP = Date.now()
-            const warps = ['mine', 'casino', 'case', 'shop']
-            const warp = getRandomElement(warps)
-            bot.chat(`/warp ${warp}`)
-            await delay(8000)
-        }
-
-        await delay(500);
-    }
-
-    logger.info(`${bot.username} - опять работать.`);
-
-    ['forward', 'back', 'left', 'right'].forEach(move =>
-        bot.setControlState(move, false)
-    );
-
-    bot.autoEat.disableAuto()
-}
-
 async function walk(bot) {
     await delay(500)
     bot.autoEat.enableAuto()
@@ -1252,9 +1206,11 @@ async function walk(bot) {
     );
 
     const warps = ['mine', 'casino', 'case', 'shop']
-    const warp = getRandomElement(warps)
-    bot.chat(`/warp ${warp}`)
-    await delay(8000)
+    if (Date.now() - lastWarpTP > 40000) {
+        const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+        bot.chat(`/warp ${warp}`);
+        await delay(8000);
+    }
 
     bot.autoEat.disableAuto()
 }
