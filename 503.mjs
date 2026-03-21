@@ -398,7 +398,7 @@ async function startBots() {
                 }
             }, 1000);
             const results = await Promise.all(botPromises);
-            console.log('All bots started:', results);
+            console.log('All bots started:');
         } catch (error) {
             await sendErrorToTelegram(error, 'startBots_execution');
             console.error('Error in bot execution:', error);
@@ -433,7 +433,7 @@ async function restartBots() {
                 }
             }, 3000);
             const results = await Promise.all(botPromises);
-            console.log('All bots restarted:', results);
+            console.log('All bots restarted:');
         } catch (error) {
             await sendErrorToTelegram(error, 'restartBots_execution');
             console.error('Error in bot execution:', error);
