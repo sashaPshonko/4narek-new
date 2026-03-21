@@ -277,9 +277,9 @@ function runWorker(bot) {
             worker.on('exit', async (code) => {
                 bot.success = false;
                 console.warn(`⚠️ Worker ${bot.username} завершился с кодом ${code}`);
-                if (code !== 0) {
-                    await sendErrorToTelegram(`Exit code: ${code}`, 'worker_exit', { username: bot.username });
-                }
+                // if (code !== 0) {
+                //     await sendErrorToTelegram(`Exit code: ${code}`, 'worker_exit', { username: bot.username });
+                // }
                 handleRestart();
             });
 
