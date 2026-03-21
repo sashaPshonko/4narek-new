@@ -663,5 +663,29 @@ process.on('uncaughtException', async (error) => {
     }, 3000);
 });
 
+
+console.log('🔍 ДИАГНОСТИКА:');
+console.log('  - workers:', workers.length);
+console.log('  - bots:', bots.length);
+console.log('  - socket:', socket ? 'created' : 'not created');
+console.log('  - isSocketOpen:', isSocketOpen);
+
+// Принудительно держим процесс
+const keepAliveInterval = setInterval(() => {
+    console.log(`🏃‍♂️ [${new Date().toISOString()}] Процесс жив. Workers: ${workers.length}`);
+}, 10000);
+
+// Ловим выход
+process.on('beforeExit', (code) => {
+    console.log(`⚠️ beforeExit с кодом ${code}`);
+    console.log('  - workers:', workers.length);
+    console.log('  - socket readyState:', socket?.readyState);
+    clearInterval(keepAliveInterval);
+});
+
+process.on('exit', (code) => {
+    console.log(`⚠️ exit с кодом ${code}`);
+});
+
 // Запуск WebSocket
 connectWebSocket();
