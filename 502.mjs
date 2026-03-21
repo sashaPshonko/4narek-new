@@ -436,23 +436,13 @@ tgBot.onText(/\/update/, async (msg) => {
         await tgBot.sendMessage(alertChatID, '🔄 Обновление через git pull...');
         await stopWorkers();
         const pullResult = await gitPull();
-        
-        // cleanNPM функция должна быть определена
-        try {
-            await cleanNPM();
-        } catch (cleanError) {
-            await sendErrorToTelegram(cleanError, 'cleanNPM');
-        }
-        
+        await cleanNPM();
         await tgBot.sendMessage(alertChatID, `✅ Git pull выполнен:\n${pullResult}`);
-        process.exit(1);
     } catch (error) {
-        await sendErrorToTelegram(error, 'update_command', { msg: msg.text });
-        try {
-            await tgBot.sendMessage(alertChatID, `❌ Произошла ошибка: ${error.message}`);
-        } catch (tgError) {
-            console.error('Не удалось отправить в ТГ:', tgError.message);
-        }
+        await sendErrorToTelegram(error, 'update_command');
+        await tgBot.sendMessage(alertChatID, `❌ Ошибка при обновлении: ${error.message}`);
+    } finally {
+        process.exit(1);
     }
 });
 
