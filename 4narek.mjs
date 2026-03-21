@@ -1103,7 +1103,7 @@ async function getBuyPrice(slotData) {
     return undefined;
 }
 
-async function getBuyPriceInStorage(slotData) {
+function getBuyPriceInStorage(slotData) {
     const loreArray = slotData?.nbt?.value?.display?.value?.Lore?.value?.value;
     if (!Array.isArray(loreArray)) return undefined;
 
