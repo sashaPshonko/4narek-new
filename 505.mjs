@@ -1,743 +1,476 @@
 import { Worker } from 'worker_threads';
-import { readFile, writeFile, access } from 'fs/promises';
-import { existsSync, constants } from 'fs';
+import { readFile } from 'fs/promises';
+import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
-import { promisify } from 'util';
 
-const execPromise = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // ========== КОНСТАНТЫ ==========
-const PATHS = {
-    items: join(__dirname, 'items.json'),
-    bots: join(__dirname, '505.json'),
-    log: join(__dirname, 'bot.log')
-};
-
-const TELEGRAM = {
-    token: '8321775652:AAFs6ZYxyb820LkCG_oq2fy6F9D4_XzVW3U',
-    chatID: -1003827870631
-};
-
+const itemsPath = join(__dirname, 'items.json');
+const botsPath = join(__dirname, '505.json');
+const token = '8321775652:AAFs6ZYxyb820LkCG_oq2fy6F9D4_XzVW3U';
+const alertChatID = -1003827870631;
 const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
-const WORKER_TIMEOUT = 30000;
-const RESTART_DELAY = 60000;
-const MAX_RESTARTS = 10;
-const RESTART_WINDOW = 3600000; // 1 час
-const PRESENCE_INTERVAL = 30000;
-const CLEAN_LOG_INTERVAL = 5 * 60 * 60 * 1000;
 
 // ========== ГЛОБАЛЬНЫЕ СОСТОЯНИЯ ==========
 let items = [];
-let bots = [];
-let workers = new Map(); // username -> { worker, restartCount, lastRestart, timeoutId }
+let bots = new Map(); // Map<username, botConfig>
+let workers = new Map(); // Map<username, { worker, timeoutId }>
 let botItems = new Map();
 let botInventory = new Map();
 let itemsBuying = [];
-let socket = null;
+let socket;
 let isSocketOpen = false;
+let botsStarted = false;
+let tgBot;
 let isShuttingDown = false;
-let isStartingBots = false;
-let healthCheckInterval = null;
-let reconnectTimeout = null;
-let telegramBot = null;
 
-// ========== УНИВЕРСАЛЬНЫЙ ЛОГГЕР ==========
-class Logger {
-    static async error(error, context = '', extraData = null) {
-        const timestamp = new Date().toLocaleString('ru-RU');
-        const errorMessage = error?.message || String(error);
-        const errorStack = error?.stack ? `\n📚 Stack: ${error.stack.substring(0, 500)}` : '';
-        
-        const fullMessage = `❌ [${timestamp}] ${context}\n📝 ${errorMessage}${errorStack}`;
-        console.error(fullMessage);
-        
-        if (extraData) {
-            console.error('📦 Дополнительные данные:', extraData);
-        }
-        
-        // Асинхронная отправка в Telegram без ожидания
-        if (telegramBot && !isShuttingDown) {
-            try {
-                const truncatedMessage = fullMessage.substring(0, 4000);
-                await telegramBot.sendMessage(TELEGRAM.chatID, truncatedMessage);
-            } catch (tgError) {
-                console.error('❌ Не удалось отправить ошибку в Telegram:', tgError.message);
-            }
-        }
-    }
-    
-    static async info(message) {
-        const timestamp = new Date().toLocaleString('ru-RU');
-        const formattedMessage = `✅ [${timestamp}] ${message}`;
-        console.log(formattedMessage);
-        
-        if (telegramBot && !isShuttingDown && Math.random() < 0.1) { // Не спамим
-            try {
-                await telegramBot.sendMessage(TELEGRAM.chatID, formattedMessage);
-            } catch (e) {
-                // Игнорируем ошибки отправки информационных сообщений
-            }
-        }
-    }
-    
-    static async warning(message) {
-        const timestamp = new Date().toLocaleString('ru-RU');
-        const formattedMessage = `⚠️ [${timestamp}] ${message}`;
-        console.warn(formattedMessage);
-    }
-}
-
-// ========== ПРОВЕРКА ФАЙЛОВ ==========
-async function ensureFileExists(filePath, defaultContent = '[]') {
+// ========== ФУНКЦИЯ ОТПРАВКИ АЛЕРТОВ ==========
+async function sendAlert(message) {
     try {
-        await access(filePath, constants.R_OK | constants.W_OK);
-        return true;
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            try {
-                await writeFile(filePath, defaultContent, 'utf-8');
-                await Logger.info(`Создан файл: ${filePath}`);
-                return true;
-            } catch (writeError) {
-                await Logger.error(writeError, `Не удалось создать файл: ${filePath}`);
-                return false;
-            }
+        if (tgBot && !isShuttingDown) {
+            await tgBot.sendMessage(alertChatID, message);
         }
-        await Logger.error(error, `Ошибка доступа к файлу: ${filePath}`);
-        return false;
+        console.log(`🔔 ${message}`);
+    } catch (error) {
+        console.error('❌ Не удалось отправить алерт:', error.message);
     }
 }
 
-// ========== ЗАГРУЗКА КОНФИГУРАЦИЙ ==========
-async function loadItemsConfig() {
-    try {
-        const fileExists = await ensureFileExists(PATHS.items);
-        if (!fileExists) {
-            items = [];
-            return;
-        }
-        
-        const itemsJson = await readFile(PATHS.items, 'utf-8');
-        items = JSON.parse(itemsJson);
-        await Logger.info(`items.json загружен (${items.length} предметов)`);
-    } catch (error) {
-        await Logger.error(error, 'loadItemsConfig');
-        items = [];
-    }
-}
-
+// ========== ЗАГРУЗКА КОНФИГОВ ==========
 async function loadBotsConfig() {
     try {
-        const fileExists = await ensureFileExists(PATHS.bots);
-        if (!fileExists) {
-            bots = [];
-            return;
+        if (!existsSync(botsPath)) {
+            await sendAlert(`❌ Файл ${botsPath} не найден`);
+            process.exit(1);
         }
         
-        const botsJson = await readFile(PATHS.bots, 'utf-8');
-        const loadedBots = JSON.parse(botsJson);
+        const botsJson = await readFile(botsPath, 'utf-8');
+        let loadedBots;
+        try {
+            loadedBots = JSON.parse(botsJson);
+        } catch (e) {
+            await sendAlert(`❌ Ошибка парсинга ${botsPath}: ${e.message}`);
+            process.exit(1);
+        }
         
-        bots = loadedBots.map(bot => ({
-            ...bot,
-            itemPrices: items,
-            msgID: 0,
-            msgTime: null,
-            isManualStop: false,
-            success: false
-        }));
+        if (!Array.isArray(loadedBots)) {
+            await sendAlert(`❌ ${botsPath} должен содержать массив`);
+            process.exit(1);
+        }
         
-        await Logger.info(`bots.json загружен (${bots.length} ботов)`);
+        bots.clear();
+        for (const bot of loadedBots) {
+            bots.set(bot.username, {
+                ...bot,
+                itemPrices: items,
+                msgID: 0,
+                msgTime: null,
+                isManualStop: false,
+                success: false
+            });
+        }
+        
+        console.log(`✅ bots.json загружен (${bots.size} ботов)`);
     } catch (error) {
-        await Logger.error(error, 'loadBotsConfig');
-        bots = [];
+        await sendAlert(`❌ Ошибка загрузки ${botsPath}: ${error.message}`);
+        process.exit(1);
     }
 }
 
-// ========== БЕЗОПАСНАЯ РАБОТА С ВОРКЕРАМИ ==========
-function isWorkerAlive(worker) {
-    if (!worker || typeof worker.terminate !== 'function') return false;
+async function loadItemsConfig() {
     try {
-        return !worker.terminated && worker.threadId !== undefined;
-    } catch (e) {
-        return false;
-    }
-}
-
-function safePostMessage(worker, message) {
-    if (!worker || !isWorkerAlive(worker)) return false;
-    try {
-        worker.postMessage(message);
-        return true;
+        if (!existsSync(itemsPath)) {
+            await sendAlert(`❌ Файл ${itemsPath} не найден`);
+            process.exit(1);
+        }
+        
+        const itemsJson = await readFile(itemsPath, 'utf-8');
+        try {
+            items = JSON.parse(itemsJson);
+        } catch (e) {
+            await sendAlert(`❌ Ошибка парсинга ${itemsPath}: ${e.message}`);
+            process.exit(1);
+        }
+        
+        if (!Array.isArray(items)) {
+            await sendAlert(`❌ ${itemsPath} должен содержать массив`);
+            process.exit(1);
+        }
+        
+        console.log(`✅ items.json загружен (${items.length} предметов)`);
     } catch (error) {
-        Logger.error(error, 'safePostMessage', { messageType: message?.type });
-        return false;
+        await sendAlert(`❌ Ошибка загрузки ${itemsPath}: ${error.message}`);
+        process.exit(1);
     }
 }
 
-async function safeTerminateWorker(worker, username) {
-    if (!worker || !isWorkerAlive(worker)) return;
+// ========== РАБОТА С ВОРКЕРАМИ ==========
+function safePostMessage(username, message) {
+    const workerData = workers.get(username);
+    if (!workerData || !workerData.worker) return false;
     
     try {
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Terminate timeout')), 5000);
-        });
-        
-        const terminatePromise = worker.terminate();
-        await Promise.race([terminatePromise, timeoutPromise]);
-        await Logger.info(`Воркер ${username} остановлен`);
-    } catch (error) {
-        await Logger.error(error, `Ошибка при остановке воркера ${username}`);
-        // Принудительное удаление
-        if (worker.threadId) {
-            try { process.kill(worker.threadId); } catch (e) {}
+        if (!workerData.worker.terminated) {
+            workerData.worker.postMessage(message);
+            return true;
         }
+    } catch (error) {
+        // Игнорируем
     }
+    return false;
 }
 
-// ========== ЗАПУСК ВОРКЕРА С ЗАЩИТОЙ ==========
 async function runWorker(bot) {
     const username = bot.username;
     
-    // Проверяем существование файла воркера
-    const workerScriptPath = join(__dirname, `${bot.type}.mjs`);
-    if (!existsSync(workerScriptPath)) {
-        await Logger.error(new Error(`Worker file not found: ${workerScriptPath}`), 'runWorker', { username });
-        return null;
-    }
-    
-    // Останавливаем старый воркер если есть
+    // Убиваем старый воркер если есть
     const existing = workers.get(username);
     if (existing) {
         if (existing.timeoutId) clearTimeout(existing.timeoutId);
-        await safeTerminateWorker(existing.worker, username);
+        try { existing.worker.terminate(); } catch (e) {}
         workers.delete(username);
     }
-    
-    // Проверяем лимит рестартов
-    const restartData = workers.get(`${username}_restart`) || { count: 0, firstRestart: Date.now() };
-    const now = Date.now();
-    
-    if (now - restartData.firstRestart > RESTART_WINDOW) {
-        // Сброс счетчика если прошло достаточно времени
-        restartData.count = 0;
-        restartData.firstRestart = now;
-    }
-    
-    if (restartData.count >= MAX_RESTARTS && !bot.isManualStop) {
-        await Logger.error(new Error(`Too many restarts`), 'runWorker', { username, count: restartData.count });
-        await Logger.info(`❌ Бот ${username} остановлен из-за слишком частых рестартов`);
-        return null;
-    }
-    
+
     return new Promise((resolve) => {
         try {
+            const workerScriptPath = join(__dirname, `${bot.type}.mjs`);
+            
+            if (!existsSync(workerScriptPath)) {
+                console.error(`❌ Файл воркера не найден: ${workerScriptPath}`);
+                resolve(null);
+                return;
+            }
+            
             const worker = new Worker(workerScriptPath, {
-                workerData: { ...bot, itemPrices: items },
+                workerData: bot,
                 resourceLimits: {
                     maxOldGenerationSizeMb: 200,
                 }
             });
+
+            bot.isManualStop = false;
             
             const timeoutId = setTimeout(() => {
-                if (workers.get(username)?.worker === worker && !bot.success) {
-                    Logger.warning(`⏱ ${username} не ответил успехом за ${WORKER_TIMEOUT/1000} сек.`);
-                    safeTerminateWorker(worker, username);
+                if (!bot.success) {
+                    console.warn(`⏱ ${username} не ответил за 30 сек`);
+                    try { worker.terminate(); } catch (e) {}
                 }
-            }, WORKER_TIMEOUT);
+            }, 30000);
             
+            workers.set(username, { worker, timeoutId });
+
             worker.on('message', async (message) => {
                 try {
-                    await handleWorkerMessage(worker, username, bot, message);
+                    if (message.name === 'success') {
+                        const botToUpdate = bots.get(username);
+                        if (botToUpdate) {
+                            botToUpdate.success = true;
+                            console.log(`✅ ${username} запущен`);
+                        }
+                    } else if (message.name === "buy" || message.name === "sell" || message.name === "try-sell") {
+                        if (socket && isSocketOpen) {
+                            const action = message.name === 'try-sell' ? 'try-sell' : message.name;
+                            const payload = { action, type: message.id };
+                            if (message.price) payload.price = message.price;
+                            socket.send(JSON.stringify(payload));
+                        }
+                    } else if (message.name === "items") {
+                        botItems.set(username, message.items);
+                    } else if (message.name === "inventory") {
+                        botInventory.set(username, message.data);
+                    } else if (message.name === "buying") {
+                        const updatedBuying = [...itemsBuying, message.data];
+                        for (const [user, _] of workers) {
+                            safePostMessage(user, { type: 'items_buying', data: updatedBuying });
+                        }
+                        itemsBuying = updatedBuying;
+                        if (socket && isSocketOpen) {
+                            socket.send(JSON.stringify({ action: "add", json_data: message.data }));
+                        }
+                    } else if (message.name === "set_min_price" || message.name === "set_max_price") {
+                        if (socket && isSocketOpen) {
+                            socket.send(JSON.stringify({ 
+                                action: message.name === "set_min_price" ? 'set_min_price' : 'set_max_price', 
+                                type: message.type, 
+                                price: message.price 
+                            }));
+                        }
+                    } else if (typeof message === 'string') {
+                        // Любая строка от воркера отправляется в Telegram
+                        await sendAlert(`📝 ${message}`);
+                    }
                 } catch (error) {
-                    await Logger.error(error, 'worker_message_handler', { username, messageType: message?.name });
+                    await sendAlert(`❌ Ошибка в обработчике ${username}: ${error.message}`);
                 }
             });
-            
+
             worker.on('error', async (error) => {
-                await Logger.error(error, 'worker_error', { username });
                 bot.success = false;
+                // Не отправляем в Telegram, просто логируем в консоль
+                console.error(`⚠️ ${username} ошибка: ${error.message}`);
             });
-            
-            worker.on('exit', async (code) => {
+
+            worker.on('exit', (code) => {
                 bot.success = false;
-                await Logger.warning(`Worker ${username} завершился с кодом ${code}`);
+                console.warn(`⚠️ ${username} завершился с кодом ${code}`);
                 
                 const workerData = workers.get(username);
-                if (workerData && workerData.worker === worker) {
-                    if (workerData.timeoutId) clearTimeout(workerData.timeoutId);
-                    
-                    if (!bot.isManualStop && !isShuttingDown) {
-                        // Увеличиваем счетчик рестартов
-                        const restartInfo = workers.get(`${username}_restart`) || { count: 0, firstRestart: Date.now() };
-                        restartInfo.count++;
-                        workers.set(`${username}_restart`, restartInfo);
-                        
-                        setTimeout(() => {
-                            if (!isShuttingDown && !bot.isManualStop) {
-                                Logger.info(`🔁 Перезапуск бота ${username} через ${RESTART_DELAY/1000} сек`);
-                                runWorker(bot);
-                            }
-                        }, RESTART_DELAY);
-                    }
-                    
-                    workers.delete(username);
+                if (workerData && workerData.timeoutId) {
+                    clearTimeout(workerData.timeoutId);
+                }
+                workers.delete(username);
+                
+                if (!bot.isManualStop && !isShuttingDown) {
+                    setTimeout(() => {
+                        console.log(`🔁 Перезапуск ${username}`);
+                        runWorker(bot);
+                    }, 60000);
                 }
             });
-            
-            workers.set(username, { worker, timeoutId, restartCount: restartData.count, lastRestart: Date.now() });
+
             resolve(worker);
-            
         } catch (error) {
-            Logger.error(error, 'runWorker_create', { username });
+            console.error(`❌ Ошибка запуска ${username}:`, error.message);
             resolve(null);
         }
     });
 }
 
-// ========== ОБРАБОТЧИК СООБЩЕНИЙ ОТ ВОРКЕРОВ ==========
-async function handleWorkerMessage(worker, username, bot, message) {
-    if (message.name === 'success') {
-        const botToUpdate = bots.find(b => b.username === username);
-        if (botToUpdate) {
-            botToUpdate.success = true;
-            await Logger.info(`${username} успешно запущен`);
-        }
-        // Сбрасываем счетчик рестартов при успешном запуске
-        workers.delete(`${username}_restart`);
-    }
-    else if (message.name === 'buy' || message.name === 'sell' || message.name === 'try-sell') {
-        if (socket && isSocketOpen) {
-            const action = message.name === 'try-sell' ? 'try-sell' : message.name;
-            const payload = { action, type: message.id };
-            if (message.price) payload.price = message.price;
-            safeSocketSend(payload);
-        }
-    }
-    else if (message.name === 'items') {
-        botItems.set(username, message.items);
-    }
-    else if (message.name === 'inventory') {
-        botInventory.set(username, message.data);
-    }
-    else if (message.name === 'buying') {
-        await broadcastBuyingLocally(message.data);
-        safeSocketSend({ action: 'add', json_data: message.data });
-    }
-    else if (message.name === 'set_min_price') {
-        safeSocketSend({ action: 'set_min_price', type: message.type, price: message.price });
-        await Logger.info(`📉 Установка минимальной цены для ${message.type}: ${message.price}`);
-    }
-    else if (message.name === 'set_max_price') {
-        safeSocketSend({ action: 'set_max_price', type: message.type, price: message.price });
-        await Logger.info(`📈 Установка максимальной цены для ${message.type}: ${message.price}`);
-    }
-    else if (typeof message === 'string') {
-        if (message.includes('ввести капчу')) {
-            await Logger.warning(`⚠️ Капча: ${message}`);
-        }
-        if (telegramBot) {
-            await telegramBot.sendMessage(TELEGRAM.chatID, `📝 ${message}`);
-        }
-    }
-}
-
-// ========== БЕЗОПАСНАЯ РАБОТА С WEBSOCKET ==========
-function safeSocketSend(data) {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-    try {
-        socket.send(JSON.stringify(data));
-        return true;
-    } catch (error) {
-        Logger.error(error, 'safeSocketSend', { data: JSON.stringify(data).substring(0, 200) });
-        return false;
-    }
-}
-
-// ========== ЛОКАЛЬНАЯ СИНХРОНИЗАЦИЯ ==========
-async function broadcastBuyingLocally(uuid) {
-    try {
-        const updatedBuying = [...itemsBuying, uuid];
-        
-        for (const [username, { worker }] of workers) {
-            safePostMessage(worker, { type: 'items_buying', data: updatedBuying });
-        }
-        
-        itemsBuying = updatedBuying;
-    } catch (error) {
-        await Logger.error(error, 'broadcastBuyingLocally', { uuid });
-    }
-}
-
-// ========== ОСТАНОВКА ВСЕХ БОТОВ ==========
 async function stopWorkers() {
-    await Logger.info('Остановка всех ботов...');
-    
-    // Устанавливаем флаг ручной остановки
-    bots.forEach(bot => { bot.isManualStop = true; });
-    
-    const stopPromises = [];
-    for (const [username, { worker, timeoutId }] of workers) {
-        if (timeoutId) clearTimeout(timeoutId);
-        stopPromises.push(safeTerminateWorker(worker, username));
+    for (const bot of bots.values()) {
+        bot.isManualStop = true;
     }
     
-    await Promise.allSettled(stopPromises);
+    for (const { worker } of workers.values()) {
+        try { worker.terminate(); } catch (e) {}
+    }
     workers.clear();
-    botItems.clear();
-    botInventory.clear();
-    itemsBuying = [];
-    
-    await Logger.info('Все боты остановлены');
+    console.log('✅ Все боты остановлены');
 }
 
-// ========== ОЧИСТКА ЛОГА ==========
-async function cleanNPM() {
-    try {
-        await execPromise(`> ${PATHS.log}`);
-        await Logger.info(`bot.log очищен`);
-    } catch (error) {
-        await Logger.error(error, 'cleanNPM');
-    }
-}
-
-// ========== GIT PULL ==========
-async function gitPull() {
-    try {
-        const { stdout, stderr } = await execPromise('git pull');
-        if (stderr) await Logger.warning(`Git pull stderr: ${stderr}`);
-        return stdout;
-    } catch (error) {
-        await Logger.error(error, 'gitPull');
-        throw error;
-    }
-}
-
-// ========== ЗАПУСК БОТОВ ==========
 async function startBots() {
-    if (isStartingBots) {
-        await Logger.warning('Боты уже запускаются, пропускаем');
-        return;
-    }
-    
-    isStartingBots = true;
     try {
         await loadBotsConfig();
         await loadItemsConfig();
         
-        // Обновляем цены у ботов
-        bots.forEach(bot => bot.itemPrices = items);
+        for (const bot of bots.values()) {
+            bot.itemPrices = items;
+            await runWorker(bot);
+        }
         
-        const botPromises = bots.map(bot => runWorker(bot));
-        const results = await Promise.allSettled(botPromises);
-        
-        const successCount = results.filter(r => r.status === 'fulfilled' && r.value !== null).length;
-        await Logger.info(`Запущено ботов: ${successCount}/${bots.length}`);
-        
-        // Отправляем info через WebSocket
-        setTimeout(() => safeSocketSend({ action: 'info' }), 3000);
+        setTimeout(() => {
+            if (socket && isSocketOpen) {
+                socket.send(JSON.stringify({ action: "info" }));
+            }
+        }, 1000);
     } catch (error) {
-        await Logger.error(error, 'startBots');
-    } finally {
-        isStartingBots = false;
+        await sendAlert(`❌ Ошибка запуска ботов: ${error.message}`);
     }
 }
 
 async function restartBots() {
-    await Logger.info('🔄 Перезапуск всех ботов...');
+    console.log('🔄 Перезапуск...');
     await stopWorkers();
     await startBots();
 }
 
-// ========== МОНИТОРИНГ ЗДОРОВЬЯ ==========
-function startHealthCheck() {
-    if (healthCheckInterval) clearInterval(healthCheckInterval);
+// ========== TELEGRAM КОМАНДЫ ==========
+async function initTelegram() {
+    tgBot = new TelegramBot(token, { polling: true });
     
-    healthCheckInterval = setInterval(async () => {
-        try {
-            // Проверяем WebSocket
-            if (!socket || socket.readyState !== WebSocket.OPEN) {
-                await Logger.warning('WebSocket не в OPEN состоянии, попытка переподключения...');
-                if (reconnectTimeout) clearTimeout(reconnectTimeout);
-                reconnectTimeout = setTimeout(connectWebSocket, 5000);
+    tgBot.onText(/\/update/, async (msg) => {
+        if ((Date.now() / 1000) - msg.date > 10) return;
+        await tgBot.sendMessage(alertChatID, '🔄 Обновление, перезапуск...');
+        isShuttingDown = true;
+        await stopWorkers();
+        exec('git pull', async (err, stdout) => {
+            if (err) {
+                await sendAlert(`❌ Git pull error: ${err.message}`);
+            } else {
+                console.log('Git pull выполнен:', stdout);
             }
-            
-            // Проверяем воркеров
-            let activeWorkers = 0;
-            for (const [username, { worker }] of workers) {
-                if (isWorkerAlive(worker)) {
-                    activeWorkers++;
-                } else {
-                    workers.delete(username);
-                }
-            }
-            
-            // Отправляем присутствие
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                const itemsCount = new Map();
-                const itemsCountInventory = new Map();
-                
-                for (const itemsList of botItems.values()) {
-                    for (const item of itemsList) {
-                        itemsCount.set(item, (itemsCount.get(item) || 0) + 1);
-                    }
-                }
-                
-                for (const itemsList of botInventory.values()) {
-                    for (const item of itemsList) {
-                        itemsCountInventory.set(item, (itemsCountInventory.get(item) || 0) + 1);
-                    }
-                }
-                
-                safeSocketSend({
-                    action: 'presence',
-                    items: Object.fromEntries(itemsCount),
-                    inventory: Object.fromEntries(itemsCountInventory)
-                });
-            }
-        } catch (error) {
-            await Logger.error(error, 'healthCheck');
-        }
-    }, PRESENCE_INTERVAL);
+            process.exit(0);
+        });
+    });
+    
+    tgBot.onText(/\/ping/, async (msg) => {
+        if ((Date.now() / 1000) - msg.date > 10) return;
+        await tgBot.sendMessage(alertChatID, `✅ Работает (ботов: ${workers.size})`);
+    });
+    
+    tgBot.onText(/\/start/, async (msg) => {
+        if ((Date.now() / 1000) - msg.date > 10) return;
+        await tgBot.sendMessage(alertChatID, '🔄 Запуск ботов');
+        await startBots();
+    });
+    
+    tgBot.onText(/\/stop/, async (msg) => {
+        if ((Date.now() / 1000) - msg.date > 10) return;
+        await tgBot.sendMessage(alertChatID, '⏹ Остановка');
+        await stopWorkers();
+    });
+    
+    tgBot.onText(/\/reload/, async (msg) => {
+        if ((Date.now() / 1000) - msg.date > 10) return;
+        await tgBot.sendMessage(alertChatID, '🔄 Перезагрузка конфигов, перезапуск...');
+        isShuttingDown = true;
+        await stopWorkers();
+        process.exit(0);
+    });
+    
+    console.log('✅ Telegram бот готов');
 }
 
-// ========== WEBSOCKET ПОДКЛЮЧЕНИЕ ==========
-async function connectWebSocket() {
-    if (reconnectTimeout) clearTimeout(reconnectTimeout);
+// ========== WEBSOCKET ==========
+function connectWebSocket() {
+    if (socket) {
+        try { socket.close(); } catch (e) {}
+    }
     
     try {
-        if (socket) {
-            try { socket.close(); } catch (e) {}
-            socket = null;
-        }
-        
         socket = new WebSocket(WEBSOCKET_URL);
-        
-        socket.on('open', async () => {
-            await Logger.info('✅ Подключено к WebSocket серверу');
+
+        socket.on('open', () => {
+            console.log('✅ WebSocket подключен');
             isSocketOpen = true;
-            safeSocketSend({ action: 'info' });
+            socket.send(JSON.stringify({ action: "info" }));
         });
-        
+
         socket.on('message', async (data) => {
             try {
                 const dataObj = JSON.parse(data);
                 
-                if (dataObj.action === 'json_update' && Array.isArray(dataObj.data)) {
-                    // Обновление списка покупок
-                    for (const [_, { worker }] of workers) {
-                        safePostMessage(worker, { type: 'items_buying', data: dataObj.data });
+                if (dataObj.action === "json_update" && Array.isArray(dataObj.data)) {
+                    for (const [username, _] of workers) {
+                        safePostMessage(username, { type: 'items_buying', data: dataObj.data });
                     }
                     itemsBuying = dataObj.data;
+                } else if (dataObj.prices) {
+                    let freshItems = [];
+                    try {
+                        if (existsSync(itemsPath)) {
+                            const itemsJson = await readFile(itemsPath, 'utf-8');
+                            freshItems = JSON.parse(itemsJson);
+                        } else {
+                            await sendAlert(`❌ ${itemsPath} пропал при обновлении цен`);
+                            process.exit(1);
+                        }
+                    } catch (e) {
+                        await sendAlert(`❌ Ошибка чтения ${itemsPath}: ${e.message}`);
+                        process.exit(1);
+                    }
+                    
+                    const itemsWithPrice = freshItems
+                        .map(item => ({
+                            ...item,
+                            priceSell: dataObj.prices[item.id],
+                            ratio: dataObj.ratios?.[item.id] || item.ratio || 0.8
+                        }))
+                        .filter(item => item.priceSell !== undefined);
+                    
+                    items = itemsWithPrice;
+                    
+                    for (const bot of bots.values()) {
+                        bot.itemPrices = items;
+                    }
+                    
+                    for (const [username, _] of workers) {
+                        safePostMessage(username, { type: 'price', data: items });
+                    }
+
+                    if (!botsStarted && items.length > 0) {
+                        botsStarted = true;
+                        startBots();
+                    }
                 }
-                else if (dataObj.prices) {
-                    await updatePrices(dataObj);
-                }
-            } catch (error) {
-                await Logger.error(error, 'websocket_message');
+            } catch (e) {
+                await sendAlert(`❌ Ошибка обработки WebSocket сообщения: ${e.message}`);
             }
         });
-        
-        socket.on('close', async () => {
-            await Logger.warning('❌ WebSocket отключён');
+
+        socket.on('close', () => {
+            console.log('❌ WebSocket отключен');
             isSocketOpen = false;
-            reconnectTimeout = setTimeout(connectWebSocket, 5000);
+            setTimeout(connectWebSocket, 5000);
         });
-        
+
         socket.on('error', async (err) => {
-            await Logger.error(err, 'WebSocket_error');
+            await sendAlert(`❌ WebSocket error: ${err.message}`);
         });
-        
     } catch (error) {
-        await Logger.error(error, 'connectWebSocket');
-        reconnectTimeout = setTimeout(connectWebSocket, 5000);
+        sendAlert(`❌ WebSocket connection error: ${error.message}`);
+        setTimeout(connectWebSocket, 5000);
     }
 }
 
-// ========== ОБНОВЛЕНИЕ ЦЕН ==========
-async function updatePrices(dataObj) {
+// ========== МОНИТОРИНГ ==========
+setInterval(() => {
     try {
-        let freshItems = [];
-        const fileExists = await ensureFileExists(PATHS.items);
-        
-        if (fileExists) {
-            const itemsJson = await readFile(PATHS.items, 'utf-8');
-            freshItems = JSON.parse(itemsJson);
-        }
-        
-        const itemsWithPrice = freshItems
-            .map(item => ({
-                ...item,
-                priceSell: dataObj.prices[item.id],
-                ratio: dataObj.ratios?.[item.id] || item.ratio || 0.8
-            }))
-            .filter(item => item.priceSell !== undefined && item.priceSell !== null);
-        
-        items = itemsWithPrice;
-        
-        // Обновляем цены у всех ботов
-        for (const [_, { worker }] of workers) {
-            safePostMessage(worker, { type: 'price', data: items });
-        }
-        
-        // Обновляем itemPrices у объектов ботов
-        bots.forEach(bot => bot.itemPrices = items);
-                
-        // Запускаем ботов если еще не запущены
-        if (!isStartingBots && workers.size === 0 && items.length > 0) {
-            await startBots();
+        if (socket && isSocketOpen) {
+            const itemsCount = new Map();
+            const itemsCountInventory = new Map();
+            
+            for (let itemsList of botItems.values()) {
+                for (let item of itemsList) {
+                    itemsCount.set(item, (itemsCount.get(item) || 0) + 1);
+                }
+            }
+            
+            for (let itemsList of botInventory.values()) {
+                for (let item of itemsList) {
+                    itemsCountInventory.set(item, (itemsCountInventory.get(item) || 0) + 1);
+                }
+            }
+            
+            socket.send(JSON.stringify({ 
+                action: "presence", 
+                items: Object.fromEntries(itemsCount),
+                inventory: Object.fromEntries(itemsCountInventory)
+            }));
         }
     } catch (error) {
-        await Logger.error(error, 'updatePrices');
+        console.error('Presence error:', error.message);
     }
-}
+}, 30000);
 
-// ========== TELEGRAM КОМАНДЫ ==========
-async function initTelegramBot() {
+// Очистка лога раз в 5 часов
+setInterval(async () => {
     try {
-        telegramBot = new TelegramBot(TELEGRAM.token, { polling: true });
-        
-        const commands = [
-            { cmd: '/update', desc: 'Git pull и перезапуск' },
-            { cmd: '/ping', desc: 'Проверка работы' },
-            { cmd: '/start', desc: 'Запуск ботов' },
-            { cmd: '/stop', desc: 'Остановка ботов' },
-            { cmd: '/reload', desc: 'Перезагрузка конфигурации' },
-            { cmd: '/status', desc: 'Статус ботов' }
-        ];
-        
-        try {
-            await telegramBot.setMyCommands(commands.map(c => ({ command: c.cmd, description: c.desc })));
-        } catch (e) {}
-        
-        telegramBot.onText(/\/update/, async (msg) => {
-            if ((Date.now() / 1000) - msg.date > 10) return;
-            await telegramBot.sendMessage(TELEGRAM.chatID, '🔄 Обновление через git pull...');
-            await stopWorkers();
-            const pullResult = await gitPull();
-            await telegramBot.sendMessage(TELEGRAM.chatID, `✅ Git pull выполнен:\n${pullResult.substring(0, 1000)}`);
-            process.exit(0);
+        exec('> bot.log', (err) => {
+            if (err) console.error('Clean log error:', err.message);
         });
-        
-        telegramBot.onText(/\/ping/, async (msg) => {
-            if ((Date.now() / 1000) - msg.date > 10) return;
-            await telegramBot.sendMessage(TELEGRAM.chatID, `✅ Работает\nБотов: ${workers.size}\nWebSocket: ${isSocketOpen ? '✅' : '❌'}`);
-        });
-        
-        telegramBot.onText(/\/start/, async (msg) => {
-            if ((Date.now() / 1000) - msg.date > 10) return;
-            await telegramBot.sendMessage(TELEGRAM.chatID, '🔄 Запуск ботов');
-            await startBots();
-        });
-        
-        telegramBot.onText(/\/stop/, async (msg) => {
-            if ((Date.now() / 1000) - msg.date > 10) return;
-            await telegramBot.sendMessage(TELEGRAM.chatID, '⏹ Остановка ботов');
-            await stopWorkers();
-        });
-        
-        telegramBot.onText(/\/reload/, async (msg) => {
-            if ((Date.now() / 1000) - msg.date > 10) return;
-            await telegramBot.sendMessage(TELEGRAM.chatID, '🔄 Перезагрузка конфигурации...');
-            await restartBots();
-            await telegramBot.sendMessage(TELEGRAM.chatID, '✅ Конфигурация перезагружена');
-        });
-        
-        telegramBot.onText(/\/status/, async (msg) => {
-            if ((Date.now() / 1000) - msg.date > 10) return;
-            let status = `📊 Статус ботов:\n`;
-            status += `Активных: ${workers.size}/${bots.length}\n`;
-            status += `WebSocket: ${isSocketOpen ? '✅' : '❌'}\n`;
-            status += `Предметов: ${items.length}\n`;
-            status += `В очереди покупки: ${itemsBuying.length}`;
-            await telegramBot.sendMessage(TELEGRAM.chatID, status);
-        });
-        
-        await Logger.info('Telegram бот инициализирован');
-    } catch (error) {
-        await Logger.error(error, 'initTelegramBot');
-    }
-}
-
-// ========== GRACEFUL SHUTDOWN ==========
-async function gracefulShutdown(signal) {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-    
-    await Logger.info(`\n🛑 Получен сигнал ${signal}, graceful shutdown...`);
-    
-    if (healthCheckInterval) clearInterval(healthCheckInterval);
-    if (reconnectTimeout) clearTimeout(reconnectTimeout);
-    
-    await stopWorkers();
-    
-    if (socket) {
-        try { socket.close(); } catch (e) {}
-        socket = null;
-    }
-    
-    if (telegramBot) {
-        try { telegramBot.stopPolling(); } catch (e) {}
-    }
-    
-    await Logger.info('✅ Graceful shutdown завершен');
-    process.exit(0);
-}
+    } catch (error) {}
+}, 5 * 60 * 60 * 1000);
 
 // ========== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ==========
 process.on('unhandledRejection', async (reason) => {
-    await Logger.error(reason, 'unhandledRejection');
+    await sendAlert(`❌ Unhandled Rejection: ${reason?.message || reason}`);
 });
 
 process.on('uncaughtException', async (error) => {
-    await Logger.error(error, 'uncaughtException');
-    // Не выходим сразу, даем время отправить сообщение
+    await sendAlert(`❌ Uncaught Exception: ${error.message}`);
     setTimeout(() => {
         if (!isShuttingDown) {
-            gracefulShutdown('uncaughtException');
+            process.exit(1);
         }
     }, 3000);
 });
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// ========== ИНИЦИАЛИЗАЦИЯ ==========
+// ========== ЗАПУСК ==========
 async function main() {
-    try {
-        await Logger.info('🚀 Запуск основного приложения');
-        
-        // Инициализация
-        await loadItemsConfig();
-        await loadBotsConfig();
-        await initTelegramBot();
-        
-        // Запуск WebSocket
-        connectWebSocket();
-        
-        // Запуск мониторинга
-        startHealthCheck();
-        
-        // Периодическая очистка лога
-        setInterval(async () => {
-            try {
-                await cleanNPM();
-            } catch (error) {
-                await Logger.error(error, 'auto_clean_log');
-            }
-        }, CLEAN_LOG_INTERVAL);
-        
-        await Logger.info('✅ Приложение успешно запущено');
-    } catch (error) {
-        await Logger.error(error, 'main');
-        setTimeout(main, 5000);
-    }
+    await initTelegram();
+    await loadItemsConfig();
+    await loadBotsConfig();
+    connectWebSocket();
 }
 
-// Запуск
-main().catch(console.error);
+main().catch(async (error) => {
+    await sendAlert(`❌ Критическая ошибка при запуске: ${error.message}`);
+    process.exit(1);
+});
