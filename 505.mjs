@@ -27,7 +27,6 @@ let itemsBuying = [];
 let socket;
 let isSocketOpen = false;
 let botsStarted = false;
-
 setInterval(async () => {
     try {
         await cleanNPM();
