@@ -15,6 +15,7 @@ let needReset = false
 let netakbistro = true
 let mu = false
 let isKrush = false
+let needSendAH = true
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
@@ -329,40 +330,50 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
 
             case myItems:
-                generateRandomKey(bot)
-                key = botKey
-                
+                generateRandomKey(bot);
+                key = botKey;
                 if (bot.currentWindow.slots[27]) {
-                    logger.error('суки обновили аукцион')
-                    break
+                    logger.error('суки обновили аукцион');
+                    break;
                 }
-                
+
+                if (needSendAH) {
+                    for (let i = 0; i < 8; i++) {
+                        const currentSlot = bot.currentWindow?.slots[i];
+                        if (currentSlot) {
+                            botCount++;
+                            const id = getIDByEnchantments(currentSlot, itemPrices);
+                            botAh.push(id);
+                        } else break;
+                    }
+
+                    parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
+                    needSendAH = false
+                    }
+
                 await delay(500);
                 needReset = false;
                 logger.info(`${name} - ${botMenu}`);
                 
                 botCount = 0;
                 botAh = [];
-                
                 let slot = null;
 
-                // Проверка на необходимость сброса
                 for (let i = 0; i < 8; i++) {
                     const currentSlot = bot.currentWindow?.slots[i];
                     if (!currentSlot) break;
 
-                    const priceOnAH = await getBuyPriceInStorage(currentSlot);
-                    const priceSell = await getPriceByEnchantments(currentSlot, itemPrices)
+                    const priceOnAH = getPriceFromItem(currentSlot);
+                    const priceSell = await getPriceByEnchantments(currentSlot, itemPrices);
 
                     if (priceSell !== priceOnAH || enoughItems) {
-                        logger.error(`chnge ${priceSell} ${priceOnAH}`)
-                        botAhFull = false
+                        logger.error(`chnge ${priceSell} ${priceOnAH}`);
+                        botAhFull = false;
                         slot = i;
                         break;
                     }
                 }
 
-                // Если нашли слот для сброса — кликаем и выходим
                 if (slot !== null) {
                     botAhFull = false;
                     botNeedSell = true;
@@ -371,22 +382,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
 
-                // Если сброс не нужен — считаем предметы для статистики
-                for (let i = 0; i < 8; i++) {
-                    const currentSlot = bot.currentWindow?.slots[i];
-                    if (currentSlot) { 
-                        botCount++;
-                        const id = getIDByEnchantments(currentSlot, itemPrices)
-                        botAh.push(id);
-                    } else {
-                        break;
-                    }
-                }
-
-                const msgAH = { name: 'items', username: bot.username, items: botAh };
-                parentPort.postMessage(msgAH);
-
-                // Переход в следующее меню
                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botMenu = setAH;
                     await safeClickBuy(bot, 52, getRandomDelayInRange(700, 1300), key);
@@ -395,7 +390,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
                 }
                 break;
-
+         
             case setAH:
                 generateRandomKey(bot)
                 key = botKey
