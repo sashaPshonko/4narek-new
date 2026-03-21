@@ -140,21 +140,6 @@ async function launchBookBuyer(name, password, anarchy) {
         botNeedSell = false
         botStartClickTime = null
         botUpdateWindow = false
-        
-        setInterval(() => {
-            const inv = []
-            for (let i = 0; i <= lastInventorySlot; i++) {
-                const slotData = bot.inventory.slots[i];
-                if (!slotData) continue;
-                
-                const config = findMatchingConfigItem(slotData, itemPrices);
-                if (config) {
-                    inv.push(config.id);
-                }
-            }
-            const msg = {name: "inventory", data: inv, username: bot.username}
-            parentPort.postMessage(msg)
-        }, 10000)
 
         logger.info(`${name} успешно проник на сервер.`);
         await delay(5000);
@@ -349,6 +334,19 @@ async function launchBookBuyer(name, password, anarchy) {
 
                     parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
                     needSendAH = false
+
+                    const inv = []
+                    for (let i = 0; i <= lastInventorySlot; i++) {
+                        const slotData = bot.inventory.slots[i];
+                        if (!slotData) continue;
+                        
+                        const config = findMatchingConfigItem(slotData, itemPrices);
+                        if (config) {
+                            inv.push(config.id);
+                        }
+                    }
+                    const msg = {name: "inventory", data: inv, username: bot.username}
+                    parentPort.postMessage(msg)
                     }
 
                 await delay(500);

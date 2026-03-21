@@ -1243,7 +1243,7 @@ func adjustPrice(item string) {
 	}
 
 	sales := countRecentSales(item, lastUpdate)
-	buys := countRecentBuys(item, lastUpdate)
+	// buys := countRecentBuys(item, lastUpdate)
 
 	newPrice := data.Prices[item]
 	priceBefore := newPrice
@@ -1328,20 +1328,6 @@ func adjustPrice(item string) {
 		log.Printf("📉 Снижение %s: плохие продажи (на АХ: %d, продажи: %d)", item, onAH, sales)
 
 	// 3. Снижение при избытке покупок (Для всех) — смотрим ТОЛЬКО аукцион
-	} else if float64(buys) > float64(sales)*2 && totalStock > cfg.NormalSales {
-		newPrice -= cfg.PriceStep
-		log.Printf("📉 Снижение %s: перекупка (покупки: %d, продажи: %d)", item, buys, sales)
-
-	// 4. 🔥 Снижение при перенасыщении 3 к 1 (ТОЛЬКО ДЛЯ ЛИДЕРА)
-	} else if item == leaderID {
-		salesLeader := cfg.NormalSales
-		if sales > cfg.NormalSales {
-			salesLeader = sales
-		}
-		if float64(totalStock) > float64(salesLeader)*3 {
-			newPrice -= cfg.PriceStep
-			log.Printf("🔥 Демпинг лидера %s: переполнение %d > %d*3", item, totalStock, salesLeader)
-		}
 	}
 
 	// --- ✅ ЗАВЕРШЕНИЕ ---
