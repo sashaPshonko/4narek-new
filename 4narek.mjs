@@ -259,6 +259,13 @@ async function launchBookBuyer(name, password, anarchy) {
                 botTimeActive = Date.now();
                 generateRandomKey(bot);
                 key = botKey
+                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
+                if (uptime > 55 || botNeedSell) {
+                    logger.info(`${name} - продажа`);
+                    await sellItems(bot, itemPrices)
+                    break;
+                }
+
                 
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000)
                 if (resetime > 60 || needReset || enoughItems) {
@@ -270,13 +277,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
                 
-                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
-                if (uptime > 55 || botNeedSell) {
-                    logger.info(`${name} - продажа`);
-                    await sellItems(bot, itemPrices)
-                    break;
-                }
-
                 logger.info(`${name} - ${botMenu}`);
                 let count = 0
                 for (let i = firstInventorySlot; i <= lastInventorySlot; i++) {
@@ -473,7 +473,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
         if (messageText.includes('Сервер заполнен')) {
             mu = false;
-            enoughItems = false
+            enoughItems = false 
             botStartTime = Date.now() - 240000;
             botAhFull = false;
             botTimeReset = Date.now() - 60000;
