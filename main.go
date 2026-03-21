@@ -145,13 +145,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_leggings",
 		},
-		"штаны_починка": {
-			BasePrice:    2000011,
-			NormalSales:  7,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_leggings",
-		},
+		// "штаны_починка": {
+		// 	BasePrice:    2000011,
+		// 	NormalSales:  7,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "netherite_leggings",
+		// },
 		// "штаны_позорные": {
 		// 	BasePrice:    800013,
 		// 	NormalSales:  4,
@@ -201,13 +201,13 @@ var (
 		// 	AnalysisTime: 10 * time.Minute,
 		// 	Type:         "netherite_pickaxe",
 		// },
-		"кирка_крутая": {
-			BasePrice:    1500020,
-			NormalSales:  5,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_pickaxe",
-		},
+		// "кирка_крутая": {
+		// 	BasePrice:    1500020,
+		// 	NormalSales:  5,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "netherite_pickaxe",
+		// },
 		"elytra": {
 			BasePrice:    600021,
 			NormalSales:  6,
@@ -327,13 +327,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "elytra-1.21",
 		},
-		"elytra_mending-1.21": {
-			BasePrice:    600037,
-			NormalSales:  4,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "elytra-1.21",
-		},
+		// "elytra_mending-1.21": {
+		// 	BasePrice:    600037,
+		// 	NormalSales:  4,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "elytra-1.21",
+		// },
 		"кирка-1.21": {
 			BasePrice:    500038,
 			NormalSales:  5,
@@ -348,13 +348,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe-1.21",
 		},
-		"кирка_крутая-1.21": {
-			BasePrice:    1200040,
-			NormalSales:  5,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_pickaxe-1.21",
-		},
+		// "кирка_крутая-1.21": {
+		// 	BasePrice:    1200040,
+		// 	NormalSales:  5,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "netherite_pickaxe-1.21",
+		// },
 	}
 )
 
