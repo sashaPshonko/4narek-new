@@ -212,42 +212,6 @@
         "nacenka": 400000
     },
     {
-        "name": "netherite_pickaxe",
-        "id": "кирка_крутая",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:efficiency",
-                "lvl": 6
-            },
-            {
-                "name": "minecraft:fortune",
-                "lvl": 3
-            },
-            {
-                "name": "buldozing",
-                "lvl": 2
-            },
-            {
-                "name": "web",
-                "lvl": 1
-            },
-            {
-                "name": "magnet",
-                "lvl": 1
-            },
-            {
-                "name": "smelting",
-                "lvl": 1
-            }
-        ],
-        "num": 3,
-        "nacenka": 500000
-    },
-    {
         "name": "elytra",
         "id": "elytra",
         "effects": [
