@@ -262,6 +262,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000)
                 if (resetime > 60 || needReset || enoughItems) {
+                    needSendAH = true
                     logger.info(`${name} - ресет`);
                     await delay(500);
                     botMenu = myItems;
