@@ -363,7 +363,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     const currentSlot = bot.currentWindow?.slots[i];
                     if (!currentSlot) break;
 
-                    const priceOnAH = getPriceFromItem(currentSlot);
+                    const priceOnAH = getBuyPriceInStorage(currentSlot);
                     const priceSell = await getPriceByEnchantments(currentSlot, itemPrices);
 
                     if (priceSell !== priceOnAH || enoughItems) {
