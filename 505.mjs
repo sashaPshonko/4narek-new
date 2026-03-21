@@ -587,9 +587,7 @@ async function updatePrices(dataObj) {
         
         // Обновляем itemPrices у объектов ботов
         bots.forEach(bot => bot.itemPrices = items);
-        
-        await Logger.info(`Обновлены цены для ${items.length} предметов`);
-        
+                
         // Запускаем ботов если еще не запущены
         if (!isStartingBots && workers.size === 0 && items.length > 0) {
             await startBots();
