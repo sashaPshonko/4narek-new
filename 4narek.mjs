@@ -441,7 +441,7 @@ async function launchBookBuyer(name, password, anarchy) {
         console.log(messageText)
 
         if (messageText.includes('[☃] Вы успешно купили')) {
-            botNeedSell = true
+            if (!botAhFull) botNeedSell = true;
             let balanceStr = messageText
             if (messageText.includes('.')) {
                 balanceStr = balanceStr.slice(0, -3)
@@ -741,10 +741,10 @@ async function sellItems(bot, itemPrices) {
                     bot.chat(`/ah sell ${price}`);
 
                     soldAnything = true;
-                    await delay(getRandomDelayInRange(600, 800));
+                    await delay(getRandomDelayInRange(200, 400));
                 } else {
                     await bot.tossStack(item);
-                    await delay(getRandomDelayInRange(300, 500));
+                    await delay(getRandomDelayInRange(200, 400));
                 }
             }
 
@@ -770,17 +770,17 @@ async function sellItems(bot, itemPrices) {
                             await bot.setQuickBarSlot(freeSlot);
                             await delay(300);
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
-                            await delay(getRandomDelayInRange(500, 700));
+                            await delay(getRandomDelayInRange(200, 400));
 
                             bot.chat(`/ah sell ${price}`);
                             await delay(getRandomDelayInRange(100, 200));
                             bot.chat(`/ah sell ${price}`);
 
                             soldAnything = true;
-                            await delay(getRandomDelayInRange(600, 800));
+                            await delay(getRandomDelayInRange(200, 400));
                         } else {
                             await bot.tossStack(item);
-                            await delay(getRandomDelayInRange(300, 500));
+                            await delay(getRandomDelayInRange(200, 400));
                         }
                     }
                 }
