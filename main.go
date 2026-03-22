@@ -1318,12 +1318,12 @@ func adjustPrice(item string) {
         }
         // Сбрасываем флаг
         data.NeedPriceIncrease[item] = false
-    } else if sales < cfg.NormalSales && totalStock < cfg.NormalSales*2 {
+    } else if sales < cfg.NormalSales && totalStock+sales < cfg.NormalSales {
 		newPrice += cfg.PriceStep
 		log.Printf("📈 Повышение %s: мало товара (%d < %d*2)", item, totalStock, cfg.NormalSales)
 
 	// 2. Снижение при плохих продажах (Для всех) — смотрим ТОЛЬКО аукцион
-	} else if (onAH > sales && onAH > cfg.NormalSales) && sales < cfg.NormalSales {
+	} else if (totalStock > sales && totalStock > cfg.NormalSales) && sales < cfg.NormalSales {
 		newPrice -= cfg.PriceStep
 		log.Printf("📉 Снижение %s: плохие продажи (на АХ: %d, продажи: %d)", item, onAH, sales)
 
