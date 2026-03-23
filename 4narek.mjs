@@ -325,6 +325,8 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
 
+                if (!bot.currentWindow.slots[0]) enoughItems = false
+
                 if (needSendAH) {
                     for (let i = 0; i < 8; i++) {
                         const currentSlot = bot.currentWindow?.slots[i];
@@ -492,7 +494,6 @@ async function launchBookBuyer(name, password, anarchy) {
 
         if (messageText.includes('[☃] У Вас купили')) {
             botAhFull = false;
-            enoughItems = false
             let balanceStr = messageText
             if (messageText.includes('.')) {
                 balanceStr = balanceStr.slice(0, -3)
