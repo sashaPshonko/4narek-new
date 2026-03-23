@@ -350,7 +350,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     parentPort.postMessage(msg)
                     }
 
-                await delay(500);
                 needReset = false;
                 logger.info(`${name} - ${botMenu}`);
                 
@@ -377,16 +376,16 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, getRandomDelayInRange(700, 1300), key);
+                    await safeClickBuy(bot, slot, getRandomDelayInRange(400, 600), key);
                     break;
                 }
 
                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botMenu = setAH;
-                    await safeClickBuy(bot, 52, getRandomDelayInRange(700, 1300), key);
+                    await safeClickBuy(bot, 52, getRandomDelayInRange(400, 600), key);
                 } else {
                     botMenu = analysisAH;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(400, 600), key);
                 }
                 break;
          
@@ -396,7 +395,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 logger.info(`${name} - ${botMenu}`);
                 botMenu = analysisAH;
 
-                await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key)
+                await safeClickBuy(bot, 46, getRandomDelayInRange(400, 600), key)
                 break;
 
             case "clan":
@@ -755,7 +754,6 @@ async function sellItems(bot, itemPrices) {
         parentPort.postMessage(error.stack || error)
     } finally {
         logger.info(`${bot.username} - продажа завершена`);
-        await delay(500);
 
         await delay(300)
 
