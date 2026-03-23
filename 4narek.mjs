@@ -1189,8 +1189,10 @@ function getRandomElement(array) {
 async function walk(bot) {
     await delay(500)
     bot.autoEat.enableAuto()
-    const endTime = Date.now() + 4000;
+    const endTime = Date.now() + 3000;
 
+    await bot.setControlState('sneak', true)
+    await delay(100)
     while (Date.now() < endTime) {
         const movements = ['forward', 'back', 'left', 'right'];
         const randomMove = movements[Math.floor(Math.random() * movements.length)];
@@ -1198,15 +1200,14 @@ async function walk(bot) {
         await delay(500);
         bot.setControlState(randomMove, false);
 
-        await delay(500);
+        await delay(100);
     }
 
-    ['forward', 'back', 'left', 'right'].forEach(move =>
-        bot.setControlState(move, false)
+    ['forward', 'back', 'left', 'right', 'sneak'].forEach(async move =>
+        await bot.setControlState(move, false)
     );
 
-    const warps = ['mine', 'casino', 'case', 'shop']
-    if (Date.now() - lastWarpTP > 40000) {
+    if (Date.now() - lastWarpTP > 60000) {
         const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
         bot.chat(`/warp ${warp}`);
         await delay(8000);
