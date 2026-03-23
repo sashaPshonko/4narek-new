@@ -662,6 +662,7 @@ function countTotalItemsInWindow(bot, itemPrices) {
 
 async function sellItems(bot, itemPrices) {
     botNeedSell = false;
+    botAhFull = false
     if (bot.currentWindow) {
         bot.closeWindow(bot.currentWindow)
     }
