@@ -13,7 +13,6 @@ let itemPrices = workerData.itemPrices
 let itemsBuying = []
 let needReset = false
 let netakbistro = true
-let mu = false
 let isKrush = false
 let needSendAH = true
 
@@ -169,7 +168,6 @@ async function launchBookBuyer(name, password, anarchy) {
 
     bot.on('physicsTick', async () => {
         if (Date.now() - botTimeActive > 90000) {
-            mu = false
             botTimeActive = Date.now();
             botMenu = analysisAH
             await safeAH(bot);
@@ -266,14 +264,12 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
 
-                
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000)
                 if (resetime > 60 || needReset || enoughItems) {
                     needSendAH = true
                     logger.info(`${name} - ресет`);
-                    await delay(500);
                     botMenu = myItems;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key)
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key)
                     break;
                 }
                 
@@ -292,7 +288,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 if (bot.currentWindow.slots[0] && 
                     bot.currentWindow.slots[0].name &&
                     bot.currentWindow.slots[0].name?.includes('stained_glass')) {
-                    await safeClickBuy(bot, 0, getRandomDelayInRange(150-300), key)
+                    await safeClickBuy(bot, 0, getRandomDelayInRange(150, 300), key)
                     break
                 }
                 
@@ -428,7 +424,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     bot.closeWindow(bot.currentWindow);
                 }
                 botStartTime = Date.now();
-                mu = false;
                 logger.info(`${bot.username} - мьютекс снят`);
 
                 await delay(500);
@@ -476,7 +471,6 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('Сервер заполнен')) {
-            mu = false;
             enoughItems = false 
             botStartTime = Date.now() - 240000;
             botAhFull = false;
@@ -494,6 +488,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
         if (messageText.includes('[☃] У Вас купили')) {
             botAhFull = false;
+            botNeedSell = true
             let balanceStr = messageText
             if (messageText.includes('.')) {
                 balanceStr = balanceStr.slice(0, -3)
@@ -504,16 +499,6 @@ async function launchBookBuyer(name, password, anarchy) {
 
             const msg = { name: 'sell', id: id, price: balance }
             parentPort.postMessage(msg);
-            botNeedSell = true
-            return
-        }
-
-        if (messageText.includes('[☃]') && messageText.includes('выставлен на продажу!')) {
-            if (botTypeSell) {
-                const msg = { name: 'try-sell', id: botTypeSell }
-                parentPort.postMessage(msg);
-            }
-            botCount++
             return
         }
         
@@ -576,25 +561,6 @@ async function launchBookBuyer(name, password, anarchy) {
             bot.chat(anarchyCommand)
             await delay(11000)
             await safeAH(bot)
-            return
-        }
-
-        if (messageText.includes('[$] Ваш баланс:')) {
-            let balanceStr = messageText
-            if (messageText.includes('.')) {
-                balanceStr = balanceStr.slice(0, -3)
-            }
-            balanceStr = balanceStr.replace(/\D/g, '')
-            const balance = parseInt(balanceStr);
-
-            if (isNaN(balance)) {
-                logger.error('баланс NAN')
-                return
-            }
-            if (balance - minBalance >= 10000000) {
-                await delay(500)
-                bot.chat(`/clan invest ${balance - minBalance}`)
-            }
             return
         }
         
@@ -697,14 +663,9 @@ function countTotalItemsInWindow(bot, itemPrices) {
 
 async function sellItems(bot, itemPrices) {
     botNeedSell = false;
-
-    if (mu) {
-        await delay(500);
-        await safeAH(bot);
-        return;
+    if (bot.currentWindow) {
+        bot.closeWindow(bot.currentWindow)
     }
-
-    mu = true;
 
     await walk(bot);
     logger.info(`${bot.username} - прогулка завершена`);
@@ -791,6 +752,7 @@ async function sellItems(bot, itemPrices) {
         }
     } catch (error) {
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
+        parentPort.postMessage(error.stack || error)
     } finally {
         logger.info(`${bot.username} - продажа завершена`);
         await delay(500);
@@ -807,13 +769,45 @@ async function sellItems(bot, itemPrices) {
             }
         }
 
-        bot.chat('/balance');
-        await delay(500);
+        const balance = extractBalance(bot.scoreboard.sidebar.items)
+        if (!balance) parentPort.postMessage(`баланс не найден ${bot.scoreboard.sidebar.items}`)
+
+        if (balance - minBalance >= 10000000) {
+            await delay(200)
+            bot.chat(`/clan invest ${balance - minBalance}`)
+        }
 
         await delay(300)
         botMenu = 'clan'
         bot.chat('/clan storage')
     }
+}
+
+function extractBalance(lines) {
+    for (const line of lines) {
+        const extra = line.displayName?.json?.extra;
+        if (!Array.isArray(extra)) continue;
+
+        let foundLabel = false;
+
+        for (const part of extra) {
+            const text = part?.text;
+            if (typeof text !== 'string') continue;
+
+            if (text.includes('Монет')) {
+                foundLabel = true;
+                continue;
+            }
+
+            if (foundLabel && /\d/.test(text)) {
+                // Extract only digits and convert to number
+                const cleaned = text.replace(/[^\d]/g, '');
+                return cleaned ? Number(cleaned) : 0;
+            }
+        }
+    }
+
+    return 0;
 }
 
 function transform(num) {
@@ -848,7 +842,6 @@ async function safeClick(bot, slot, time) {
 }
 
 async function safeAH(bot) {
-    if (mu) return
     netakbistro = true
     let key = botKey;
     botTimeActive = Date.now();
