@@ -469,6 +469,18 @@ async function launchBookBuyer(name, password, anarchy) {
             return
         }
 
+        if (messageText.includes('[$] Ваш баланс:')) {
+            let balanceStr = messageText;
+            balanceStr = balanceStr.replace(/\D/g, '');
+            const currentBalance = parseInt(balanceStr);
+            if (isNaN(currentBalance)) {
+                logger.error('баланс NAN');
+                return;
+            }
+            balance = currentBalance
+            return;
+        }
+
         if (messageText.includes('Сервер заполнен')) {
             enoughItems = false 
             botStartTime = Date.now() - 240000;
@@ -768,9 +780,8 @@ async function sellItems(bot, itemPrices) {
             }
         }
 
-        const balance = extractBalance(bot.scoreboard.sidebar.items)
-        if (!balance) parentPort.postMessage(`баланс не найден ${bot.scoreboard.sidebar.items}`)
-
+        bot.chat('/balance')
+        await delay(300)
         if (balance - minBalance >= 10000000) {
             await delay(200)
             bot.chat(`/clan invest ${balance - minBalance}`)
