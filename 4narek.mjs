@@ -15,6 +15,7 @@ let needReset = false
 let netakbistro = true
 let isKrush = false
 let needSendAH = true
+let balance = 0
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
@@ -254,7 +255,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
             case analysisAH:
                 logger.info(`${name} - ${botMenu}`);
-                bot.botMenu = analysisAH
+                botMenu = analysisAH
                 botTimeActive = Date.now();
                 
                 generateRandomKey(bot);
@@ -470,7 +471,7 @@ async function launchBookBuyer(name, password, anarchy) {
             const currentKey = botKey
             await delay(3000)
             if (botKey === currentKey)
-            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(500, 1000), key);
+            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(500, 1000));
             return;
         }
 
