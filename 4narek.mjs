@@ -465,8 +465,11 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
-            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 3000))
-            return
+            const currentKey = key
+            await delay(3000)
+            if (key === currentKey)
+            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(500, 1000), key);
+            return;
         }
 
         if (messageText.includes('[$] Ваш баланс:')) {
