@@ -383,7 +383,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
 
-                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60 && bot.currentWindow.slots[0]) {
+                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botMenu = setAH;
                     await safeClickBuy(bot, 52, getRandomDelayInRange(400, 600), key);
                 } else {
