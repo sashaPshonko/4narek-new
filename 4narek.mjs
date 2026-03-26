@@ -16,6 +16,7 @@ let netakbistro = true
 let isKrush = false
 let needSendAH = true
 let balance = 0
+let mu = false
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
@@ -690,9 +691,16 @@ function countTotalItemsInWindow(bot, itemPrices) {
 }
 
 async function sellItems(bot, itemPrices) {
+    if (mu) {
+        botTimeActive = Date.now()
+        return
+    }
+    mu = true
+    botTimeActive = Date.now()
+     logger.info(`${bot.username} - начало продажи`)
+
     botNeedSell = false;
     botAhFull = false
-    botStartTime = Date.now();
     if (bot.currentWindow) {
         bot.closeWindow(bot.currentWindow)
     }
@@ -725,18 +733,18 @@ async function sellItems(bot, itemPrices) {
                 const price = getBestSellPrice(bot, item, itemPrices);
                 if (price > 0) {
                     if (bot.quickBarSlot !== quickSlot) {
-                        await bot.setQuickBarSlot(quickSlot);
                         await delay(getRandomDelayInRange(400, 600));
+                        await bot.setQuickBarSlot(quickSlot);
                     }
+                    await delay(getRandomDelayInRange(400, 600));
                     bot.chat(`/ah sell ${price}`);
-                    await delay(getRandomDelayInRange(100, 200));
+                    await delay(getRandomDelayInRange(200, 400));
                     bot.chat(`/ah sell ${price}`);
 
                     soldAnything = true;
-                    await delay(getRandomDelayInRange(200, 400));
                 } else {
+                    await delay(getRandomDelayInRange(300, 800));
                     await bot.tossStack(item);
-                    await delay(getRandomDelayInRange(200, 400));
                 }
             }
 
@@ -759,20 +767,21 @@ async function sellItems(bot, itemPrices) {
 
                         const price = getBestSellPrice(bot, item, itemPrices);
                         if (price > 0) {
-                            await bot.setQuickBarSlot(freeSlot);
                             await delay(300);
+                            await bot.setQuickBarSlot(freeSlot);
+                            await delay(getRandomDelayInRange(300, 500));
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
-                            await delay(getRandomDelayInRange(200, 400));
 
+                            await delay(getRandomDelayInRange(300, 500));
                             bot.chat(`/ah sell ${price}`);
-                            await delay(getRandomDelayInRange(100, 200));
+                            await delay(getRandomDelayInRange(200, 300));
+
                             bot.chat(`/ah sell ${price}`);
 
                             soldAnything = true;
-                            await delay(getRandomDelayInRange(200, 400));
                         } else {
-                            await bot.tossStack(item);
                             await delay(getRandomDelayInRange(200, 400));
+                            await bot.tossStack(item);
                         }
                     }
                 }
@@ -781,6 +790,7 @@ async function sellItems(bot, itemPrices) {
             if (!soldAnything) break;
         }
     } catch (error) {
+    
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
         parentPort.postMessage(error.stack || error)
     } finally {
@@ -806,6 +816,9 @@ async function sellItems(bot, itemPrices) {
         }
 
         await delay(300)
+        mu = false
+        botTimeActive = Date.now()
+        botStartTime = Date.now()
         await safeAH(bot)
     }
 }
