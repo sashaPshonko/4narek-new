@@ -174,6 +174,7 @@ async function launchBookBuyer(name, password, anarchy) {
 });
 
     bot.on('windowOpen', async () => {
+        botTimeActive = Date.now()
         let key = ""
         switch (botMenu) {
             case chooseBuying:
