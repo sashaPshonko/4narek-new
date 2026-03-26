@@ -804,8 +804,7 @@ async function sellItems(bot, itemPrices) {
         }
 
         await delay(300)
-        botMenu = 'clan'
-        bot.chat('/clan storage')
+        await safeAH(bot)
     }
 }
 
