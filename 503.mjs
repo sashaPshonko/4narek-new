@@ -213,7 +213,7 @@ async function runWorker(bot) {
             worker.on('error', async (error) => {
                 bot.success = false;
                 // Не отправляем в Telegram, просто логируем в консоль
-                console.error(`⚠️ ${username} ошибка: ${error.message}`);
+                await sendAlert(error.message)
             });
 
             worker.on('exit', (code) => {
