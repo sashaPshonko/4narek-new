@@ -92,7 +92,7 @@ const firstAHSlot = 0;
 const lastAHSlot = 44;
 const firstSellSlot = 36;
 
-const anarchyCommand = `/an${anarchy}`;
+const anarchyCommand = `/an${parentPort.anarchy}`;
 
 const logger = createLogger({
     level: 'info',
