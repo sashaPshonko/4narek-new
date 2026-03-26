@@ -168,12 +168,10 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     bot.on('physicsTick', async () => {
-        if (Date.now() - botTimeActive > 90000) {
-            botTimeActive = Date.now();
-            botMenu = analysisAH
-            await safeAH(bot);
-        }
-    });
+    if (Date.now() - botTimeActive > 30000) {
+        await sellItems(bot, itemPrices)
+    }
+});
 
     bot.on('windowOpen', async () => {
         let key = ""
@@ -383,7 +381,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
 
-                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
+                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60 && bot.currentWindow.slots[0]) {
                     botMenu = setAH;
                     await safeClickBuy(bot, 52, getRandomDelayInRange(400, 600), key);
                 } else {
@@ -541,6 +539,16 @@ async function launchBookBuyer(name, password, anarchy) {
             botMenu = analysisAH;
             await safeAH(bot)
             return
+        }
+
+        if (messageText.includes('[⚠] Здесь нет команд!')) {
+            await walk(bot)
+            bot.chat(anarchyCommand)
+            await delay(1000)
+            botTimeLogin = Date.now()
+            while (Date.now() - botTimeLogin < 13000) await delay(1000);
+            await safeAH(bot);
+            return;
         }
         
         if (messageText.includes('[☃] После входа на режим необходимо немного подождать перед использованием аукциона. Подождите')) {
