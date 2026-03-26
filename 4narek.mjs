@@ -169,6 +169,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
     bot.on('physicsTick', async () => {
     if (Date.now() - botTimeActive > 30000) {
+        botTimeActive = Date.now()
         await sellItems(bot, itemPrices)
     }
 });
@@ -1240,16 +1241,6 @@ async function performRandomMovement(bot, duration) {
         await delay(moveDuration);
         bot.setControlState(randomMove, false);
         await delay(getRandomDelayInRange(500, 1000)); // увеличенная пауза
-    }
-}
-
-async function stopAllMovements(bot) {
-    const controlStates = ['forward', 'back', 'left', 'right', 'jump', 'sprint'];
-    for (const state of controlStates) {
-        if (bot.getControlState(state)) {
-            bot.setControlState(state, false);
-            await delay(50);
-        }
     }
 }
 
