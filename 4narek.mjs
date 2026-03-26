@@ -887,9 +887,19 @@ async function safeAH(bot) {
     botTimeActive = Date.now();
     botMenu = analysisAH
     botUpdateWindow = true
+    let count = 0
     while (key === botKey) {
+        count++
+        if (count === 6) {
+            botTimeActive = Date.now()
+            botTimeLogin = Date.now()
+            await delay(200)
+            bot.chat(anarchyCommand)
+            break
+        }
+        await delay(getRandomDelayInRange(500, 1000));
+        botMenu = analysisAH
         bot.chat(ahCommand);
-        await delay(1000);
     }
 }
 
