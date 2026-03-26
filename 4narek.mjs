@@ -425,7 +425,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 if (bot.currentWindow) {
                     bot.closeWindow(bot.currentWindow);
                 }
-                botStartTime = Date.now();
+                
                 logger.info(`${bot.username} - мьютекс снят`);
 
                 await delay(500);
@@ -691,6 +691,7 @@ function countTotalItemsInWindow(bot, itemPrices) {
 async function sellItems(bot, itemPrices) {
     botNeedSell = false;
     botAhFull = false
+    botStartTime = Date.now();
     if (bot.currentWindow) {
         bot.closeWindow(bot.currentWindow)
     }
