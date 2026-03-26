@@ -1254,7 +1254,7 @@ async function performRandomMovement(bot, duration) {
         const moveDuration = getRandomDelayInRange(800, 1200);
         await delay(moveDuration);
         bot.setControlState(randomMove, false);
-        await delay(getRandomDelayInRange(500, 1000)); // увеличенная пауза
+        await delay(getRandomDelayInRange(100, 200)); // увеличенная пауза
     }
 }
 
