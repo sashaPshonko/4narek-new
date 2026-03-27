@@ -525,6 +525,18 @@ async function launchBookBuyer(name, password, anarchy) {
             parentPort.postMessage(msg);
             return
         }
+
+        //[⚠] Здесь нет команд!
+
+        if (messageText.includes('[⚠] Здесь нет команд!')) {
+            await walk(bot)
+            await delay(300)
+            botTimeLogin = Date.now()
+            botTimeActive = Date.now()
+            bot.chat(anarchyCommand)
+            await delay(300)
+            await safeAH(bot)
+        }
         
         if (messageText.includes('Не так быстро..')) {
             await delay(getRandomDelayInRange(500, 700));
