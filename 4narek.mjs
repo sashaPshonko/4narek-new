@@ -9,6 +9,7 @@ import { join } from 'path';
 import net from 'net';
 import { generateKey } from 'crypto';
 
+// ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
 let itemPrices = workerData.itemPrices
 let itemsBuying = []
 let needReset = false
@@ -123,7 +124,6 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     const loginCommand = `/l ${name}`;
-
     const shopCommand = '/shop';
 
     console.warn = () => { };
@@ -171,11 +171,14 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     bot.on('physicsTick', async () => {
-    if (Date.now() - botTimeActive > 30000) {
-        botTimeActive = Date.now()
-        await sellItems(bot, itemPrices)
-    }
-});
+        if (mu) return;
+        if (Date.now() - botTimeActive > 90000) {
+            botTimeActive = Date.now();
+            botMenu = analysisAH;
+            mu = false;
+            await safeAH(bot);
+        }
+    });
 
     bot.on('windowOpen', async () => {
         botTimeActive = Date.now()
@@ -275,7 +278,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     needSendAH = true
                     logger.info(`${name} - ресет`);
                     botMenu = myItems;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key)
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(500, 1000), key)
                     break;
                 }
                 
@@ -311,7 +314,7 @@ async function launchBookBuyer(name, password, anarchy) {
                             netakbistro = false;
                             await safeClickBuy(bot, slotToBuy, 1655, key);
                         } else if (slotToBuy < 9) {
-                            await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(100, 150) * (slotToBuy + 1), key);
+                            await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(200, 250) * (slotToBuy + 2), key);
                         } else {
                             await safeClickBuy(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500), key);
                         }
@@ -390,7 +393,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     botMenu = setAH;
                     await safeClickBuy(bot, 52, getRandomDelayInRange(300, 600), key);
                 } else {
-                    botTimeReset = Date.now(); // ← ДОБАВИТЬ сброс
+                    botTimeReset = Date.now();
                     botMenu = analysisAH;
                     await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key);
                 }
@@ -825,33 +828,6 @@ async function sellItems(bot, itemPrices) {
     }
 }
 
-function extractBalance(lines) {
-    for (const line of lines) {
-        const extra = line.displayName?.json?.extra;
-        if (!Array.isArray(extra)) continue;
-
-        let foundLabel = false;
-
-        for (const part of extra) {
-            const text = part?.text;
-            if (typeof text !== 'string') continue;
-
-            if (text.includes('Монет')) {
-                foundLabel = true;
-                continue;
-            }
-
-            if (foundLabel && /\d/.test(text)) {
-                // Extract only digits and convert to number
-                const cleaned = text.replace(/[^\d]/g, '');
-                return cleaned ? Number(cleaned) : 0;
-            }
-        }
-    }
-
-    return 0;
-}
-
 function transform(num) {
     if (num < 0 || num > 8) return num;
     return 44 - (8 - num);
@@ -884,6 +860,7 @@ async function safeClick(bot, slot, time) {
 }
 
 async function safeAH(bot) {
+    if (mu) return;
     netakbistro = true
     let key = botKey;
     botTimeActive = Date.now();
@@ -1017,7 +994,6 @@ function getNacenkaByEnchantments(slotData, itemPrices) {
     return getItemNacenka(slotData, itemPrices);
 }
 
-
 function findMatchingConfigItem(item, itemPrices, options = { checkDurability: true, checkMissingEnchants: true }) {
     if (!item || !itemPrices?.length) return null;
 
@@ -1090,17 +1066,8 @@ function getItemNacenka(item, itemPrices) {
     return config ? config.nacenka : 0;
 }
 
-function getMinSellPrice(item, itemPrices) {
-    const config = findMatchingConfigItem(item, itemPrices);
-    return config ? config.minPrice : 0;
-}
-
 function isItemMatchingConfig(item, itemPrices) {
     return findMatchingConfigItem(item, itemPrices) !== null;
-}
-
-function getItemConfig(item, itemPrices) {
-    return findMatchingConfigItem(item, itemPrices);
 }
 
 async function getBuyPrice(slotData) {
@@ -1121,9 +1088,8 @@ async function getBuyPrice(slotData) {
                         const price = parseInt(priceStr.replace(/,/g, '').replace(/\s/g, ''));
                         if (!isNaN(price)) {
                             if (price > 10000) {
-                                return price; // нормальная цена
+                                return price;
                             } else {
-                                // подозрительно низкая цена
                                 parentPort.postMessage(
                                     `подозрительная цена ${price} для ${slotData.name}: ${JSON.stringify(slotData)}`
                                 );
@@ -1132,7 +1098,6 @@ async function getBuyPrice(slotData) {
                         }
                     }
                 }
-                // структура с $ есть, но не удалось извлечь число
                 parentPort.postMessage(
                     `невозможно извлечь цену из структуры с $ для ${slotData.name}: ${JSON.stringify(slotData)}`
                 );
@@ -1143,7 +1108,6 @@ async function getBuyPrice(slotData) {
         }
     }
 
-    // объект с $ не найден
     parentPort.postMessage(
         `не найден объект с $ для ${slotData.name}: ${JSON.stringify(slotData)}`
     );
@@ -1229,58 +1193,28 @@ function getRandomElement(array) {
 }
 
 async function walk(bot) {
-    try {
-        if (bot.autoEat) bot.autoEat.enableAuto();
-        await delay(500);
-        
-        if (!bot.entity || !bot.entity.position) {
-            parentPort.postMessage(`Ошибка walk: ${bot.username} - бот не в мире`);
-            return;
-        }
-        
-        await performRandomMovement(bot, 5000);
-        
-        if (Date.now() - lastWarpTP > 60000) {
-            const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
-            bot.chat(`/warp ${warp}`);
-            await delay(8000);
-            await performRandomMovement(bot, 5000);
-            lastWarpTP = Date.now();
-        }
-        
-    } catch (error) {
-        parentPort.postMessage(`Ошибка walk: ${bot.username} - ${error.message}`);
-    } finally {
-        await stopAllMovements(bot);
-        if (bot.autoEat) bot.autoEat.disableAuto();
-    }
-}
+    await delay(500);
+    bot.autoEat.enableAuto();
+    const endTime = Date.now() + 4000;
 
-async function performRandomMovement(bot, duration) {
-    const endTime = Date.now() + duration;
-    const movements = ['forward', 'back', 'left', 'right'];
-    
     while (Date.now() < endTime) {
-        const randomMove = movements[Math.floor(Math.random() * movements.length)];
+        const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
         bot.setControlState(randomMove, true);
-        const moveDuration = getRandomDelayInRange(800, 1200);
-        await delay(moveDuration);
+        await delay(500);
         bot.setControlState(randomMove, false);
-        await delay(getRandomDelayInRange(100, 200)); // увеличенная пауза
+        await delay(500);
     }
-}
 
-async function stopAllMovements(bot) {
-    // Список активных движений, которые нужно остановить
-    const controlStates = ['forward', 'back', 'left', 'right'];
+    ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
     
-    // Последовательно отключаем каждое активное состояние
-    for (const state of controlStates) {
-        if (bot.getControlState(state)) {
-            bot.setControlState(state, false);
-            await delay(50);
-        }
+    if (Date.now() - lastWarpTP > 60000) {
+        const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+        bot.chat(`/warp ${warp}`);
+        await delay(8000);
+        lastWarpTP = Date.now();
     }
+    
+    bot.autoEat.disableAuto();
 }
 
 async function safeClickBuy(bot, slot, time, key) {
