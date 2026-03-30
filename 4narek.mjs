@@ -278,7 +278,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     needSendAH = true
                     logger.info(`${name} - ресет`);
                     botMenu = myItems;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(500, 1000), key)
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(500, 4000), key)
                     break;
                 }
                 
@@ -385,17 +385,17 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, getRandomDelayInRange(400, 600), key);
+                    await safeClickBuy(bot, slot, getRandomDelayInRange(400, 600)*(slot+1), key);
                     break;
                 }
 
                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60 && bot.currentWindow.slots[0]) {
                     botMenu = setAH;
-                    await safeClickBuy(bot, 52, getRandomDelayInRange(300, 600), key);
+                    await safeClickBuy(bot, 52, getRandomDelayInRange(1500, 4000), key);
                 } else {
                     botTimeReset = Date.now();
                     botMenu = analysisAH;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key);
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4000), key);
                 }
                 break;
          
@@ -449,9 +449,6 @@ async function launchBookBuyer(name, password, anarchy) {
         if (messageText.includes('[☃] Вы успешно купили')) {
             if (!botAhFull) botNeedSell = true;
             let balanceStr = messageText
-            if (messageText.includes('.')) {
-                balanceStr = balanceStr.slice(0, -3)
-            }
             balanceStr = balanceStr.replace(/\D/g, '')
             const balance = parseInt(balanceStr);
             const msg = { name: 'buy', id: botType, price: balance }
@@ -514,9 +511,6 @@ async function launchBookBuyer(name, password, anarchy) {
             botAhFull = false;
             botNeedSell = true
             let balanceStr = messageText
-            if (messageText.includes('.')) {
-                balanceStr = balanceStr.slice(0, -3)
-            }
             balanceStr = balanceStr.replace(/\D/g, '')
             const balance = parseInt(balanceStr);
             const id = getIdBySellPrice(itemPrices, balance)
@@ -750,12 +744,12 @@ async function sellItems(bot, itemPrices) {
                 const price = getBestSellPrice(bot, item, itemPrices);
                 if (price > 0) {
                     if (bot.quickBarSlot !== quickSlot) {
-                        await delay(getRandomDelayInRange(400, 600));
+                        await delay(getRandomDelayInRange(400, 900));
                         await bot.setQuickBarSlot(quickSlot);
                     }
-                    await delay(getRandomDelayInRange(400, 600));
+                    await delay(getRandomDelayInRange(400, 1200));
                     bot.chat(`/ah sell ${price}`);
-                    await delay(getRandomDelayInRange(200, 400));
+                    await delay(getRandomDelayInRange(200, 600));
                     bot.chat(`/ah sell ${price}`);
 
                     soldAnything = true;
@@ -786,18 +780,18 @@ async function sellItems(bot, itemPrices) {
                         if (price > 0) {
                             await delay(300);
                             await bot.setQuickBarSlot(freeSlot);
-                            await delay(getRandomDelayInRange(300, 500));
+                            await delay(getRandomDelayInRange(500, 1000));
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
 
-                            await delay(getRandomDelayInRange(300, 500));
+                            await delay(getRandomDelayInRange(500, 1000));
                             bot.chat(`/ah sell ${price}`);
-                            await delay(getRandomDelayInRange(200, 300));
+                            await delay(getRandomDelayInRange(200, 600));
 
                             bot.chat(`/ah sell ${price}`);
 
                             soldAnything = true;
                         } else {
-                            await delay(getRandomDelayInRange(200, 400));
+                            await delay(getRandomDelayInRange(200, 1500));
                             await bot.tossStack(item);
                         }
                     }
@@ -821,14 +815,14 @@ async function sellItems(bot, itemPrices) {
 
             if (!isItemMatchingConfig(slotData, itemPrices)) {
                 await bot.tossStack(slotData)
-                await delay(300)
+                await delay(500)
             }
         }
 
         bot.chat('/balance')
         await delay(300)
         if (balance - minBalance >= 10000000) {
-            await delay(200)
+            await delay(1000)
             bot.chat(`/clan invest ${balance - minBalance}`)
         }
 
