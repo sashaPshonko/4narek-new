@@ -1318,7 +1318,7 @@ func adjustPrice(item string) {
         }
         // Сбрасываем флаг
         data.NeedPriceIncrease[item] = false
-    } else if sales < cfg.NormalSales && totalStock+sales < cfg.NormalSales {
+    } else if sales < cfg.NormalSales && totalStock < cfg.NormalSales {
 		newPrice += cfg.PriceStep
 		log.Printf("📈 Повышение %s: мало товара (%d < %d*2)", item, totalStock, cfg.NormalSales)
 
