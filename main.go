@@ -95,6 +95,20 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_sword",
+		},// megasword-2-1.21
+		"megasword-2-1.21": {
+			BasePrice:    4500099,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_sword",
+		},
+		"pochti-megasword-1.21": {
+			BasePrice:    3000098,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_sword",
 		},
 		"ботинки": {
 			BasePrice:    1000005,
