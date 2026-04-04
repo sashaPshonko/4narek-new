@@ -52,6 +52,7 @@ var inventoryLimit = map[string]int{
 type ItemConfig struct {
 	BasePrice    int
 	NormalSales  int
+	NormalCount  int
 	PriceStep    int
 	AnalysisTime time.Duration
 	MinPrice     int
@@ -371,16 +372,18 @@ var (
 		// },
 		"пыль": {
 			BasePrice:    70051,
-			NormalSales:  5,
+			NormalSales:  20,      // ожидаемое количество продаж (сделок) за интервал
+			NormalCount:  9,       // ожидаемое наличие (сравнивается с totalStock)
 			PriceStep:    5000,
-			AnalysisTime: 4 * time.Minute,
+			AnalysisTime: 10 * time.Minute,
 			Type:         "пыль-1.21",
 		},
 		"дезориентация": {
 			BasePrice:    70052,
-			NormalSales:  5,
+			NormalSales:  20,
+			NormalCount:  9,
 			PriceStep:    5000,
-			AnalysisTime: 4 * time.Minute,
+			AnalysisTime: 10 * time.Minute,
 			Type:         "дезориентация-1.21",
 		},
 	}
@@ -1308,6 +1311,12 @@ func adjustPrice(item string) {
 		}
 	}
 
+	stockNorm := cfg.NormalSales
+	if cfg.NormalCount > 0 {
+		stockNorm = cfg.NormalCount
+	}
+
+
 	onAH := ahCounts[item]      // Сколько этого предмета на аукционе
 	inInv := invCounts[item]    // Сколько этого предмета в инвентаре
 	totalStock := onAH + inInv  // Общий запас (для лидера)
@@ -1346,16 +1355,12 @@ func adjustPrice(item string) {
         }
         // Сбрасываем флаг
         data.NeedPriceIncrease[item] = false
-    } else if sales < cfg.NormalSales && totalStock < cfg.NormalSales {
+    } else if sales < cfg.NormalSales && totalStock < stockNorm {
 		newPrice += cfg.PriceStep
-		log.Printf("📈 Повышение %s: мало товара (%d < %d*2)", item, totalStock, cfg.NormalSales)
-
-	// 2. Снижение при плохих продажах (Для всех) — смотрим ТОЛЬКО аукцион
-	} else if (totalStock > sales && totalStock > cfg.NormalSales) && sales < cfg.NormalSales {
+		log.Printf("📈 Повышение %s: мало товара (%d < %d)", item, totalStock, stockNorm)
+	} else if (totalStock > sales && totalStock > stockNorm) && sales < cfg.NormalSales {
 		newPrice -= cfg.PriceStep
 		log.Printf("📉 Снижение %s: плохие продажи (на АХ: %d, продажи: %d)", item, onAH, sales)
-
-	// 3. Снижение при избытке покупок (Для всех) — смотрим ТОЛЬКО аукцион
 	}
 
 	// --- ✅ ЗАВЕРШЕНИЕ ---
