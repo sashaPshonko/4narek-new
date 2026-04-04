@@ -369,6 +369,20 @@ var (
 		// 	AnalysisTime: 10 * time.Minute,
 		// 	Type:         "netherite_pickaxe-1.21",
 		// },
+		"пыль": {
+			BasePrice:    70051,
+			NormalSales:  5,
+			PriceStep:    5000,
+			AnalysisTime: 3 * time.Minute,
+			Type:         "пыль-1.21",
+		},
+		"дезориентация": {
+			BasePrice:    70052,
+			NormalSales:  5,
+			PriceStep:    5000,
+			AnalysisTime: 3 * time.Minute,
+			Type:         "дезориентация-1.21",
+		},
 	}
 )
 
