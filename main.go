@@ -363,13 +363,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe-1.21",
 		},
-		// "кирка_крутая-1.21": {
-		// 	BasePrice:    1200040,
-		// 	NormalSales:  5,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	Type:         "netherite_pickaxe-1.21",
-		// },
+		"кирка_крутая-1.21": {
+			BasePrice:    1200040,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_pickaxe-1.21",
+		},
 		"пыль": {
 			BasePrice:    70051,
 			NormalSales:  20,      // ожидаемое количество продаж (сделок) за интервал
