@@ -159,6 +159,27 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_helmet-1.21",
+		}, //
+		"фарм-1.21": {
+			BasePrice:    1600013,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "отдача-1.21",
+		},
+		"мега-отдача-1.21": {
+			BasePrice:    4000014,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "отдача-1.21",
+		},
+		"почти-мега-отдача-1.21": {
+			BasePrice:    3000015,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "отдача-1.21",
 		},
 	}
 )
