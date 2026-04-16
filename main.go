@@ -76,30 +76,23 @@ type DailyData struct {
 
 var (
 	itemsConfig = map[string]ItemConfig{
-		"megasword-2-1.21": {
-			BasePrice:    4500001,
-			NormalSales:  5,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_sword",
-		},
 		"pochti-megasword-1.21": {
 			BasePrice:    3000002,
-			NormalSales:  5,
+			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_sword",
 		},
 		"sword7-1.21": {
 			BasePrice:    1500003,
-			NormalSales:  7,
+			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_sword-1.21",
 		},
 		"megasword-1.21": {
 			BasePrice:    4500004,
-			NormalSales:  5,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_sword-1.21",
@@ -120,7 +113,7 @@ var (
 		},
 		"нагрудник-1.21": {
 			BasePrice:    1500007,
-			NormalSales:  7,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_chestplate-1.21",
@@ -134,14 +127,14 @@ var (
 		},
 		"ботинки-1.21": {
 			BasePrice:    1500009,
-			NormalSales:  7,
+			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_boots-1.21",
 		},
 		"ботинки_позорные-1.21": {
 			BasePrice:    1200010,
-			NormalSales:  6,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_boots-1.21",
@@ -162,21 +155,7 @@ var (
 		}, //
 		"фарм-1.21": {
 			BasePrice:    1600013,
-			NormalSales:  6,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "отдача-1.21",
-		},
-		"мега-отдача-1.21": {
-			BasePrice:    4000014,
-			NormalSales:  6,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "отдача-1.21",
-		},
-		"почти-мега-отдача-1.21": {
-			BasePrice:    3000015,
-			NormalSales:  6,
+			NormalSales:  7,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "отдача-1.21",
