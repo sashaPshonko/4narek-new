@@ -159,6 +159,20 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "отдача-1.21",
+		},// 
+		"pochti-diamond-1.21": {
+			BasePrice:    1600013,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "diamond-1.21",
+		},
+		"diamond-1.21": {
+			BasePrice:    3000013,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "diamond-1.21",
 		},
 	}
 )
