@@ -27,6 +27,14 @@ type PriceAndRatio struct {
 	Ratios map[string]float64 `json:"ratios"`
 }
 
+type PriceHistory struct {
+    Prices []int `json:"prices"`
+    Limit  int   `json:"limit"`
+}
+
+var priceHistory = make(map[string]*PriceHistory)
+const priceHistoryLimit = 30
+
 var (
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
@@ -748,6 +756,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			data.LastTrade[msg.Type] = time.Now()
 			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy"})
 			data.BuySum[msg.Type] += msg.Price 
+			addPriceToHistory(msg.Type, msg.Price)
 			mutex.Unlock()
 
 			mutex.Lock()
@@ -1076,16 +1085,7 @@ func adjustPrice(item string) {
 	ratioBefore := data.Ratios[item]
 
 	// Используем сохраненные мин/макс цены (динамические!)
-	minPrice := data.MinPrices[item]
-	maxPrice := data.MaxPrices[item]
-	
-	// Если по какой-то причине их нет, берем из конфига
-	if minPrice == 0 {
-		minPrice = cfg.MinPrice
-	}
-	if maxPrice == 0 {
-		maxPrice = cfg.MaxPrice
-	}
+	minPrice := getMinPriceFromHistory(item)
 
 	// --- 📊 СБОР СТАТИСТИКИ (как в старом добром коде) ---
 	ahCounts := make(map[string]int)  // Только аукцион
@@ -1154,7 +1154,9 @@ func adjustPrice(item string) {
 		newPrice += cfg.PriceStep
 		log.Printf("📈 Повышение %s: мало товара (%d < %d)", item, totalStock, stockNorm)
 	} else if (totalStock > sales && totalStock > stockNorm) && sales < cfg.NormalSales {
-		newPrice -= cfg.PriceStep
+		if newPrice - cfg.PriceStep > minPrice + 300000 {
+			newPrice -= cfg.PriceStep
+		}
 		log.Printf("📉 Снижение %s: плохие продажи (на АХ: %d, продажи: %d)", item, onAH, sales)
 	}
 
@@ -1295,3 +1297,45 @@ func getOnlineCount() int {
 
 	return status.PlayersOnline
 }
+
+// Добавление цены покупки в историю
+func addPriceToHistory(item string, price int) {
+    if price <= 0 {
+        return // отрицательные цены не храним
+    }
+    
+    hist := priceHistory[item]
+    if hist == nil {
+        hist = &PriceHistory{
+            Prices: []int{},
+            Limit:  priceHistoryLimit,
+        }
+        priceHistory[item] = hist
+    }
+    
+    hist.Prices = append(hist.Prices, price)
+    if len(hist.Prices) > hist.Limit {
+        hist.Prices = hist.Prices[1:]
+    }
+    
+    log.Printf("[HISTORY] %s: добавлена цена %d (всего записей: %d)", 
+        item, price, len(hist.Prices))
+}
+
+// Получение минимальной цены из истории
+func getMinPriceFromHistory(item string) int {
+    hist := priceHistory[item]
+    if hist == nil || len(hist.Prices) == 0 {
+        return 0 // нет истории — не ограничиваем
+    }
+    
+    min := hist.Prices[0]
+    for _, p := range hist.Prices {
+        if p < min {
+            min = p
+        }
+    }
+    return min
+}
+
+
