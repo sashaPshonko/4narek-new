@@ -81,7 +81,7 @@ var (
 			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_sword",
+			Type:         "netherite_sword-1.21",
 		},
 		"sword7-1.21": {
 			BasePrice:    1500003,
@@ -173,6 +173,13 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "diamond-1.21",
+		}, // 
+		"фарм5-1.21": {
+			BasePrice:    1200014,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_sword-1.21",
 		},
 	}
 )
