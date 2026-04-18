@@ -161,21 +161,21 @@ var (
 			Type:         "отдача-1.21",
 		},// 
 		"pochti-diamond-1.21": {
-			BasePrice:    1600013,
+			BasePrice:    1600014,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "diamond-1.21",
 		},
 		"diamond-1.21": {
-			BasePrice:    3000013,
+			BasePrice:    3000015,
 			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "diamond-1.21",
 		}, // 
 		"фарм5-1.21": {
-			BasePrice:    1200014,
+			BasePrice:    1200016,
 			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
