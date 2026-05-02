@@ -121,14 +121,14 @@ var (
 		},
 		"нагрудник-1.21": {
 			BasePrice:    1500007,
-			NormalSales:  6,
+			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_chestplate-1.21",
 		},
 		"нагрудник_позорный-1.21": {
 			BasePrice:    1200008,
-			NormalSales:  6,
+			NormalSales:  8,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_chestplate-1.21",
@@ -181,6 +181,13 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "diamond-1.21",
+		},
+		"ботинки-крутые-1.21": {
+			BasePrice:    3000016,
+			NormalSales:  4,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_boots-1.21",
 		},
 	}
 )
