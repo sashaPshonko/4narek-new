@@ -177,7 +177,7 @@ var (
 		// },
 		"ботинки-крутые-1.21": {
 			BasePrice:    3000016,
-			NormalSales:  4,
+			NormalSales:  5,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_boots-1.21",
@@ -202,6 +202,13 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe-1.21",
+		}, //шлем_крутой-1.21
+		"шлем_крутой-1.21": {
+			BasePrice:    1200020,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_helmet-1.21",
 		},
 	}
 )
