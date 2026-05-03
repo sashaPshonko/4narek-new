@@ -1147,7 +1147,7 @@ func adjustPrice(item string) {
 		newPrice += cfg.PriceStep
 		log.Printf("📈 Повышение %s: мало товара (%d < %d)", item, totalStock, stockNorm)
 	} else if (totalStock > sales && totalStock > stockNorm) && sales < cfg.NormalSales {
-		if newPrice - cfg.PriceStep > minPrice + 300000 {
+		if newPrice - cfg.PriceStep > minPrice + 200000 {
 			newPrice -= cfg.PriceStep
 		}
 		log.Printf("📉 Снижение %s: плохие продажи (на АХ: %d, продажи: %d)", item, onAH, sales)
