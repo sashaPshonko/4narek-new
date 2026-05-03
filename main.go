@@ -161,26 +161,47 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "отдача-1.21",
 		},// 
-		"pochti-diamond-1.21": {
-			BasePrice:    1600014,
-			NormalSales:  6,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "diamond-1.21",
-		},
-		"diamond-1.21": {
-			BasePrice:    3000015,
-			NormalSales:  6,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "diamond-1.21",
-		},
+		// "pochti-diamond-1.21": {
+		// 	BasePrice:    1600014,
+		// 	NormalSales:  6,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "diamond-1.21",
+		// },
+		// "diamond-1.21": {
+		// 	BasePrice:    3000015,
+		// 	NormalSales:  6,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "diamond-1.21",
+		// },
 		"ботинки-крутые-1.21": {
 			BasePrice:    3000016,
 			NormalSales:  4,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_boots-1.21",
+		}, //бульдозер-1-1.21
+		"бульдозер-1-1.21": {
+			BasePrice:    500017,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_pickaxe-1.21",
+		},
+		"бульдозер-2-1.21": {
+			BasePrice:    1200018,
+			NormalSales:  6,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_pickaxe-1.21",
+		},//кирка_крутая-1.21
+		"кирка_крутая-1.21": {
+			BasePrice:    1200019,
+			NormalSales:  5,
+			PriceStep:    100000,
+			AnalysisTime: 10 * time.Minute,
+			Type:         "netherite_pickaxe-1.21",
 		},
 	}
 )
