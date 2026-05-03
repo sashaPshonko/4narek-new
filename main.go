@@ -126,13 +126,6 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_chestplate-1.21",
 		},
-		"нагрудник_позорный-1.21": {
-			BasePrice:    1200008,
-			NormalSales:  8,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_chestplate-1.21",
-		},
 		"ботинки-1.21": {
 			BasePrice:    1500009,
 			NormalSales:  8,
