@@ -203,13 +203,13 @@ var (
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe-1.21",
 		}, //шлем_крутой-1.21
-		"шлем_крутой-1.21": {
-			BasePrice:    1400020,
-			NormalSales:  5,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_helmet-1.21",
-		},
+		// "шлем_крутой-1.21": {
+		// 	BasePrice:    1400020,
+		// 	NormalSales:  5,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "netherite_helmet-1.21",
+		// },
 	}
 )
 
