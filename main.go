@@ -90,6 +90,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_sword-1.21",
+			NormalCount: 5,
 		},
 		"sword7-1.21": {
 			BasePrice:    1500003,
@@ -97,6 +98,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_sword-1.21",
+			NormalCount: 5,
 		},
 		"megasword-1.21": {
 			BasePrice:    4500004,
@@ -104,6 +106,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_sword-1.21",
+			NormalCount: 5,
 		},
 		"штаны-1.21": {
 			BasePrice:    1500005,
@@ -111,6 +114,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_leggings-1.21",
+			NormalCount: 5,
 		},
 		// "штаны_позорные-1.21": {
 		// 	BasePrice:    1200006,
@@ -125,6 +129,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_chestplate-1.21",
+			NormalCount: 5,
 		},
 		"ботинки-1.21": {
 			BasePrice:    1500009,
@@ -132,6 +137,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_boots-1.21",
+			NormalCount: 5,
 		},
 		// "ботинки_позорные-1.21": {
 		// 	BasePrice:    1200010,
@@ -146,6 +152,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_helmet-1.21",
+			NormalCount: 5,
 		},
 		// "шлем_позорный-1.21": {
 		// 	BasePrice:    1200012,
@@ -160,6 +167,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "отдача-1.21",
+			NormalCount: 5,
 		},// 
 		// "pochti-diamond-1.21": {
 		// 	BasePrice:    1600014,
@@ -181,6 +189,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_boots-1.21",
+			NormalCount: 5,
 		}, //бульдозер-1-1.21
 		"бульдозер-1-1.21": {
 			BasePrice:    500017,
@@ -188,6 +197,7 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe-1.21",
+			NormalCount: 5,
 		},
 		"бульдозер-2-1.21": {
 			BasePrice:    1200018,
@@ -195,13 +205,15 @@ var (
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe-1.21",
+			NormalCount: 5,
 		},//кирка_крутая-1.21
 		"кирка_крутая-1.21": {
 			BasePrice:    1200019,
-			NormalSales:  5,
+			NormalSales:  6,
 			PriceStep:    100000,
 			AnalysisTime: 10 * time.Minute,
 			Type:         "netherite_pickaxe-1.21",
+			NormalCount: 5,
 		}, //шлем_крутой-1.21
 		// "шлем_крутой-1.21": {
 		// 	BasePrice:    1400020,
@@ -1171,14 +1183,14 @@ func adjustPrice(item string) {
         }
         // Сбрасываем флаг
         data.NeedPriceIncrease[item] = false
-    } else if sales < cfg.NormalSales && totalStock+sales < stockNorm {
-		newPrice += cfg.PriceStep
-		log.Printf("📈 Повышение %s: мало товара (%d < %d)", item, totalStock, stockNorm)
-	} else if (totalStock > sales && totalStock > stockNorm) && sales < cfg.NormalSales {
+    } else if totalStock > stockNorm && sales < cfg.NormalSales {
 		if newPrice - cfg.PriceStep > minPrice + 200000 {
 			newPrice -= cfg.PriceStep
 		}
 		log.Printf("📉 Снижение %s: плохие продажи (на АХ: %d, продажи: %d)", item, onAH, sales)
+	} else if sales < cfg.NormalSales {
+		newPrice += cfg.PriceStep
+		log.Printf("📈 Повышение %s: мало товара (%d < %d)", item, totalStock, stockNorm)
 	}
 
 	// --- ✅ ЗАВЕРШЕНИЕ ---
