@@ -222,14 +222,14 @@ var (
 		// 	AnalysisTime: 10 * time.Minute,
 		// 	Type:         "netherite_helmet-1.21",
 		// },
-		"фарм7-1.21": {
-			BasePrice:    1600020,
-			NormalSales:  7,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "отдача-1.21",
-			NormalCount: 5,
-		},
+		// "фарм7-1.21": {
+		// 	BasePrice:    1600020,
+		// 	NormalSales:  7,
+		// 	PriceStep:    100000,
+		// 	AnalysisTime: 10 * time.Minute,
+		// 	Type:         "отдача-1.21",
+		// 	NormalCount: 5,
+		// },
 	}
 )
 
