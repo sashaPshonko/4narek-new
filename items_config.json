@@ -1,0 +1,322 @@
+{
+  "pochti-megasword-1.21": {
+    "base_price": 3000002,
+    "normal_sales": 8,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "poison",
+        "lvl": 1
+      },
+      {
+        "name": "vampirism",
+        "lvl": 1
+      },
+      {
+        "name": "detection",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 4
+  },
+  "sword7-1.21": {
+    "base_price": 1500003,
+    "normal_sales": 8,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      }
+    ],
+    "nacenka": 300000,
+    "num": 1
+  },
+  "megasword-1.21": {
+    "base_price": 4500004,
+    "normal_sales": 6,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "poison",
+        "lvl": 2
+      },
+      {
+        "name": "vampirism",
+        "lvl": 2
+      }
+    ],
+    "nacenka": 400000,
+    "num": 5
+  },
+  "штаны-1.21": {
+    "base_price": 1500005,
+    "normal_sales": 7,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_leggings",
+    "type": "netherite_leggings-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      }
+    ],
+    "nacenka": 300000,
+    "num": 2
+  },
+  "нагрудник-1.21": {
+    "base_price": 1500007,
+    "normal_sales": 8,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_chestplate",
+    "type": "netherite_chestplate-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      }
+    ],
+    "nacenka": 300000,
+    "num": 2
+  },
+  "ботинки-1.21": {
+    "base_price": 1500009,
+    "normal_sales": 8,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_boots",
+    "type": "netherite_boots-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      }
+    ],
+    "nacenka": 300000,
+    "num": 2
+  },
+  "шлем-1.21": {
+    "base_price": 1600011,
+    "normal_sales": 7,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_helmet",
+    "type": "netherite_helmet-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      }
+    ],
+    "nacenka": 300000,
+    "num": 2
+  },
+  "фарм-1.21": {
+    "base_price": 1600013,
+    "normal_sales": 7,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "отдача-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:looting",
+        "lvl": 5
+      }
+    ],
+    "nacenka": 300000,
+    "num": 2
+  },
+  "ботинки-крутые-1.21": {
+    "base_price": 3000016,
+    "normal_sales": 5,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_boots",
+    "type": "netherite_boots-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:depth_strider",
+        "lvl": 3
+      }
+    ],
+    "nacenka": 300000,
+    "num": 3
+  },
+  "бульдозер-1-1.21": {
+    "base_price": 500017,
+    "normal_sales": 6,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_pickaxe",
+    "type": "netherite_pickaxe-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 3
+      },
+      {
+        "name": "buldozing",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 1
+  },
+  "бульдозер-2-1.21": {
+    "base_price": 1200018,
+    "normal_sales": 6,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_pickaxe",
+    "type": "netherite_pickaxe-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fortune",
+        "lvl": 3
+      },
+      {
+        "name": "buldozing",
+        "lvl": 2
+      },
+      {
+        "name": "magnet",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 2
+  },
+  "кирка_крутая-1.21": {
+    "base_price": 1200019,
+    "normal_sales": 6,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_pickaxe",
+    "type": "netherite_pickaxe-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:fortune",
+        "lvl": 5
+      },
+      {
+        "name": "buldozing",
+        "lvl": 2
+      }
+    ],
+    "nacenka": 300000,
+    "num": 3
+  }
+}

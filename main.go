@@ -9,6 +9,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,9 +24,23 @@ const (
 	timezone = "Asia/Tashkent"
 )
 
-type PriceAndRatio struct {
-	Prices map[string]int     `json:"prices"`
-	Ratios map[string]float64 `json:"ratios"`
+type PriceUpdate struct {
+	Prices  map[string]int   `json:"prices"`
+	Catalog []CatalogItemOut `json:"catalog,omitempty"`
+}
+
+type CatalogItemOut struct {
+	ID      string       `json:"id"`
+	Name    string       `json:"name"`
+	Type    string       `json:"type"`
+	Nacenka int          `json:"nacenka"`
+	Num     int          `json:"num"`
+	Effects []ItemEffect `json:"effects"`
+}
+
+type ItemEffect struct {
+	Name string `json:"name"`
+	Lvl  int    `json:"lvl"`
 }
 
 type PriceHistory struct {
@@ -43,8 +59,10 @@ var (
 )
 
 var (
-	clientItems     = make(map[*websocket.Conn]map[string]int)
-	clientInventory = make(map[*websocket.Conn]map[string]int)
+	clientItems       = make(map[*websocket.Conn]map[string]int)
+	clientInventory   = make(map[*websocket.Conn]map[string]int)
+	clientActiveTypes = make(map[*websocket.Conn]map[string]struct{})
+	clientFleetTypes  = make(map[*websocket.Conn]map[string]struct{})
 )
 
 var itemLimit = map[string]int{
@@ -58,180 +76,31 @@ var inventoryLimit = map[string]int{
 }
 
 type ItemConfig struct {
+	ID           string
+	Name         string
+	Type         string
 	BasePrice    int
 	NormalSales  int
 	NormalCount  int
 	PriceStep    int
 	AnalysisTime time.Duration
-	MinPrice     int
-	MaxPrice     int
-	Type         string
+	Nacenka      int
+	Num          int
+	Effects      []ItemEffect
 }
 
 type DailyData struct {
 	Date         string             `json:"date"`
-	Prices       map[string]int     `json:"prices"`
-	Ratios       map[string]float64 `json:"ratios"`
-	BuyStats     map[string]int     `json:"buy_stats"`
+	Prices       map[string]int `json:"prices"`
+	BuyStats     map[string]int `json:"buy_stats"`
 	SellStats    map[string]int     `json:"sell_stats"`
 	TrySellStats map[string]int     `json:"try_sell_stats"`
 	MessageID    int                `json:"message_id"`
-	BuySum       map[string]int     `json:"buy_sum"`
-    SellSum      map[string]int     `json:"sell_sum"`
-	MinPrices    map[string]int     `json:"min_prices"`    // новая
-    MaxPrices    map[string]int     `json:"max_prices"`
+	BuySum   map[string]int `json:"buy_sum"`
+	SellSum  map[string]int `json:"sell_sum"`
 }
 
-var (
-	itemsConfig = map[string]ItemConfig{
-		"pochti-megasword-1.21": {
-			BasePrice:    3000002,
-			NormalSales:  8,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_sword-1.21",
-			NormalCount: 5,
-		},
-		"sword7-1.21": {
-			BasePrice:    1500003,
-			NormalSales:  8,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_sword-1.21",
-			NormalCount: 5,
-		},
-		"megasword-1.21": {
-			BasePrice:    4500004,
-			NormalSales:  6,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_sword-1.21",
-			NormalCount: 5,
-		},
-		"штаны-1.21": {
-			BasePrice:    1500005,
-			NormalSales:  7,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_leggings-1.21",
-			NormalCount: 5,
-		},
-		// "штаны_позорные-1.21": {
-		// 	BasePrice:    1200006,
-		// 	NormalSales:  6,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	Type:         "netherite_leggings-1.21",
-		// },
-		"нагрудник-1.21": {
-			BasePrice:    1500007,
-			NormalSales:  8,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_chestplate-1.21",
-			NormalCount: 5,
-		},
-		"ботинки-1.21": {
-			BasePrice:    1500009,
-			NormalSales:  8,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_boots-1.21",
-			NormalCount: 5,
-		},
-		// "ботинки_позорные-1.21": {
-		// 	BasePrice:    1200010,
-		// 	NormalSales:  5,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	Type:         "netherite_boots-1.21",
-		// },
-		"шлем-1.21": {
-			BasePrice:    1600011,
-			NormalSales:  7,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_helmet-1.21",
-			NormalCount: 5,
-		},
-		// "шлем_позорный-1.21": {
-		// 	BasePrice:    1200012,
-		// 	NormalSales:  6,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	Type:         "netherite_helmet-1.21",
-		// }, //
-		"фарм-1.21": {
-			BasePrice:    1600013,
-			NormalSales:  7,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "отдача-1.21",
-			NormalCount: 5,
-		},// 
-		// "pochti-diamond-1.21": {
-		// 	BasePrice:    1600014,
-		// 	NormalSales:  6,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	Type:         "diamond-1.21",
-		// },
-		// "diamond-1.21": {
-		// 	BasePrice:    3000015,
-		// 	NormalSales:  6,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	Type:         "diamond-1.21",
-		// },
-		"ботинки-крутые-1.21": {
-			BasePrice:    3000016,
-			NormalSales:  5,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_boots-1.21",
-			NormalCount: 5,
-		}, //бульдозер-1-1.21
-		"бульдозер-1-1.21": {
-			BasePrice:    500017,
-			NormalSales:  6,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_pickaxe-1.21",
-			NormalCount: 5,
-		},
-		"бульдозер-2-1.21": {
-			BasePrice:    1200018,
-			NormalSales:  6,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_pickaxe-1.21",
-			NormalCount: 5,
-		},//кирка_крутая-1.21
-		"кирка_крутая-1.21": {
-			BasePrice:    1200019,
-			NormalSales:  6,
-			PriceStep:    100000,
-			AnalysisTime: 10 * time.Minute,
-			Type:         "netherite_pickaxe-1.21",
-			NormalCount: 5,
-		}, //шлем_крутой-1.21
-		// "шлем_крутой-1.21": {
-		// 	BasePrice:    1400020,
-		// 	NormalSales:  5,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	Type:         "netherite_helmet-1.21",
-		// },
-		// "фарм7-1.21": {
-		// 	BasePrice:    1600020,
-		// 	NormalSales:  7,
-		// 	PriceStep:    100000,
-		// 	AnalysisTime: 10 * time.Minute,
-		// 	Type:         "отдача-1.21",
-		// 	NormalCount: 5,
-		// },
-	}
-)
+var itemsConfig map[string]ItemConfig
 
 type TradeLog struct {
 	Time time.Time
@@ -239,25 +108,20 @@ type TradeLog struct {
 }
 
 type Data struct {
-	Prices       map[string]int
-	Ratios       map[string]float64
-	BuyStats     map[string]int
-	SellStats    map[string]int
-	TrySellStats map[string]int
-	LastTrade    map[string]time.Time
-	TradeHistory map[string][]TradeLog
-	BuySum       map[string]int   // новая
-    SellSum      map[string]int   // новая
-	MinPrices    map[string]int     // новая
-    MaxPrices    map[string]int
-	NeedPriceIncrease   map[string]bool 
-	NeedPriceDecrease   map[string]bool 
-	LastManualUpdate    map[string]time.Time
+	Prices           map[string]int
+	BuyStats         map[string]int
+	SellStats        map[string]int
+	TrySellStats     map[string]int
+	LastTrade        map[string]time.Time
+	TradeHistory     map[string][]TradeLog
+	BuySum           map[string]int
+	SellSum          map[string]int
+	LastManualUpdate map[string]time.Time
 }
 
 var (
 	data    = &Data{}
-	mutex   = sync.Mutex{}
+	mutex   = sync.RWMutex{}
 	clients = make(map[*websocket.Conn]bool)
 
 	currentDay string
@@ -283,7 +147,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Инициализация бота Telegram
+	if err := loadItemsConfig(); err != nil {
+		log.Fatalf("%v", err)
+	}
+
 	b, err := bot.New(token)
 	if err != nil {
 		log.Printf("Error creating bot: %v", err)
@@ -298,25 +165,10 @@ func main() {
 	data.TrySellStats = make(map[string]int)
 	data.LastTrade = make(map[string]time.Time)
 	data.TradeHistory = make(map[string][]TradeLog)
-	data.Ratios = make(map[string]float64)
 	data.BuySum = make(map[string]int)
 	data.SellSum = make(map[string]int)
-	data.MinPrices = make(map[string]int)
-	data.MaxPrices = make(map[string]int)
-	data.NeedPriceIncrease = make(map[string]bool)
-	data.NeedPriceDecrease = make(map[string]bool)
 	data.LastManualUpdate = make(map[string]time.Time)
 
-	for item, cfg := range itemsConfig {
-    if _, exists := data.MinPrices[item]; !exists {
-        data.MinPrices[item] = cfg.MinPrice
-    }
-    if _, exists := data.MaxPrices[item]; !exists {
-        data.MaxPrices[item] = cfg.MaxPrice
-    }
-}
-
-	// Загрузка данных за сегодня
 	loadDailyData(loc)
 
 	// Запускаем брокер рассылки
@@ -341,20 +193,123 @@ func main() {
 	select {}
 }
 
-func filterPrices() PriceAndRatio {
-    filteredPrices := make(map[string]int)
-    filteredRatios := make(map[string]float64)
-    for k, v := range data.Prices {
-        if _, ok := itemsConfig[k]; ok {
-            filteredPrices[k] = v
-        }
-    }
-    for k, v := range data.Ratios {
-        if _, ok := itemsConfig[k]; ok {
-            filteredRatios[k] = v
-        }
-    }
-    return PriceAndRatio{Prices: filteredPrices, Ratios: filteredRatios}
+func filterPrices() PriceUpdate {
+	filteredPrices := make(map[string]int)
+	for k, v := range data.Prices {
+		if _, ok := itemsConfig[k]; ok {
+			filteredPrices[k] = v
+		}
+	}
+	return PriceUpdate{Prices: filteredPrices}
+}
+
+func buildCatalogOut() []CatalogItemOut {
+	out := make([]CatalogItemOut, 0, len(itemsConfig))
+	for id, cfg := range itemsConfig {
+		out = append(out, CatalogItemOut{
+			ID:      id,
+			Name:    cfg.Name,
+			Type:    cfg.Type,
+			Nacenka: cfg.Nacenka,
+			Num:     cfg.Num,
+			Effects: cfg.Effects,
+		})
+	}
+	return out
+}
+
+func initialPricePayload() PriceUpdate {
+	p := filterPrices()
+	p.Catalog = buildCatalogOut()
+	return p
+}
+
+func typesMapFromSlice(list []string) map[string]struct{} {
+	types := make(map[string]struct{}, len(list))
+	for _, t := range list {
+		if t != "" {
+			types[t] = struct{}{}
+		}
+	}
+	return types
+}
+
+func typesMapKeys(m map[string]struct{}) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(m))
+	for t := range m {
+		out = append(out, t)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func aggregateActiveTypesLocked() map[string]int {
+	counts := make(map[string]int)
+	for _, types := range clientActiveTypes {
+		for t := range types {
+			counts[t]++
+		}
+	}
+	return counts
+}
+
+func logGlobalFleetState(prefix string) {
+	active := aggregateActiveTypesLocked()
+	if len(active) == 0 {
+		log.Printf("%s активных типов нет — adjustPrice для всех типов на паузе", prefix)
+		return
+	}
+	parts := make([]string, 0, len(active))
+	for t, n := range active {
+		parts = append(parts, fmt.Sprintf("%s×%d", t, n))
+	}
+	sort.Strings(parts)
+	log.Printf("%s активные типы: %s", prefix, strings.Join(parts, ", "))
+}
+
+// Тип активен, если хотя бы один подключённый оркестратор прислал живых ботов этого типа.
+func isMinecraftTypeActive(minecraftType string) bool {
+	if minecraftType == "" {
+		return false
+	}
+	mutex.RLock()
+	defer mutex.RUnlock()
+	for _, types := range clientActiveTypes {
+		if _, ok := types[minecraftType]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func setClientActiveTypes(ws *websocket.Conn, activeTypes []string) {
+	clientActiveTypes[ws] = typesMapFromSlice(activeTypes)
+}
+
+func setClientFleetTypes(ws *websocket.Conn, fleetTypes []string) {
+	clientFleetTypes[ws] = typesMapFromSlice(fleetTypes)
+}
+
+func logClientFleetDisconnect(ws *websocket.Conn) {
+	fleet := typesMapKeys(clientFleetTypes[ws])
+	active := typesMapKeys(clientActiveTypes[ws])
+	log.Printf("[FLEET] оркестратор отключился | заявлено: %v | было активно: %v", fleet, active)
+	delete(clientFleetTypes, ws)
+	logGlobalFleetState("[FLEET] после отключения")
+}
+
+func publishPrices() {
+	pricesCopy := make(map[string]int, len(data.Prices))
+	for k, v := range data.Prices {
+		pricesCopy[k] = v
+	}
+	select {
+	case broadcast <- PriceUpdate{Prices: pricesCopy}:
+	default:
+	}
 }
 
 func broadcastBroker() {
@@ -373,6 +328,8 @@ func broadcastBroker() {
 				delete(clients, client)
 				delete(clientItems, client)
 				delete(clientInventory, client)
+				delete(clientActiveTypes, client)
+				delete(clientFleetTypes, client)
 				mutex.Unlock()
 			}
 		}
@@ -426,11 +383,8 @@ func loadDailyData(loc *time.Location) {
 		BuyStats:     make(map[string]int),
 		SellStats:    make(map[string]int),
 		TrySellStats: make(map[string]int),
-		Ratios:       make(map[string]float64),
-		BuySum:       make(map[string]int),   // добавить
-    	SellSum:      make(map[string]int),   // добавить
-		MinPrices:    make(map[string]int),   // добавить
-        MaxPrices:    make(map[string]int),   // добавить
+		BuySum:       make(map[string]int),
+		SellSum:      make(map[string]int),
 	}
 
 	if file, err := os.ReadFile(filename); err == nil {
@@ -459,22 +413,6 @@ func loadDailyData(loc *time.Location) {
 			for item, count := range dailyData.TrySellStats {
 				data.TrySellStats[item] = count
 			}
-			for item, ratio := range dailyData.Ratios {
-				data.Ratios[item] = ratio
-			}
-			 if dailyData.MinPrices == nil {
-                dailyData.MinPrices = make(map[string]int)
-            }
-            if dailyData.MaxPrices == nil {
-                dailyData.MaxPrices = make(map[string]int)
-            }
-            
-            for item, price := range dailyData.MinPrices {
-                data.MinPrices[item] = price
-            }
-            for item, price := range dailyData.MaxPrices {
-                data.MaxPrices[item] = price
-            }
 			log.Println("Данные успешно загружены из файла")
 		}
 	}
@@ -484,22 +422,7 @@ func loadDailyData(loc *time.Location) {
 			data.Prices[item] = cfg.BasePrice
 			dailyData.Prices[item] = cfg.BasePrice
 		}
-		if _, exists := data.Ratios[item]; !exists {
-			data.Ratios[item] = 0.8
-			dailyData.Ratios[item] = 0.8
-		}
 	}
-
-	for item, cfg := range itemsConfig {
-        if _, exists := data.MinPrices[item]; !exists {
-            data.MinPrices[item] = cfg.MinPrice
-            dailyData.MinPrices[item] = cfg.MinPrice
-        }
-        if _, exists := data.MaxPrices[item]; !exists {
-            data.MaxPrices[item] = cfg.MaxPrice
-            dailyData.MaxPrices[item] = cfg.MaxPrice
-        }
-    }
 
 	for item := range itemsConfig {
 		swordTimes[item] = time.Now().Add(-itemsConfig[item].AnalysisTime)
@@ -526,7 +449,7 @@ func startItemTimers() {
 	}
 }
 
-func getItemStatsForReporting(item string, since time.Time) (sales, buys, trySells, price int, ratio float64) {
+func getItemStatsForReporting(item string, since time.Time) (sales, buys, trySells, price int) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -534,8 +457,6 @@ func getItemStatsForReporting(item string, since time.Time) (sales, buys, trySel
 	buys = countRecentBuys(item, since)
 	trySells = countRecentTrySells(item, since)
 	price = data.Prices[item]
-	ratio = data.Ratios[item]
-
 	return
 }
 
@@ -550,27 +471,31 @@ func getInventoryStats(item string) (onHand, inInventory int) {
 }
 
 func adjustAndReport(item string, cfg ItemConfig) {
+	if !isMinecraftTypeActive(cfg.Type) {
+		log.Printf("[SKIP] %s: тип %s — нет активных ботов на оркестраторах", item, cfg.Type)
+		return
+	}
+
 	now := time.Now()
 	start := now.Add(-cfg.AnalysisTime)
 
-	sales, buys, trySells, price, ratio := getItemStatsForReporting(item, start)
+	sales, buys, trySells, price := getItemStatsForReporting(item, start)
 
 	log.Printf("[ANALYSIS] %s: анализ с %s по %s. Продажи: %d (норма: %d)",
 		item, start.Format("15:04:05"), now.Format("15:04:05"), sales, cfg.NormalSales)
 
 	adjustPrice(item)
 
-	newPrice, newRatio := func() (int, float64) {
+	newPrice := func() int {
 		mutex.Lock()
 		defer mutex.Unlock()
-		return data.Prices[item], data.Ratios[item]
+		return data.Prices[item]
 	}()
 
 	sendIntervalStatsToTelegram(
-		item,
-		start, now,
+		item, start, now,
 		float64(sales), float64(cfg.NormalSales), float64(buys), float64(trySells),
-		float64(price), ratio, float64(newPrice), newRatio,
+		price, newPrice,
 	)
 }
 
@@ -585,11 +510,8 @@ func saveDailyDataNoMessageUpdate() {
 	dailyData.BuyStats = data.BuyStats
 	dailyData.SellStats = data.SellStats
 	dailyData.TrySellStats = data.TrySellStats
-	dailyData.Ratios = data.Ratios
 	dailyData.BuySum = data.BuySum
 	dailyData.SellSum = data.SellSum
-	dailyData.MinPrices = data.MinPrices    // добавить
-    dailyData.MaxPrices = data.MaxPrices 
 
 	file, err := json.MarshalIndent(dailyData, "", "  ")
 	if err != nil {
@@ -709,11 +631,8 @@ func saveDailyData() {
 	dailyData.BuyStats = data.BuyStats
 	dailyData.SellStats = data.SellStats
 	dailyData.TrySellStats = data.TrySellStats
-	dailyData.Ratios = data.Ratios
 	dailyData.BuySum = data.BuySum
 	dailyData.SellSum = data.SellSum
-	dailyData.MinPrices = data.MinPrices    // добавить
-    dailyData.MaxPrices = data.MaxPrices    // добавить
 
 	file, err := json.MarshalIndent(dailyData, "", "  ")
 	if err != nil {
@@ -739,6 +658,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	clients[ws] = true
 	clientItems[ws] = make(map[string]int)
 	clientInventory[ws] = make(map[string]int)
+	clientActiveTypes[ws] = make(map[string]struct{})
+	clientFleetTypes[ws] = make(map[string]struct{})
 	mutex.Unlock()
 
 	defer func() {
@@ -746,6 +667,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		delete(clients, ws)
 		delete(clientItems, ws)
 		delete(clientInventory, ws)
+		logClientFleetDisconnect(ws)
 		mutex.Unlock()
 	}()
 
@@ -756,10 +678,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	jsonList = getCurrentJsonList()
 	mutex.Unlock()
 
-	select {
-		case broadcast <- filterPrices():
-		default:
+	if err := ws.WriteJSON(initialPricePayload()); err != nil {
+		log.Printf("ошибка отправки каталога: %v", err)
 	}
+
 	select {
 	case broadcast <- map[string]interface{}{
 		"action": "json_update",
@@ -776,11 +698,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var msg struct {
-			Action    string         `json:"action"`
-			Type      string         `json:"type"`
-			Items     map[string]int `json:"items"`
-			Inventory map[string]int `json:"inventory"`
-			Price int    `json:"price"`
+			Action      string         `json:"action"`
+			Type        string         `json:"type"`
+			Items       map[string]int `json:"items"`
+			Inventory   map[string]int `json:"inventory"`
+			Types       []string       `json:"types"`
+			ActiveTypes []string       `json:"active_types"`
+			Price       int            `json:"price"`
 		}
 		if msg.Action != "add" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
@@ -827,15 +751,24 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		case "info":
 			mutex.Unlock()
-
-			select {
-			case broadcast <- filterPrices():
-			default:
+			if err := ws.WriteJSON(initialPricePayload()); err != nil {
+				log.Printf("ошибка info payload: %v", err)
 			}
+
+		case "fleet":
+			fleetTypes := msg.Types
+			if len(fleetTypes) == 0 {
+				fleetTypes = msg.ActiveTypes
+			}
+			setClientFleetTypes(ws, fleetTypes)
+			log.Printf("[FLEET] оркестратор подключился | заявленные типы: %v", typesMapKeys(clientFleetTypes[ws]))
+			mutex.Unlock()
+			logGlobalFleetState("[FLEET]")
 
 		case "presence":
 			clientItems[ws] = copyMap(msg.Items)
 			clientInventory[ws] = copyMap(msg.Inventory)
+			setClientActiveTypes(ws, msg.ActiveTypes)
 			mutex.Unlock()
 
 		case "add":
@@ -871,135 +804,46 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				mutex.Unlock()
 				continue
 			}
-			
 			if _, exists := itemsConfig[msg.Type]; !exists {
 				mutex.Unlock()
 				continue
 			}
-
 			if data.Prices[msg.Type] == msg.Price {
-				log.Printf("[CONFIG] %s: цена уже %d, пропускаем", msg.Type, msg.Price)
 				mutex.Unlock()
 				continue
 			}
-			data.LastManualUpdate[msg.Type] = time.Now()
-			
-			// Сохраняем минимальную цену
-			data.MinPrices[msg.Type] = msg.Price
-			
-			// 1. СРАЗУ МЕНЯЕМ ЦЕНУ
 			oldPrice := data.Prices[msg.Type]
 			data.Prices[msg.Type] = msg.Price
-			
-			// 2. СБРАСЫВАЕМ ФЛАГИ, чтобы плановое изменение ничего не делало
-			data.NeedPriceIncrease[msg.Type] = false
-			data.NeedPriceDecrease[msg.Type] = false
-			
-			// 3. СТАВИМ "ЗАМОРОЗКУ" - плановое изменение пропустит этот цикл
-			lastPriceUpdate[msg.Type] = time.Now()
-			
-			log.Printf("[CONFIG] %s: цена мгновенно изменена %d -> %d", 
-				msg.Type, oldPrice, msg.Price)
-			
-			// Отправляем всем клиентам
-			pricesCopy := make(map[string]int)
-			ratiosCopy := make(map[string]float64)
-			for k, v := range data.Prices {
-				pricesCopy[k] = v
-			}
-			for k, v := range data.Ratios {
-				ratiosCopy[k] = v
-			}
+			data.LastManualUpdate[msg.Type] = time.Now()
+			log.Printf("[CONFIG] %s: min -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
+			publishPrices()
 			mutex.Unlock()
-			
-			select {
-			case broadcast <- PriceAndRatio{
-				Prices: pricesCopy,
-				Ratios: ratiosCopy,
-			}:
-			default:
-			}
-			
-			// Сохраняем в файл
 			mutex.Lock()
 			saveDailyData()
 			mutex.Unlock()
 
-	case "set_max_price":
-    if msg.Type == "" || msg.Price == 0 {
-        mutex.Unlock()
-        continue
-    }
-    
-    if _, exists := itemsConfig[msg.Type]; !exists {
-        mutex.Unlock()
-        continue
-    }
-
-    if data.Prices[msg.Type] == msg.Price {
-        log.Printf("[CONFIG] %s: цена уже %d, пропускаем", msg.Type, msg.Price)
-        mutex.Unlock()
-        continue
-    }
-
-    data.LastManualUpdate[msg.Type] = time.Now()
-    
-    // Сохраняем максимальную цену
-    oldMaxPrice := data.MaxPrices[msg.Type]
-    data.MaxPrices[msg.Type] = msg.Price
-    
-    // 1. СРАЗУ МЕНЯЕМ ЦЕНУ (только если она выше текущей)
-    oldPrice := data.Prices[msg.Type]
-    if msg.Price < oldPrice {  // только если максимальная цена ниже текущей
-        data.Prices[msg.Type] = msg.Price
-        
-        // 2. СБРАСЫВАЕМ ФЛАГИ
-        data.NeedPriceIncrease[msg.Type] = false
-        data.NeedPriceDecrease[msg.Type] = false
-        
-        // 3. СТАВИМ "ЗАМОРОЗКУ"
-        lastPriceUpdate[msg.Type] = time.Now()
-        
-        log.Printf("[CONFIG] %s: цена мгновенно понижена %d -> %d (макс: %d)", 
-            msg.Type, oldPrice, msg.Price, msg.Price)
-    } else {
-        log.Printf("[CONFIG] %s: макс цена обновлена %d -> %d (текущая %d, изменение не требуется)", 
-            msg.Type, oldMaxPrice, msg.Price, oldPrice)
-    }
-    
-    // Отправляем всем клиентам
-    pricesCopy := make(map[string]int)
-    ratiosCopy := make(map[string]float64)
-    for k, v := range data.Prices {
-        pricesCopy[k] = v
-    }
-    for k, v := range data.Ratios {
-        ratiosCopy[k] = v
-    }
-    mutex.Unlock()
-    
-    select {
-    case broadcast <- PriceAndRatio{
-        Prices: pricesCopy,
-        Ratios: ratiosCopy,
-    }:
-    default:
-    }
-    
-    // Сохраняем в файл
-    mutex.Lock()
-    saveDailyData()
-    mutex.Unlock()
-
-    // Отправляем подтверждение
-    select {
-    case broadcast <- map[string]interface{}{
-        "action": "price_config_updated",
-        "type":   msg.Type,
-        "max_price": msg.Price,
-    }:
-    default:
-    }
+		case "set_max_price":
+			if msg.Type == "" || msg.Price == 0 {
+				mutex.Unlock()
+				continue
+			}
+			if _, exists := itemsConfig[msg.Type]; !exists {
+				mutex.Unlock()
+				continue
+			}
+			oldPrice := data.Prices[msg.Type]
+			if msg.Price >= oldPrice {
+				mutex.Unlock()
+				continue
+			}
+			data.Prices[msg.Type] = msg.Price
+			data.LastManualUpdate[msg.Type] = time.Now()
+			log.Printf("[CONFIG] %s: max -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
+			publishPrices()
+			mutex.Unlock()
+			mutex.Lock()
+			saveDailyData()
+			mutex.Unlock()
 		default:
 			mutex.Unlock()
 		}
@@ -1087,19 +931,6 @@ func countRecentTrySells(item string, since time.Time) int {
 	return count
 }
 
-func downRatio(ratio float64) float64 {
-	if ratio <= 0.75 {
-		return 0
-	}
-	return ratio - 0.05
-}
-
-func upRatio(ratio float64) float64 {
-	if ratio >= 0.85 {
-		return 0
-	}
-	return ratio + 0.05
-}
 func adjustPrice(item string) {
 	cfg, ok := itemsConfig[item]
 	if !ok {
@@ -1110,6 +941,12 @@ func adjustPrice(item string) {
 	now := time.Now()
 	swordTimes[item] = now
 	lastUpdate := now.Add(-cfg.AnalysisTime)
+
+	if !isMinecraftTypeActive(cfg.Type) {
+		log.Printf("[SKIP] %s: тип %s — нет активных ботов", item, cfg.Type)
+		mutex.Unlock()
+		return
+	}
 
 	if time.Since(data.LastManualUpdate[item]) < cfg.AnalysisTime {
 		log.Printf("[SKIP] %s: ручное изменение %v назад, пропускаем анализ", 
@@ -1123,9 +960,6 @@ func adjustPrice(item string) {
 
 	newPrice := data.Prices[item]
 	priceBefore := newPrice
-	ratioBefore := data.Ratios[item]
-
-	// Используем сохраненные мин/макс цены (динамические!)
 	minPrice := getMinPriceFromHistory(item)
 
 	// --- 📊 СБОР СТАТИСТИКИ (как в старом добром коде) ---
@@ -1170,28 +1004,7 @@ func adjustPrice(item string) {
 		}
 	}
 
-	// --- ⚖️ ЛОГИКА ЦЕНООБРАЗОВАНИЯ (ПОЛНОСТЬЮ ИЗ СТАРОГО КОДА) ---
-	ratio := ratioBefore
-
-	if data.NeedPriceDecrease[item] {
-		targetPrice := data.MaxPrices[item]
-		if targetPrice > 0 && targetPrice < newPrice {
-			newPrice = targetPrice
-			log.Printf("📉 Принудительное понижение %s по флагу: %d -> %d", 
-				item, priceBefore, newPrice)
-		}
-		// Сбрасываем флаг
-		data.NeedPriceDecrease[item] = false
-	} else if data.NeedPriceIncrease[item] {
-        targetPrice := data.MinPrices[item]
-        if targetPrice > 0 && targetPrice > newPrice {
-            newPrice = targetPrice
-            log.Printf("🚀 Принудительное повышение %s по флагу: %d -> %d", 
-                item, priceBefore, newPrice)
-        }
-        // Сбрасываем флаг
-        data.NeedPriceIncrease[item] = false
-    } else if totalStock > stockNorm && sales < cfg.NormalSales {
+	if totalStock > stockNorm && sales < cfg.NormalSales {
 		if newPrice - cfg.PriceStep > minPrice + 200000 {
 			newPrice -= cfg.PriceStep
 		}
@@ -1201,12 +1014,9 @@ func adjustPrice(item string) {
 		log.Printf("📈 Повышение %s: мало товара (%d < %d)", item, totalStock, stockNorm)
 	}
 
-	// --- ✅ ЗАВЕРШЕНИЕ ---
-	if newPrice != priceBefore || ratio != ratioBefore {
+	if newPrice != priceBefore {
 		data.Prices[item] = newPrice
 		dailyData.Prices[item] = newPrice
-		data.Ratios[item] = ratio
-		dailyData.Ratios[item] = ratio
 		lastPriceUpdate[item] = now
 		
 		mutex.Unlock()
@@ -1222,46 +1032,37 @@ func adjustPrice(item string) {
 		mutex.Unlock()
 	}
 }
-func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales, expectedSales, buyCount, trySellCount,
-    oldPrice, oldRatio, newPrice, newRatio float64) {
+func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales, expectedSales, buyCount, trySellCount float64,
+	oldPrice, newPrice int) {
 
-	// Мега-костыль: рандомная задержка от 3 до 7 секунд
-    time.Sleep(time.Duration(rand.Intn(4000)+3000) * time.Millisecond)
+	time.Sleep(time.Duration(rand.Intn(4000)+3000) * time.Millisecond)
 
-    status := "✅"
-    if actualSales < expectedSales {
-        status = "⚠️"
-    }
+	status := "✅"
+	if actualSales < expectedSales {
+		status = "⚠️"
+	}
 
-    onlineCount := getOnlineCount()
-    onHand, inInventory := getInventoryStats(item)
+	onlineCount := getOnlineCount()
+	onHand, inInventory := getInventoryStats(item)
 
-    msg := fmt.Sprintf(
-        "*%s* %s\n"+
-            "⏳ Интервал: %s - %s\n"+
-            "📦 Покупки: *%.0f*\n"+
-            "🛒 Попытки продаж: *%.0f*\n"+
-            "📊 Продажи: *%.0f* из *%.0f* (норма)\n"+
-            "💰 Цена: %d → %d (%s)\n"+
-            "🧮 Коэффициент: %.2f → %.2f\n"+
-            "🎒 На аукционе: %d\n"+
-            "🎒 В инвентаре: %d\n"+
-            "👥 Онлайн: %d игроков",
-        item,
-        status,
-        start.Format("15:04:05"),
-        end.Format("15:04:05"),
-        buyCount,
-        trySellCount,
-        actualSales,
-        expectedSales,
-        int(oldPrice), int(newPrice),
-        getPriceChangeEmoji(int(oldPrice), int(newPrice)),
-        oldRatio, newRatio,
-        onHand,
-        inInventory,
-        onlineCount,
-    )
+	msg := fmt.Sprintf(
+		"*%s* %s\n"+
+			"⏳ Интервал: %s - %s\n"+
+			"📦 Покупки: *%.0f*\n"+
+			"🛒 Попытки продаж: *%.0f*\n"+
+			"📊 Продажи: *%.0f* из *%.0f* (норма)\n"+
+			"💰 Цена: %d → %d (%s)\n"+
+			"🎒 На аукционе: %d\n"+
+			"🎒 В инвентаре: %d\n"+
+			"👥 Онлайн: %d игроков",
+		item, status,
+		start.Format("15:04:05"), end.Format("15:04:05"),
+		buyCount, trySellCount,
+		actualSales, expectedSales,
+		oldPrice, newPrice,
+		getPriceChangeEmoji(oldPrice, newPrice),
+		onHand, inInventory, onlineCount,
+	)
 
     ctx := context.Background()
     _, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
@@ -1273,20 +1074,13 @@ func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales,
         log.Printf("[Telegram] Ошибка при отправке интервал-статы: %v", err)
     }
 
-    plainLog := fmt.Sprintf(
-        "%s [%s → %s] %s | Покупки: %.0f | Продажи: %.0f/%.0f | Цена: %d→%d | Коэф: %.2f→%.2f | На руках: %d | Онлайн: %d\n",
-        item,
-        start.Format("15:04:05"),
-        end.Format("15:04:05"),
-        status,
-        buyCount,
-        actualSales,
-        expectedSales,
-        int(oldPrice), int(newPrice),
-        oldRatio, newRatio,
-        onHand,
-        onlineCount,
-    )
+	plainLog := fmt.Sprintf(
+		"%s [%s → %s] %s | Покупки: %.0f | Продажи: %.0f/%.0f | Цена: %d→%d | На руках: %d | Онлайн: %d\n",
+		item,
+		start.Format("15:04:05"), end.Format("15:04:05"),
+		status, buyCount, actualSales, expectedSales,
+		oldPrice, newPrice, onHand, onlineCount,
+	)
 
     appendToFile("logs_interval.txt", plainLog)
 }
