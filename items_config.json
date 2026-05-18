@@ -318,5 +318,44 @@
     ],
     "nacenka": 300000,
     "num": 3
+  },
+  "ярость-1.21": {
+    "base_price": 7000020,
+    "normal_sales": 7,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "totem_of_undying",
+    "type": "ярость-1.21",
+    "effects": [],
+    "lore_match": "Граничит с безумием",
+    "nacenka": 300000,
+    "num": 1
+  },
+  "хаос-1.21": {
+    "base_price": 4000021,
+    "normal_sales": 7,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "player_head",
+    "type": "хаос-1.21",
+    "effects": [],
+    "lore_match": "Хаос искажает",
+    "nacenka": 300000,
+    "num": 1
+  },
+  "бестия-1.21": {
+    "base_price": 4000021,
+    "normal_sales": 7,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "player_head",
+    "type": "бестия-1.21",
+    "effects": [],
+    "lore_match": "Обостряет реакции",
+    "nacenka": 300000,
+    "num": 1
   }
 }

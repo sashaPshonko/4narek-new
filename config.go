@@ -27,6 +27,7 @@ type itemConfigJSON struct {
 	Nacenka         int              `json:"nacenka"`
 	Num             int              `json:"num"`
 	Effects         []itemEffectJSON `json:"effects"`
+	LoreMatch       string           `json:"lore_match,omitempty"`
 }
 
 func loadItemsConfig() error {
@@ -72,6 +73,7 @@ func loadItemsConfig() error {
 			Nacenka:      entry.Nacenka,
 			Num:          entry.Num,
 			Effects:      effects,
+			LoreMatch:    entry.LoreMatch,
 		}
 	}
 
