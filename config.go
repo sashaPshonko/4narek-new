@@ -25,6 +25,7 @@ type itemConfigJSON struct {
 	PriceStep       int              `json:"price_step"`
 	AnalysisMinutes int              `json:"analysis_minutes"`
 	Nacenka         int              `json:"nacenka"`
+	NacenkaMin      int              `json:"nacenka_min"`
 	Num             int              `json:"num"`
 	Effects         []itemEffectJSON `json:"effects"`
 	LoreMatch       string           `json:"lore_match,omitempty"`
@@ -71,6 +72,7 @@ func loadItemsConfig() error {
 			PriceStep:    entry.PriceStep,
 			AnalysisTime: time.Duration(minutes) * time.Minute,
 			Nacenka:      entry.Nacenka,
+			NacenkaMin:   entry.NacenkaMin,
 			Num:          entry.Num,
 			Effects:      effects,
 			LoreMatch:    entry.LoreMatch,

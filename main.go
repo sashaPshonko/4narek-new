@@ -44,9 +44,14 @@ type ItemEffect struct {
 	Lvl  int    `json:"lvl"`
 }
 
+type PriceRecord struct {
+	Price int       `json:"price"`
+	Time  time.Time `json:"time"`
+}
+
 type PriceHistory struct {
-    Prices []int `json:"prices"`
-    Limit  int   `json:"limit"`
+	Records []PriceRecord `json:"records"`
+	Limit   int           `json:"limit"`
 }
 
 var priceHistory = make(map[string]*PriceHistory)
@@ -86,31 +91,37 @@ type ItemConfig struct {
 	PriceStep    int
 	AnalysisTime time.Duration
 	Nacenka      int
+	NacenkaMin   int
 	Num          int
 	Effects      []ItemEffect
 	LoreMatch    string
 }
 
 type DailyData struct {
-	Date         string             `json:"date"`
-	Prices       map[string]int `json:"prices"`
-	BuyStats     map[string]int `json:"buy_stats"`
-	SellStats    map[string]int     `json:"sell_stats"`
-	TrySellStats map[string]int     `json:"try_sell_stats"`
-	MessageID    int                `json:"message_id"`
-	BuySum   map[string]int `json:"buy_sum"`
-	SellSum  map[string]int `json:"sell_sum"`
+	Date         string                     `json:"date"`
+	Prices       map[string]int             `json:"prices"`
+	Nacenkas     map[string]int             `json:"nacenkas"`
+	AdjustState  map[string]ItemAdjustState `json:"adjust_state"`
+	BuyStats     map[string]int             `json:"buy_stats"`
+	SellStats    map[string]int             `json:"sell_stats"`
+	TrySellStats map[string]int             `json:"try_sell_stats"`
+	MessageID    int                        `json:"message_id"`
+	BuySum       map[string]int             `json:"buy_sum"`
+	SellSum      map[string]int             `json:"sell_sum"`
 }
 
 var itemsConfig map[string]ItemConfig
 
 type TradeLog struct {
-	Time time.Time
-	Type string // "buy", "sell" или "try-sell"
+	Time  time.Time
+	Type  string // "buy", "sell" или "try-sell"
+	Price int
 }
 
 type Data struct {
 	Prices           map[string]int
+	Nacenkas         map[string]int
+	AdjustState      map[string]ItemAdjustState
 	BuyStats         map[string]int
 	SellStats        map[string]int
 	TrySellStats     map[string]int
@@ -162,6 +173,8 @@ func main() {
 
 	// Инициализация данных
 	data.Prices = make(map[string]int)
+	data.Nacenkas = make(map[string]int)
+	data.AdjustState = make(map[string]ItemAdjustState)
 	data.BuyStats = make(map[string]int)
 	data.SellStats = make(map[string]int)
 	data.TrySellStats = make(map[string]int)
@@ -212,7 +225,7 @@ func buildCatalogOut() []CatalogItemOut {
 			ID:        id,
 			Name:      cfg.Name,
 			Type:      cfg.Type,
-			Nacenka:   cfg.Nacenka,
+			Nacenka:   getNacenka(id),
 			Num:       cfg.Num,
 			Effects:   cfg.Effects,
 			LoreMatch: cfg.LoreMatch,
@@ -222,9 +235,9 @@ func buildCatalogOut() []CatalogItemOut {
 }
 
 func initialPricePayload() PriceUpdate {
-	p := filterPrices()
-	p.Catalog = buildCatalogOut()
-	return p
+	mutex.RLock()
+	defer mutex.RUnlock()
+	return priceUpdatePayloadLocked()
 }
 
 func typesMapFromSlice(list []string) map[string]struct{} {
@@ -310,14 +323,7 @@ func logClientFleetDisconnect(ws *websocket.Conn) {
 }
 
 func publishPrices() {
-	pricesCopy := make(map[string]int, len(data.Prices))
-	for k, v := range data.Prices {
-		pricesCopy[k] = v
-	}
-	select {
-	case broadcast <- PriceUpdate{Prices: pricesCopy}:
-	default:
-	}
+	publishPriceUpdate()
 }
 
 func broadcastBroker() {
@@ -388,6 +394,8 @@ func loadDailyData(loc *time.Location) {
 	dailyData = DailyData{
 		Date:         today,
 		Prices:       make(map[string]int),
+		Nacenkas:     make(map[string]int),
+		AdjustState:  make(map[string]ItemAdjustState),
 		BuyStats:     make(map[string]int),
 		SellStats:    make(map[string]int),
 		TrySellStats: make(map[string]int),
@@ -403,6 +411,12 @@ func loadDailyData(loc *time.Location) {
 			if dailyData.SellSum == nil {
 				dailyData.SellSum = make(map[string]int)
 			}
+			if dailyData.Nacenkas == nil {
+				dailyData.Nacenkas = make(map[string]int)
+			}
+			if dailyData.AdjustState == nil {
+				dailyData.AdjustState = make(map[string]ItemAdjustState)
+			}
 			for item, sum := range dailyData.BuySum {
 				data.BuySum[item] = sum
 			}
@@ -411,6 +425,12 @@ func loadDailyData(loc *time.Location) {
 			}
 			for item, price := range dailyData.Prices {
 				data.Prices[item] = price
+			}
+			for item, n := range dailyData.Nacenkas {
+				data.Nacenkas[item] = n
+			}
+			for item, st := range dailyData.AdjustState {
+				data.AdjustState[item] = st
 			}
 			for item, count := range dailyData.BuyStats {
 				data.BuyStats[item] = count
@@ -431,6 +451,8 @@ func loadDailyData(loc *time.Location) {
 			dailyData.Prices[item] = cfg.BasePrice
 		}
 	}
+
+	ensureNacenkasInitialized()
 
 	for item := range itemsConfig {
 		swordTimes[item] = time.Now().Add(-itemsConfig[item].AnalysisTime)
@@ -515,6 +537,8 @@ func saveDailyDataNoMessageUpdate() {
 
 	filename := fmt.Sprintf("data_%s.json", today)
 	dailyData.Prices = data.Prices
+	dailyData.Nacenkas = data.Nacenkas
+	dailyData.AdjustState = data.AdjustState
 	dailyData.BuyStats = data.BuyStats
 	dailyData.SellStats = data.SellStats
 	dailyData.TrySellStats = data.TrySellStats
@@ -636,6 +660,8 @@ func saveDailyData() {
 
 	filename := fmt.Sprintf("data_%s.json", today)
 	dailyData.Prices = data.Prices
+	dailyData.Nacenkas = data.Nacenkas
+	dailyData.AdjustState = data.AdjustState
 	dailyData.BuyStats = data.BuyStats
 	dailyData.SellStats = data.SellStats
 	dailyData.TrySellStats = data.TrySellStats
@@ -724,8 +750,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		case "buy":
 			data.BuyStats[msg.Type]++
 			data.LastTrade[msg.Type] = time.Now()
-			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy"})
-			data.BuySum[msg.Type] += msg.Price 
+			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy", Price: msg.Price})
+			data.BuySum[msg.Type] += msg.Price
 			addPriceToHistory(msg.Type, msg.Price)
 			mutex.Unlock()
 
@@ -736,8 +762,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		case "sell":
 			data.SellStats[msg.Type]++
 			data.LastTrade[msg.Type] = time.Now()
-			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "sell"})
-			data.SellSum[msg.Type] += msg.Price 
+			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "sell", Price: msg.Price})
+			data.SellSum[msg.Type] += msg.Price
 			mutex.Unlock()
 
 			mutex.Lock()
@@ -936,108 +962,6 @@ func countRecentTrySells(item string, since time.Time) int {
 	return count
 }
 
-func adjustPrice(item string) {
-	cfg, ok := itemsConfig[item]
-	if !ok {
-		return
-	}
-
-	mutex.Lock()
-	now := time.Now()
-	swordTimes[item] = now
-	lastUpdate := now.Add(-cfg.AnalysisTime)
-
-	if !isMinecraftTypeActiveLocked(cfg.Type) {
-		log.Printf("[SKIP] %s: тип %s — нет активных ботов", item, cfg.Type)
-		mutex.Unlock()
-		return
-	}
-
-	if time.Since(data.LastManualUpdate[item]) < cfg.AnalysisTime {
-		log.Printf("[SKIP] %s: ручное изменение %v назад, пропускаем анализ", 
-			item, time.Since(data.LastManualUpdate[item]))
-		mutex.Unlock()
-		return
-	}
-
-	sales := countRecentSales(item, lastUpdate)
-	// buys := countRecentBuys(item, lastUpdate)
-
-	newPrice := data.Prices[item]
-	priceBefore := newPrice
-	minPrice := getMinPriceFromHistory(item)
-
-	// --- 📊 СБОР СТАТИСТИКИ (как в старом добром коде) ---
-	ahCounts := make(map[string]int)  // Только аукцион
-	invCounts := make(map[string]int) // Только инвентарь
-	
-	for _, items := range clientItems {
-		for name, count := range items {
-			if conf, exists := itemsConfig[name]; exists && conf.Type == cfg.Type {
-				ahCounts[name] += count
-			}
-		}
-	}
-	for _, inv := range clientInventory {
-		for name, count := range inv {
-			if conf, exists := itemsConfig[name]; exists && conf.Type == cfg.Type {
-				invCounts[name] += count
-			}
-		}
-	}
-
-	stockNorm := cfg.NormalSales
-	if cfg.NormalCount > 0 {
-		stockNorm = cfg.NormalCount
-	}
-
-
-	onAH := ahCounts[item]      // Сколько этого предмета на аукционе
-	inInv := invCounts[item]    // Сколько этого предмета в инвентаре
-	totalStock := onAH + inInv  // Общий запас (для лидера)
-
-	// Определяем лидера типа (по общему количеству AH + INV)
-	leaderID := ""
-	maxTotal := -1
-	for name := range itemsConfig {
-		if itemsConfig[name].Type == cfg.Type {
-			total := ahCounts[name] + invCounts[name]
-			if total > maxTotal {
-				maxTotal = total
-				leaderID = name
-			}
-		}
-	}
-
-	if totalStock > stockNorm && sales < cfg.NormalSales {
-		priceFloor := minPrice + cfg.Nacenka
-		if newPrice-cfg.PriceStep > priceFloor {
-			newPrice -= cfg.PriceStep
-		}
-		log.Printf("📉 Снижение %s: плохие продажи (на АХ: %d, продажи: %d)", item, onAH, sales)
-	} else if sales < cfg.NormalSales {
-		newPrice += cfg.PriceStep
-		log.Printf("📈 Повышение %s: мало товара (%d < %d)", item, totalStock, stockNorm)
-	}
-
-	if newPrice != priceBefore {
-		data.Prices[item] = newPrice
-		dailyData.Prices[item] = newPrice
-		lastPriceUpdate[item] = now
-		
-		mutex.Unlock()
-
-		log.Printf("[PRICE] %s: цена %d -> %d (На АХ: %d, Продажи: %d/%d, Лидер: %s)", 
-			item, priceBefore, newPrice, onAH, sales, cfg.NormalSales, leaderID)
-
-		select {
-		case broadcast <- filterPrices():
-		default:
-		}
-	} else {
-		mutex.Unlock()
-	}
-}
 func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales, expectedSales, buyCount, trySellCount float64,
 	oldPrice, newPrice int) {
 
@@ -1141,42 +1065,42 @@ func getOnlineCount() int {
 
 // Добавление цены покупки в историю
 func addPriceToHistory(item string, price int) {
-    if price <= 0 {
-        return // отрицательные цены не храним
-    }
-    
-    hist := priceHistory[item]
-    if hist == nil {
-        hist = &PriceHistory{
-            Prices: []int{},
-            Limit:  priceHistoryLimit,
-        }
-        priceHistory[item] = hist
-    }
-    
-    hist.Prices = append(hist.Prices, price)
-    if len(hist.Prices) > hist.Limit {
-        hist.Prices = hist.Prices[1:]
-    }
-    
-    log.Printf("[HISTORY] %s: добавлена цена %d (всего записей: %d)", 
-        item, price, len(hist.Prices))
+	if price <= 0 {
+		return
+	}
+
+	hist := priceHistory[item]
+	if hist == nil {
+		hist = &PriceHistory{
+			Records: []PriceRecord{},
+			Limit:   priceHistoryLimit,
+		}
+		priceHistory[item] = hist
+	}
+
+	hist.Records = append(hist.Records, PriceRecord{Price: price, Time: time.Now()})
+	if len(hist.Records) > hist.Limit {
+		hist.Records = hist.Records[1:]
+	}
+
+	log.Printf("[HISTORY] %s: добавлена цена %d (всего записей: %d)",
+		item, price, len(hist.Records))
 }
 
-// Получение минимальной цены из истории
+// Получение минимальной цены из истории покупок
 func getMinPriceFromHistory(item string) int {
-    hist := priceHistory[item]
-    if hist == nil || len(hist.Prices) == 0 {
-        return 0 // нет истории — не ограничиваем
-    }
-    
-    min := hist.Prices[0]
-    for _, p := range hist.Prices {
-        if p < min {
-            min = p
-        }
-    }
-    return min
+	hist := priceHistory[item]
+	if hist == nil || len(hist.Records) == 0 {
+		return 0
+	}
+
+	min := hist.Records[0].Price
+	for _, r := range hist.Records {
+		if r.Price < min {
+			min = r.Price
+		}
+	}
+	return min
 }
 
 
