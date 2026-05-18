@@ -270,19 +270,24 @@ func logGlobalFleetState(prefix string) {
 	log.Printf("%s активные типы: %s", prefix, strings.Join(parts, ", "))
 }
 
-// Тип активен, если хотя бы один подключённый оркестратор прислал живых ботов этого типа.
-func isMinecraftTypeActive(minecraftType string) bool {
+// isMinecraftTypeActiveLocked — вызывать только под mutex.Lock (не RLock!).
+func isMinecraftTypeActiveLocked(minecraftType string) bool {
 	if minecraftType == "" {
 		return false
 	}
-	mutex.RLock()
-	defer mutex.RUnlock()
 	for _, types := range clientActiveTypes {
 		if _, ok := types[minecraftType]; ok {
 			return true
 		}
 	}
 	return false
+}
+
+// Тип активен, если хотя бы один подключённый оркестратор прислал живых ботов этого типа.
+func isMinecraftTypeActive(minecraftType string) bool {
+	mutex.RLock()
+	defer mutex.RUnlock()
+	return isMinecraftTypeActiveLocked(minecraftType)
 }
 
 func setClientActiveTypes(ws *websocket.Conn, activeTypes []string) {
@@ -667,16 +672,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		delete(clients, ws)
 		delete(clientItems, ws)
 		delete(clientInventory, ws)
+		delete(clientActiveTypes, ws)
 		logClientFleetDisconnect(ws)
 		mutex.Unlock()
 	}()
 
 	// Отправляем начальные данные
-	var jsonList []string
-
-	mutex.Lock()
-	jsonList = getCurrentJsonList()
-	mutex.Unlock()
+	jsonList := getCurrentJsonList()
 
 	if err := ws.WriteJSON(initialPricePayload()); err != nil {
 		log.Printf("ошибка отправки каталога: %v", err)
@@ -942,7 +944,7 @@ func adjustPrice(item string) {
 	swordTimes[item] = now
 	lastUpdate := now.Add(-cfg.AnalysisTime)
 
-	if !isMinecraftTypeActive(cfg.Type) {
+	if !isMinecraftTypeActiveLocked(cfg.Type) {
 		log.Printf("[SKIP] %s: тип %s — нет активных ботов", item, cfg.Type)
 		mutex.Unlock()
 		return
