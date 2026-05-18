@@ -185,7 +185,7 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
-    "type": "отдача-1.21",
+    "type": "netherite_sword-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",
