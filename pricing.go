@@ -18,11 +18,7 @@ func resolveNacenkaMin(cfg ItemConfig) int {
 	if cfg.NacenkaMin > 0 {
 		return cfg.NacenkaMin
 	}
-	min := cfg.Nacenka / 2
-	if min < 100000 {
-		min = 100000
-	}
-	return min
+	return cfg.Nacenka
 }
 
 func getNacenka(item string) int {
