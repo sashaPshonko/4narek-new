@@ -322,7 +322,7 @@
   "ярость-1.21": {
     "base_price": 7000020,
     "normal_sales": 7,
-    "normal_count": 4,
+    "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "totem_of_undying",
@@ -335,7 +335,7 @@
   "хаос-1.21": {
     "base_price": 4000021,
     "normal_sales": 7,
-    "normal_count": 4,
+    "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "player_head",
@@ -348,7 +348,7 @@
   "бестия-1.21": {
     "base_price": 4000021,
     "normal_sales": 7,
-    "normal_count": 4,
+    "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "player_head",
