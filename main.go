@@ -144,6 +144,10 @@ var (
 
 	lastPriceUpdate = make(map[string]time.Time)
 
+	// Когда go-тип впервые появился в active_types; сбрасывается, если ботов типа нет.
+	typeActiveSince  = make(map[string]time.Time)
+	lastTypePresence = make(map[string]time.Time)
+
 	// Новый: канал рассылки
 	broadcast = make(chan interface{}, 1000)
 
@@ -308,6 +312,41 @@ func isMinecraftTypeActive(minecraftType string) bool {
 
 func setClientActiveTypes(ws *websocket.Conn, activeTypes []string) {
 	clientActiveTypes[ws] = typesMapFromSlice(activeTypes)
+}
+
+// updateTypeFleetActivityLocked — после presence: фиксируем, с какого момента тип в флоте онлайн.
+func updateTypeFleetActivityLocked() {
+	now := time.Now()
+	active := make(map[string]struct{})
+	for _, types := range clientActiveTypes {
+		for t := range types {
+			active[t] = struct{}{}
+		}
+	}
+	for t := range active {
+		lastTypePresence[t] = now
+		if typeActiveSince[t].IsZero() {
+			typeActiveSince[t] = now
+		}
+	}
+	for t := range typeActiveSince {
+		if _, ok := active[t]; !ok {
+			delete(typeActiveSince, t)
+			delete(lastTypePresence, t)
+		}
+	}
+}
+
+// typeWasActiveForAnalysisWindowLocked — тип был активен с начала окна анализа (бот не перезапускался mid-window).
+func typeWasActiveForAnalysisWindowLocked(minecraftType string, windowStart time.Time) bool {
+	if !isMinecraftTypeActiveLocked(minecraftType) {
+		return false
+	}
+	since, ok := typeActiveSince[minecraftType]
+	if !ok || since.IsZero() {
+		return false
+	}
+	return !since.After(windowStart)
 }
 
 func setClientFleetTypes(ws *websocket.Conn, fleetTypes []string) {
@@ -736,6 +775,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			Types       []string       `json:"types"`
 			ActiveTypes []string       `json:"active_types"`
 			Price       int            `json:"price"`
+			Floors      map[string]int `json:"floors"`
 		}
 		if msg.Action != "add" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
@@ -780,6 +820,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			saveDailyData()
 			mutex.Unlock()
 
+		case "ah_market_floor":
+			floors := msg.Floors
+			mutex.Unlock()
+			applyMarketFloors(floors)
+
 		case "info":
 			mutex.Unlock()
 			if err := ws.WriteJSON(initialPricePayload()); err != nil {
@@ -800,6 +845,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			clientItems[ws] = copyMap(msg.Items)
 			clientInventory[ws] = copyMap(msg.Inventory)
 			setClientActiveTypes(ws, msg.ActiveTypes)
+			updateTypeFleetActivityLocked()
 			mutex.Unlock()
 
 		case "add":

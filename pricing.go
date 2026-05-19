@@ -112,6 +112,55 @@ func cheapBuyFraction(item string, sellPrice, nacenka, step int, since time.Time
 	return float64(cheap) / float64(total), total
 }
 
+// applyMarketFloors — подтянуть sell-цену к минимальному лоту на АХ (+ наценка), если сейчас ниже.
+func applyMarketFloors(floors map[string]int) {
+	if len(floors) == 0 {
+		return
+	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	ensureNacenkasInitialized()
+	changed := false
+
+	for item, floor := range floors {
+		if _, ok := itemsConfig[item]; !ok || floor <= 0 {
+			continue
+		}
+
+		current := data.Prices[item]
+		if current <= 0 {
+			continue
+		}
+
+		nacenka := getNacenka(item)
+		target := floor + nacenka
+		marker := current % 100
+		target = (target/100)*100 + marker
+
+		if current >= target {
+			continue
+		}
+
+		log.Printf("[MARKET_FLOOR] %s: %d → %d (лот %d + наценка %d)",
+			item, current, target, floor, nacenka)
+		data.Prices[item] = target
+		dailyData.Prices[item] = target
+		lastPriceUpdate[item] = time.Now()
+		changed = true
+	}
+
+	if !changed {
+		return
+	}
+
+	mutex.Unlock()
+	publishPriceUpdate()
+	mutex.Lock()
+	saveDailyDataNoMessageUpdate()
+}
+
 func adjustPrice(item string) {
 	cfg, ok := itemsConfig[item]
 	if !ok {
