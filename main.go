@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"math/rand"
 	"net/http"
 	"os"
@@ -134,6 +135,8 @@ type Data struct {
 
 var (
 	data    = &Data{}
+	// mutex: Lock — запись (data, clients, adjustPrice). RLock — только чтение (publishPriceUpdate).
+	// Нельзя: Lock и в той же горутине RLock/publishPrices — дедлок RWMutex.
 	mutex   = sync.RWMutex{}
 	clients = make(map[*websocket.Conn]bool)
 
@@ -361,6 +364,7 @@ func logClientFleetDisconnect(ws *websocket.Conn) {
 	logGlobalFleetState("[FLEET] после отключения")
 }
 
+// publishPrices — только без удержанного mutex.Lock (внутри RLock).
 func publishPrices() {
 	publishPriceUpdate()
 }
@@ -424,7 +428,6 @@ func getConnectedClientsCount() int {
 
 func loadDailyData(loc *time.Location) {
 	mutex.Lock()
-	defer mutex.Unlock()
 
 	today := time.Now().In(loc).Format("2006-01-02")
 	currentDay = today
@@ -497,7 +500,9 @@ func loadDailyData(loc *time.Location) {
 		swordTimes[item] = time.Now().Add(-itemsConfig[item].AnalysisTime)
 	}
 
-	saveDailyDataNoMessageUpdate()
+	snap := cloneDailySnapshotLocked()
+	mutex.Unlock()
+	persistDailySnapshot(&snap)
 }
 
 func startItemTimers() {
@@ -568,13 +573,8 @@ func adjustAndReport(item string, cfg ItemConfig) {
 	)
 }
 
-func saveDailyDataNoMessageUpdate() {
-	today := currentDay
-	if today == "" {
-		return
-	}
-
-	filename := fmt.Sprintf("data_%s.json", today)
+// cloneDailySnapshotLocked — снимок dailyData; вызывать только под mutex.Lock.
+func cloneDailySnapshotLocked() DailyData {
 	dailyData.Prices = data.Prices
 	dailyData.Nacenkas = data.Nacenkas
 	dailyData.AdjustState = data.AdjustState
@@ -584,16 +584,40 @@ func saveDailyDataNoMessageUpdate() {
 	dailyData.BuySum = data.BuySum
 	dailyData.SellSum = data.SellSum
 
-	file, err := json.MarshalIndent(dailyData, "", "  ")
+	return DailyData{
+		Date:         currentDay,
+		MessageID:    dailyData.MessageID,
+		Prices:       maps.Clone(dailyData.Prices),
+		Nacenkas:     maps.Clone(dailyData.Nacenkas),
+		AdjustState:  maps.Clone(dailyData.AdjustState),
+		BuyStats:     maps.Clone(dailyData.BuyStats),
+		SellStats:    maps.Clone(dailyData.SellStats),
+		TrySellStats: maps.Clone(dailyData.TrySellStats),
+		BuySum:       maps.Clone(dailyData.BuySum),
+		SellSum:      maps.Clone(dailyData.SellSum),
+	}
+}
+
+func persistDailySnapshot(snap *DailyData) {
+	if snap == nil || snap.Date == "" {
+		return
+	}
+	filename := fmt.Sprintf("data_%s.json", snap.Date)
+	file, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
 		log.Printf("Ошибка сохранения данных: %v", err)
 		return
 	}
-
 	if err := os.WriteFile(filename, file, 0644); err != nil {
 		log.Printf("Ошибка записи файла: %v", err)
-		return
 	}
+}
+
+func saveDailyDataNoMessageUpdate() {
+	mutex.Lock()
+	snap := cloneDailySnapshotLocked()
+	mutex.Unlock()
+	persistDailySnapshot(&snap)
 }
 
 func updateTelegramMessageWithoutLocks(prices, buyStats, sellStats map[string]int, date string, messageID int) {
@@ -649,8 +673,9 @@ func updateTelegramMessageWithoutLocks(prices, buyStats, sellStats map[string]in
 	if newMessageID != 0 {
 		mutex.Lock()
 		dailyData.MessageID = newMessageID
-		saveDailyDataNoMessageUpdate()
+		snap := cloneDailySnapshotLocked()
 		mutex.Unlock()
+		persistDailySnapshot(&snap)
 	}
 }
 
@@ -683,9 +708,7 @@ func checkDayChange(loc *time.Location) {
 		nextDay = time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), 0, 0, 0, 0, loc)
 		time.Sleep(time.Until(nextDay))
 
-		mutex.Lock()
-		saveDailyData()
-		mutex.Unlock()
+		saveDailyDataNoMessageUpdate()
 
 		loadDailyData(loc)
 	}
@@ -794,10 +817,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			data.BuySum[msg.Type] += msg.Price
 			addPriceToHistory(msg.Type, msg.Price)
 			mutex.Unlock()
-
-			mutex.Lock()
-			saveDailyData()
-			mutex.Unlock()
+			saveDailyDataNoMessageUpdate()
 
 		case "sell":
 			data.SellStats[msg.Type]++
@@ -805,20 +825,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "sell", Price: msg.Price})
 			data.SellSum[msg.Type] += msg.Price
 			mutex.Unlock()
-
-			mutex.Lock()
-			saveDailyData()
-			mutex.Unlock()
+			saveDailyDataNoMessageUpdate()
 
 		case "try-sell":
 			data.TrySellStats[msg.Type]++
 			data.LastTrade[msg.Type] = time.Now()
 			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "try-sell"})
 			mutex.Unlock()
-
-			mutex.Lock()
-			saveDailyData()
-			mutex.Unlock()
+			saveDailyDataNoMessageUpdate()
 
 		case "ah_market_floor":
 			floors := msg.Floors
@@ -872,9 +886,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				log.Println("Буфер broadcast переполнен при отправке json_update")
 			}
 
-			mutex.Lock()
-			saveDailyData()
-			mutex.Unlock()
+			saveDailyDataNoMessageUpdate()
 
 		case "set_min_price":
 			if msg.Type == "" || msg.Price == 0 {
@@ -895,9 +907,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[CONFIG] %s: min -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
 			mutex.Unlock()
 			publishPrices()
-			mutex.Lock()
-			saveDailyData()
-			mutex.Unlock()
+			saveDailyDataNoMessageUpdate()
 
 		case "set_max_price":
 			if msg.Type == "" || msg.Price == 0 {
@@ -918,9 +928,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[CONFIG] %s: max -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
 			mutex.Unlock()
 			publishPrices()
-			mutex.Lock()
-			saveDailyData()
-			mutex.Unlock()
+			saveDailyDataNoMessageUpdate()
 		default:
 			mutex.Unlock()
 		}

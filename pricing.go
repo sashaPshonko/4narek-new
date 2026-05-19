@@ -61,6 +61,7 @@ func priceUpdatePayload() PriceUpdate {
 	return priceUpdatePayloadLocked()
 }
 
+// publishPriceUpdate — только без mutex.Lock в этой горутине (иначе дедлок RWMutex).
 func publishPriceUpdate() {
 	mutex.RLock()
 	payload := priceUpdatePayloadLocked()
@@ -156,9 +157,7 @@ func applyMarketFloors(floors map[string]int) {
 	}
 
 	publishPriceUpdate()
-	mutex.Lock()
 	saveDailyDataNoMessageUpdate()
-	mutex.Unlock()
 }
 
 func adjustPrice(item string) {
@@ -324,12 +323,6 @@ func adjustPrice(item string) {
 
 	if needBroadcast {
 		publishPriceUpdate()
-		mutex.Lock()
-		saveDailyDataNoMessageUpdate()
-		mutex.Unlock()
-	} else {
-		mutex.Lock()
-		saveDailyDataNoMessageUpdate()
-		mutex.Unlock()
 	}
+	saveDailyDataNoMessageUpdate()
 }
