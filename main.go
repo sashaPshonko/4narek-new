@@ -798,7 +798,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			Types       []string       `json:"types"`
 			ActiveTypes []string       `json:"active_types"`
 			Price       int            `json:"price"`
-			Floors      map[string]int `json:"floors"`
+			Floors         map[string]int `json:"floors"`
+			WindowStartMs  int64          `json:"window_start_ms"`
+			WindowEndMs    int64          `json:"window_end_ms"`
+			WindowMs       int64          `json:"window_ms"`
 		}
 		if msg.Action != "add" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
@@ -836,8 +839,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		case "ah_market_floor":
 			floors := msg.Floors
+			windowStart := msg.WindowStartMs
+			windowEnd := msg.WindowEndMs
+			windowMs := msg.WindowMs
 			mutex.Unlock()
-			applyMarketFloors(floors)
+			applyMarketFloors(floors, windowStart, windowEnd, windowMs)
 
 		case "info":
 			mutex.Unlock()

@@ -7,6 +7,12 @@ import (
 
 const cheapBuyFractionThreshold = 0.65
 
+const (
+	marketFloorWindow    = 10 * time.Minute
+	marketFloorWindowMin = 9*time.Minute + 30*time.Second
+	marketFloorMaxStale  = 2 * time.Minute
+)
+
 // ItemAdjustState — streak / эксперимент / прибыль прошлого цикла.
 type ItemAdjustState struct {
 	GoodStreak      int  `json:"good_streak"`
@@ -114,9 +120,28 @@ func cheapBuyFraction(item string, sellPrice, nacenka, step int, since time.Time
 }
 
 // applyMarketFloors — подтянуть sell-цену к мин. лоту на АХ (+ наценка), если ниже.
-// Только при 0 продаж и 0 наличия (АХ + инвентарь) за окно анализа.
-func applyMarketFloors(floors map[string]int) {
+// Только при 0 продаж, 0 наличия и подтверждённом окне сбора ≥10 мин.
+func applyMarketFloors(floors map[string]int, windowStartMs, windowEndMs, windowMs int64) {
 	if len(floors) == 0 {
+		return
+	}
+	if windowStartMs <= 0 || windowEndMs <= 0 || windowEndMs <= windowStartMs {
+		log.Printf("[MARKET_FLOOR] skip: нет метаданных окна")
+		return
+	}
+	windowStart := time.UnixMilli(windowStartMs)
+	windowEnd := time.UnixMilli(windowEndMs)
+	span := windowEnd.Sub(windowStart)
+	if span < marketFloorWindowMin {
+		log.Printf("[MARKET_FLOOR] skip: окно %v < %v", span.Round(time.Second), marketFloorWindowMin)
+		return
+	}
+	if windowMs > 0 && windowMs < int64(marketFloorWindow/time.Millisecond) {
+		log.Printf("[MARKET_FLOOR] skip: window_ms=%d", windowMs)
+		return
+	}
+	if time.Since(windowEnd) > marketFloorMaxStale {
+		log.Printf("[MARKET_FLOOR] skip: устарело (конец окна %v назад)", time.Since(windowEnd).Round(time.Second))
 		return
 	}
 
@@ -128,6 +153,10 @@ func applyMarketFloors(floors map[string]int) {
 	for item, floor := range floors {
 		cfg, ok := itemsConfig[item]
 		if !ok || floor <= 0 {
+			continue
+		}
+
+		if !isMinecraftTypeActiveLocked(cfg.Type) {
 			continue
 		}
 
@@ -151,8 +180,8 @@ func applyMarketFloors(floors map[string]int) {
 			continue
 		}
 
-		log.Printf("[MARKET_FLOOR] %s: %d → %d (лот %d + наценка %d, sales=0 stock=0)",
-			item, current, target, floor, nacenka)
+		log.Printf("[MARKET_FLOOR] %s: %d → %d (лот %d + наценка %d, окно %v, sales=0 stock=0)",
+			item, current, target, floor, nacenka, span.Round(time.Second))
 		data.Prices[item] = target
 		dailyData.Prices[item] = target
 		lastPriceUpdate[item] = time.Now()
