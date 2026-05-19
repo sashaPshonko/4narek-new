@@ -113,7 +113,8 @@ func cheapBuyFraction(item string, sellPrice, nacenka, step int, since time.Time
 	return float64(cheap) / float64(total), total
 }
 
-// applyMarketFloors — подтянуть sell-цену к минимальному лоту на АХ (+ наценка), если сейчас ниже.
+// applyMarketFloors — подтянуть sell-цену к мин. лоту на АХ (+ наценка), если ниже.
+// Только при 0 продаж и 0 наличия (АХ + инвентарь) за окно анализа.
 func applyMarketFloors(floors map[string]int) {
 	if len(floors) == 0 {
 		return
@@ -122,9 +123,17 @@ func applyMarketFloors(floors map[string]int) {
 	mutex.Lock()
 	ensureNacenkasInitialized()
 	changed := false
+	now := time.Now()
 
 	for item, floor := range floors {
-		if _, ok := itemsConfig[item]; !ok || floor <= 0 {
+		cfg, ok := itemsConfig[item]
+		if !ok || floor <= 0 {
+			continue
+		}
+
+		sales := countRecentSales(item, now.Add(-cfg.AnalysisTime))
+		totalStock := getItemCount(item) + getInventoryCount(item)
+		if sales != 0 || totalStock != 0 {
 			continue
 		}
 
@@ -142,7 +151,7 @@ func applyMarketFloors(floors map[string]int) {
 			continue
 		}
 
-		log.Printf("[MARKET_FLOOR] %s: %d → %d (лот %d + наценка %d)",
+		log.Printf("[MARKET_FLOOR] %s: %d → %d (лот %d + наценка %d, sales=0 stock=0)",
 			item, current, target, floor, nacenka)
 		data.Prices[item] = target
 		dailyData.Prices[item] = target
