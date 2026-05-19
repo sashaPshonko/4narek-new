@@ -121,81 +121,90 @@ func cheapBuyFraction(item string, sellPrice, nacenka, step int, since time.Time
 
 // applyMarketFloors — подтянуть sell-цену к мин. лоту на АХ (+ наценка), если ниже.
 // Только при 0 продаж, 0 наличия и подтверждённом окне сбора ≥10 мин.
+// ОТКЛЮЧЕНО: не повышаем цену, если она ниже мин. лота на АХ.
 func applyMarketFloors(floors map[string]int, windowStartMs, windowEndMs, windowMs int64) {
-	if len(floors) == 0 {
-		return
-	}
-	if windowStartMs <= 0 || windowEndMs <= 0 || windowEndMs <= windowStartMs {
-		log.Printf("[MARKET_FLOOR] skip: нет метаданных окна")
-		return
-	}
-	windowStart := time.UnixMilli(windowStartMs)
-	windowEnd := time.UnixMilli(windowEndMs)
-	span := windowEnd.Sub(windowStart)
-	if span < marketFloorWindowMin {
-		log.Printf("[MARKET_FLOOR] skip: окно %v < %v", span.Round(time.Second), marketFloorWindowMin)
-		return
-	}
-	if windowMs > 0 && windowMs < int64(marketFloorWindow/time.Millisecond) {
-		log.Printf("[MARKET_FLOOR] skip: window_ms=%d", windowMs)
-		return
-	}
-	if time.Since(windowEnd) > marketFloorMaxStale {
-		log.Printf("[MARKET_FLOOR] skip: устарело (конец окна %v назад)", time.Since(windowEnd).Round(time.Second))
-		return
-	}
+	_ = floors
+	_ = windowStartMs
+	_ = windowEndMs
+	_ = windowMs
+	return
 
-	mutex.Lock()
-	ensureNacenkasInitialized()
-	changed := false
-	now := time.Now()
-
-	for item, floor := range floors {
-		cfg, ok := itemsConfig[item]
-		if !ok || floor <= 0 {
-			continue
+	/*
+		if len(floors) == 0 {
+			return
+		}
+		if windowStartMs <= 0 || windowEndMs <= 0 || windowEndMs <= windowStartMs {
+			log.Printf("[MARKET_FLOOR] skip: нет метаданных окна")
+			return
+		}
+		windowStart := time.UnixMilli(windowStartMs)
+		windowEnd := time.UnixMilli(windowEndMs)
+		span := windowEnd.Sub(windowStart)
+		if span < marketFloorWindowMin {
+			log.Printf("[MARKET_FLOOR] skip: окно %v < %v", span.Round(time.Second), marketFloorWindowMin)
+			return
+		}
+		if windowMs > 0 && windowMs < int64(marketFloorWindow/time.Millisecond) {
+			log.Printf("[MARKET_FLOOR] skip: window_ms=%d", windowMs)
+			return
+		}
+		if time.Since(windowEnd) > marketFloorMaxStale {
+			log.Printf("[MARKET_FLOOR] skip: устарело (конец окна %v назад)", time.Since(windowEnd).Round(time.Second))
+			return
 		}
 
-		if !isMinecraftTypeActiveLocked(cfg.Type) {
-			continue
+		mutex.Lock()
+		ensureNacenkasInitialized()
+		changed := false
+		now := time.Now()
+
+		for item, floor := range floors {
+			cfg, ok := itemsConfig[item]
+			if !ok || floor <= 0 {
+				continue
+			}
+
+			if !isMinecraftTypeActiveLocked(cfg.Type) {
+				continue
+			}
+
+			sales := countRecentSales(item, now.Add(-cfg.AnalysisTime))
+			totalStock := getItemCount(item) + getInventoryCount(item)
+			if sales != 0 || totalStock != 0 {
+				continue
+			}
+
+			current := data.Prices[item]
+			if current <= 0 {
+				continue
+			}
+
+			nacenka := getNacenka(item)
+			target := floor + nacenka
+			marker := current % 100
+			target = (target/100)*100 + marker
+
+			if current >= target {
+				continue
+			}
+
+			log.Printf("[MARKET_FLOOR] %s: %d → %d (лот %d + наценка %d, окно %v, sales=0 stock=0)",
+				item, current, target, floor, nacenka, span.Round(time.Second))
+			data.Prices[item] = target
+			dailyData.Prices[item] = target
+			lastPriceUpdate[item] = time.Now()
+			changed = true
 		}
 
-		sales := countRecentSales(item, now.Add(-cfg.AnalysisTime))
-		totalStock := getItemCount(item) + getInventoryCount(item)
-		if sales != 0 || totalStock != 0 {
-			continue
+		mutex.Unlock()
+
+		if !changed {
+			return
 		}
 
-		current := data.Prices[item]
-		if current <= 0 {
-			continue
-		}
-
-		nacenka := getNacenka(item)
-		target := floor + nacenka
-		marker := current % 100
-		target = (target/100)*100 + marker
-
-		if current >= target {
-			continue
-		}
-
-		log.Printf("[MARKET_FLOOR] %s: %d → %d (лот %d + наценка %d, окно %v, sales=0 stock=0)",
-			item, current, target, floor, nacenka, span.Round(time.Second))
-		data.Prices[item] = target
-		dailyData.Prices[item] = target
-		lastPriceUpdate[item] = time.Now()
-		changed = true
-	}
-
-	mutex.Unlock()
-
-	if !changed {
-		return
-	}
-
-	publishPriceUpdate()
-	saveDailyDataNoMessageUpdate()
+		publishPriceUpdate()
+		saveDailyDataNoMessageUpdate()
+	*/
 }
 
 func adjustPrice(item string) {

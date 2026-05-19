@@ -837,13 +837,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			mutex.Unlock()
 			saveDailyDataNoMessageUpdate()
 
-		case "ah_market_floor":
-			floors := msg.Floors
-			windowStart := msg.WindowStartMs
-			windowEnd := msg.WindowEndMs
-			windowMs := msg.WindowMs
-			mutex.Unlock()
-			applyMarketFloors(floors, windowStart, windowEnd, windowMs)
+		// case "ah_market_floor":
+		// 	floors := msg.Floors
+		// 	windowStart := msg.WindowStartMs
+		// 	windowEnd := msg.WindowEndMs
+		// 	windowMs := msg.WindowMs
+		// 	mutex.Unlock()
+		// 	applyMarketFloors(floors, windowStart, windowEnd, windowMs)
 
 		case "info":
 			mutex.Unlock()
