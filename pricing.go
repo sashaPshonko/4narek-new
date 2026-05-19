@@ -119,8 +119,6 @@ func applyMarketFloors(floors map[string]int) {
 	}
 
 	mutex.Lock()
-	defer mutex.Unlock()
-
 	ensureNacenkasInitialized()
 	changed := false
 
@@ -151,14 +149,16 @@ func applyMarketFloors(floors map[string]int) {
 		changed = true
 	}
 
+	mutex.Unlock()
+
 	if !changed {
 		return
 	}
 
-	mutex.Unlock()
 	publishPriceUpdate()
 	mutex.Lock()
 	saveDailyDataNoMessageUpdate()
+	mutex.Unlock()
 }
 
 func adjustPrice(item string) {

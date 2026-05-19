@@ -893,8 +893,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			data.Prices[msg.Type] = msg.Price
 			data.LastManualUpdate[msg.Type] = time.Now()
 			log.Printf("[CONFIG] %s: min -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
-			publishPrices()
 			mutex.Unlock()
+			publishPrices()
 			mutex.Lock()
 			saveDailyData()
 			mutex.Unlock()
@@ -916,8 +916,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			data.Prices[msg.Type] = msg.Price
 			data.LastManualUpdate[msg.Type] = time.Now()
 			log.Printf("[CONFIG] %s: max -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
-			publishPrices()
 			mutex.Unlock()
+			publishPrices()
 			mutex.Lock()
 			saveDailyData()
 			mutex.Unlock()
