@@ -238,6 +238,8 @@ func adjustPrice(item string) {
 	state := data.AdjustState[item]
 	profitPrev := state.LastCycleProfit
 
+	tryAdvanceCategoryMLOutcomesLocked(cfg.Type, now)
+
 	newPrice := data.Prices[item]
 	priceBefore := newPrice
 	nacenka := getNacenka(item)
@@ -360,10 +362,20 @@ func adjustPrice(item string) {
 		lastPriceUpdate[item] = now
 	}
 
+	actionTaken := action
+	if actionTaken == "" {
+		actionTaken = "hold"
+	}
 	if changed {
 		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d→%d | прибыль %d (было %d) | продажи %d | сток %d",
 			item, action, priceBefore, newPrice, nacenkaBefore, nacenka, profitNow, profitPrev, sales, totalStock)
 	}
+
+	queueMLDecisionLocked(
+		item, cfg, actionTaken,
+		priceBefore, newPrice, nacenkaBefore, nacenka,
+		now,
+	)
 
 	needBroadcast := changed
 	mutex.Unlock()

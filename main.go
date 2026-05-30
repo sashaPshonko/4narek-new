@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"maps"
 	"math/rand"
@@ -68,8 +67,9 @@ var (
 var (
 	clientItems       = make(map[*websocket.Conn]map[string]int)
 	clientInventory   = make(map[*websocket.Conn]map[string]int)
-	clientActiveTypes = make(map[*websocket.Conn]map[string]struct{})
-	clientFleetTypes  = make(map[*websocket.Conn]map[string]struct{})
+	clientActiveTypes  = make(map[*websocket.Conn]map[string]struct{})
+	clientFleetTypes   = make(map[*websocket.Conn]map[string]struct{})
+	clientBotsPerType  = make(map[*websocket.Conn]map[string]int)
 )
 
 var itemLimit = map[string]int{
@@ -192,6 +192,7 @@ func main() {
 	data.LastManualUpdate = make(map[string]time.Time)
 
 	loadDailyData(loc)
+	initMLLog()
 
 	// Запускаем брокер рассылки
 	go broadcastBroker()
@@ -277,6 +278,27 @@ func aggregateActiveTypesLocked() map[string]int {
 		}
 	}
 	return counts
+}
+
+func setClientBotsPerType(ws *websocket.Conn, counts map[string]int) {
+	if len(counts) == 0 {
+		clientBotsPerType[ws] = make(map[string]int)
+		return
+	}
+	clientBotsPerType[ws] = copyMap(counts)
+}
+
+// aggregateBotsPerTypeLocked — сумма живых ботов по go-типу со всех оркестраторов.
+func aggregateBotsPerTypeLocked() map[string]int {
+	totals := make(map[string]int)
+	for _, m := range clientBotsPerType {
+		for t, n := range m {
+			if n > 0 {
+				totals[t] += n
+			}
+		}
+	}
+	return totals
 }
 
 func logGlobalFleetState(prefix string) {
@@ -387,6 +409,7 @@ func broadcastBroker() {
 				delete(clientInventory, client)
 				delete(clientActiveTypes, client)
 				delete(clientFleetTypes, client)
+				delete(clientBotsPerType, client)
 				mutex.Unlock()
 			}
 		}
@@ -756,6 +779,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	clientInventory[ws] = make(map[string]int)
 	clientActiveTypes[ws] = make(map[string]struct{})
 	clientFleetTypes[ws] = make(map[string]struct{})
+	clientBotsPerType[ws] = make(map[string]int)
 	mutex.Unlock()
 
 	defer func() {
@@ -764,6 +788,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		delete(clientItems, ws)
 		delete(clientInventory, ws)
 		delete(clientActiveTypes, ws)
+		delete(clientBotsPerType, ws)
 		logClientFleetDisconnect(ws)
 		mutex.Unlock()
 	}()
@@ -796,8 +821,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			Items       map[string]int `json:"items"`
 			Inventory   map[string]int `json:"inventory"`
 			Types       []string       `json:"types"`
-			ActiveTypes []string       `json:"active_types"`
-			Price       int            `json:"price"`
+			ActiveTypes  []string       `json:"active_types"`
+			BotsPerType  map[string]int `json:"bots_per_type"`
+			Price        int            `json:"price"`
 			Floors         map[string]int `json:"floors"`
 			WindowStartMs  int64          `json:"window_start_ms"`
 			WindowEndMs    int64          `json:"window_end_ms"`
@@ -819,6 +845,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy", Price: msg.Price})
 			data.BuySum[msg.Type] += msg.Price
 			addPriceToHistory(msg.Type, msg.Price)
+			logTradeEventML(msg.Type, "buy", msg.Price)
 			mutex.Unlock()
 			saveDailyDataNoMessageUpdate()
 
@@ -827,13 +854,17 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			data.LastTrade[msg.Type] = time.Now()
 			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "sell", Price: msg.Price})
 			data.SellSum[msg.Type] += msg.Price
+			logTradeEventML(msg.Type, "sell", msg.Price)
 			mutex.Unlock()
 			saveDailyDataNoMessageUpdate()
 
 		case "try-sell":
 			data.TrySellStats[msg.Type]++
 			data.LastTrade[msg.Type] = time.Now()
-			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "try-sell"})
+			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{
+				Time: time.Now(), Type: "try-sell", Price: msg.Price,
+			})
+			logTradeEventML(msg.Type, "try-sell", msg.Price)
 			mutex.Unlock()
 			saveDailyDataNoMessageUpdate()
 
@@ -865,6 +896,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			clientItems[ws] = copyMap(msg.Items)
 			clientInventory[ws] = copyMap(msg.Inventory)
 			setClientActiveTypes(ws, msg.ActiveTypes)
+			setClientBotsPerType(ws, msg.BotsPerType)
 			updateTypeFleetActivityLocked()
 			mutex.Unlock()
 
@@ -910,6 +942,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			oldPrice := data.Prices[msg.Type]
 			data.Prices[msg.Type] = msg.Price
 			data.LastManualUpdate[msg.Type] = time.Now()
+			recordExternalPriceChangeLocked(msg.Type, "server_min", oldPrice, msg.Price)
 			log.Printf("[CONFIG] %s: min -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
 			mutex.Unlock()
 			publishPrices()
@@ -931,6 +964,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 			data.Prices[msg.Type] = msg.Price
 			data.LastManualUpdate[msg.Type] = time.Now()
+			recordExternalPriceChangeLocked(msg.Type, "server_max", oldPrice, msg.Price)
 			log.Printf("[CONFIG] %s: max -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
 			mutex.Unlock()
 			publishPrices()
@@ -1095,32 +1129,6 @@ func appendToFile(filename, content string) {
 	if _, err := f.WriteString(content); err != nil {
 		log.Printf("Ошибка записи в файл лога: %v", err)
 	}
-}
-
-func getOnlineCount() int {
-	resp, err := http.Get("http://45.141.76.110:5000/status")
-	if err != nil {
-		log.Printf("Ошибка запроса онлайна: %v", err)
-		return -1
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Ошибка чтения тела ответа: %v", err)
-		return -1
-	}
-
-	var status struct {
-		PlayersOnline int `json:"players_online"`
-	}
-
-	if err := json.Unmarshal(body, &status); err != nil {
-		log.Printf("Ошибка парсинга JSON онлайна: %v", err)
-		return -1
-	}
-
-	return status.PlayersOnline
 }
 
 // Добавление цены покупки в историю
