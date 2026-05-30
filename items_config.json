@@ -1,6 +1,6 @@
 {
   "pochti-megasword-1.21": {
-    "base_price": 3000002,
+    "base_price": 1000002,
     "normal_sales": 8,
     "normal_count": 5,
     "price_step": 100000,
@@ -37,7 +37,7 @@
     "num": 4
   },
   "sword7-1.21": {
-    "base_price": 1500003,
+    "base_price": 600003,
     "normal_sales": 8,
     "normal_count": 5,
     "price_step": 100000,
@@ -62,7 +62,7 @@
     "num": 1
   },
   "megasword-1.21": {
-    "base_price": 4500004,
+    "base_price": 1000004,
     "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,
@@ -95,7 +95,7 @@
     "num": 5
   },
   "штаны-1.21": {
-    "base_price": 1500005,
+    "base_price": 600005,
     "normal_sales": 7,
     "normal_count": 5,
     "price_step": 100000,
@@ -116,7 +116,7 @@
     "num": 2
   },
   "нагрудник-1.21": {
-    "base_price": 1500007,
+    "base_price": 600007,
     "normal_sales": 8,
     "normal_count": 5,
     "price_step": 100000,
@@ -137,7 +137,7 @@
     "num": 2
   },
   "ботинки-1.21": {
-    "base_price": 1500009,
+    "base_price": 600009,
     "normal_sales": 8,
     "normal_count": 5,
     "price_step": 100000,
@@ -158,7 +158,7 @@
     "num": 2
   },
   "шлем-1.21": {
-    "base_price": 1600011,
+    "base_price": 600011,
     "normal_sales": 7,
     "normal_count": 5,
     "price_step": 100000,
@@ -179,7 +179,7 @@
     "num": 2
   },
   "фарм-1.21": {
-    "base_price": 1600013,
+    "base_price": 600013,
     "normal_sales": 7,
     "normal_count": 5,
     "price_step": 100000,
@@ -208,7 +208,7 @@
     "num": 2
   },
   "ботинки-крутые-1.21": {
-    "base_price": 3000016,
+    "base_price": 600016,
     "normal_sales": 5,
     "normal_count": 5,
     "price_step": 100000,
@@ -233,7 +233,7 @@
     "num": 3
   },
   "бульдозер-1-1.21": {
-    "base_price": 500017,
+    "base_price": 300017,
     "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,
@@ -258,7 +258,7 @@
     "num": 1
   },
   "бульдозер-2-1.21": {
-    "base_price": 1200018,
+    "base_price": 600018,
     "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,
@@ -291,7 +291,7 @@
     "num": 2
   },
   "кирка_крутая-1.21": {
-    "base_price": 1200019,
+    "base_price": 600019,
     "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,
