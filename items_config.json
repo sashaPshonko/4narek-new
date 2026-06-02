@@ -38,8 +38,8 @@
   },
   "sword7-1.21": {
     "base_price": 600003,
-    "normal_sales": 8,
-    "normal_count": 5,
+    "normal_sales": 5,
+    "normal_count": 7,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -57,6 +57,9 @@
         "name": "minecraft:sharpness",
         "lvl": 7
       }
+    ],
+    "forbidden_effects": [
+      { "name": "minecraft:knockback" }
     ],
     "nacenka": 300000,
     "num": 1

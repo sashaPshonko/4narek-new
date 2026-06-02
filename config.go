@@ -27,8 +27,9 @@ type itemConfigJSON struct {
 	Nacenka         int              `json:"nacenka"`
 	NacenkaMin      int              `json:"nacenka_min"`
 	Num             int              `json:"num"`
-	Effects         []itemEffectJSON `json:"effects"`
-	LoreMatch       string           `json:"lore_match,omitempty"`
+	Effects           []itemEffectJSON `json:"effects"`
+	ForbiddenEffects  []itemEffectJSON `json:"forbidden_effects,omitempty"`
+	LoreMatch         string           `json:"lore_match,omitempty"`
 }
 
 func loadItemsConfig() error {
@@ -61,6 +62,10 @@ func loadItemsConfig() error {
 		for i, e := range entry.Effects {
 			effects[i] = ItemEffect{Name: e.Name, Lvl: e.Lvl}
 		}
+		forbidden := make([]ItemEffect, len(entry.ForbiddenEffects))
+		for i, e := range entry.ForbiddenEffects {
+			forbidden[i] = ItemEffect{Name: e.Name, Lvl: e.Lvl}
+		}
 
 		itemsConfig[id] = ItemConfig{
 			ID:           id,
@@ -74,8 +79,9 @@ func loadItemsConfig() error {
 			Nacenka:      entry.Nacenka,
 			NacenkaMin:   entry.NacenkaMin,
 			Num:          entry.Num,
-			Effects:      effects,
-			LoreMatch:    entry.LoreMatch,
+			Effects:          effects,
+			ForbiddenEffects: forbidden,
+			LoreMatch:        entry.LoreMatch,
 		}
 	}
 

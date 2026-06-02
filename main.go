@@ -35,8 +35,9 @@ type CatalogItemOut struct {
 	Type    string       `json:"type"`
 	Nacenka int          `json:"nacenka"`
 	Num     int          `json:"num"`
-	Effects   []ItemEffect `json:"effects"`
-	LoreMatch string       `json:"lore_match,omitempty"`
+	Effects          []ItemEffect `json:"effects"`
+	ForbiddenEffects []ItemEffect `json:"forbidden_effects,omitempty"`
+	LoreMatch        string       `json:"lore_match,omitempty"`
 }
 
 type ItemEffect struct {
@@ -94,8 +95,9 @@ type ItemConfig struct {
 	Nacenka      int
 	NacenkaMin   int
 	Num          int
-	Effects      []ItemEffect
-	LoreMatch    string
+	Effects          []ItemEffect
+	ForbiddenEffects []ItemEffect
+	LoreMatch        string
 }
 
 type DailyData struct {
@@ -230,13 +232,14 @@ func buildCatalogOut() []CatalogItemOut {
 	out := make([]CatalogItemOut, 0, len(itemsConfig))
 	for id, cfg := range itemsConfig {
 		out = append(out, CatalogItemOut{
-			ID:        id,
-			Name:      cfg.Name,
-			Type:      cfg.Type,
-			Nacenka:   getNacenka(id),
-			Num:       cfg.Num,
-			Effects:   cfg.Effects,
-			LoreMatch: cfg.LoreMatch,
+			ID:               id,
+			Name:             cfg.Name,
+			Type:             cfg.Type,
+			Nacenka:          getNacenka(id),
+			Num:              cfg.Num,
+			Effects:          cfg.Effects,
+			ForbiddenEffects: cfg.ForbiddenEffects,
+			LoreMatch:        cfg.LoreMatch,
 		})
 	}
 	return out

@@ -1,0 +1,120 @@
+{
+  "date": "2026-06-01",
+  "prices": {
+    "megasword-1.21": 7400004,
+    "pochti-megasword-1.21": 4400002,
+    "sword7-1.21": 1800003,
+    "бестия-1.21": 1500022,
+    "ботинки-1.21": 1100009,
+    "ботинки-крутые-1.21": 1549916,
+    "бульдозер-1-1.21": 3549917,
+    "бульдозер-2-1.21": 3599918,
+    "кирка_крутая-1.21": 4300019,
+    "нагрудник-1.21": 799907,
+    "фарм-1.21": 2500013,
+    "хаос-1.21": 1500021,
+    "шлем-1.21": 1300011,
+    "штаны-1.21": 700005,
+    "ярость-1.21": 5000020
+  },
+  "nacenkas": {
+    "megasword-1.21": 400000,
+    "pochti-megasword-1.21": 300000,
+    "sword7-1.21": 300000,
+    "бестия-1.21": 300000,
+    "ботинки-1.21": 300000,
+    "ботинки-крутые-1.21": 300000,
+    "бульдозер-1-1.21": 300000,
+    "бульдозер-2-1.21": 300000,
+    "кирка_крутая-1.21": 300000,
+    "нагрудник-1.21": 300000,
+    "фарм-1.21": 300000,
+    "хаос-1.21": 300000,
+    "шлем-1.21": 300000,
+    "штаны-1.21": 300000,
+    "ярость-1.21": 300000
+  },
+  "adjust_state": {
+    "megasword-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "pochti-megasword-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "sword7-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "бестия-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "ботинки-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "ботинки-крутые-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "бульдозер-1-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "бульдозер-2-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "кирка_крутая-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "нагрудник-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "фарм-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "хаос-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "шлем-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "штаны-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    },
+    "ярость-1.21": {
+      "good_streak": 0,
+      "experiment_check": false,
+      "last_cycle_profit": 0
+    }
+  },
+  "buy_stats": {},
+  "sell_stats": {},
+  "try_sell_stats": {},
+  "message_id": 0,
+  "buy_sum": {},
+  "sell_sum": {}
+}
