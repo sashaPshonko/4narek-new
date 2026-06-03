@@ -7,6 +7,9 @@ import (
 
 const cheapBuyFractionThreshold = 0.65
 
+// Слотов «Хранилище» на АХ у одного бота (4NAREK.mjs STORAGE_AH_SLOTS).
+const ahStorageSlotsPerBot = 5
+
 const (
 	marketFloorWindow    = 10 * time.Minute
 	marketFloorWindowMin = 9*time.Minute + 30*time.Second
@@ -95,6 +98,59 @@ func profitInWindow(item string, since time.Time) int {
 		}
 	}
 	return profit
+}
+
+func normalStockTarget(cfg ItemConfig) int {
+	if cfg.NormalCount > 0 {
+		return cfg.NormalCount
+	}
+	return cfg.NormalSales
+}
+
+// categoryAhCapacityLocked — ёмкость хранилища АХ по типу (боты × 5 слотов). Только под mutex.Lock.
+func categoryAhCapacityLocked(minecraftType string) int {
+	bots := aggregateBotsPerTypeLocked()[minecraftType]
+	if bots <= 0 {
+		return 0
+	}
+	return bots * ahStorageSlotsPerBot
+}
+
+// allowSellPriceIncreaseLocked — не поднимать цену, если другие id того же go-типа
+// забили слоты и наш предмет физически не может дойти до normal_count.
+// ahCounts — уже собранные счётчики по id на АХ (как в adjustPrice). Только под mutex.Lock.
+func allowSellPriceIncreaseLocked(item string, cfg ItemConfig, onAH int, ahCounts map[string]int) bool {
+	target := normalStockTarget(cfg)
+	if target <= 0 {
+		return true
+	}
+	capacity := categoryAhCapacityLocked(cfg.Type)
+	if capacity <= 0 {
+		return true
+	}
+
+	occupiedOthers := 0
+	for name, count := range ahCounts {
+		if name == item || count <= 0 {
+			continue
+		}
+		other, ok := itemsConfig[name]
+		if !ok || other.Type != cfg.Type {
+			continue
+		}
+		occupiedOthers += count
+	}
+	if occupiedOthers == 0 {
+		return true
+	}
+
+	totalOccupied := onAH + occupiedOthers
+	freeSlots := capacity - totalOccupied
+	if freeSlots < 0 {
+		freeSlots = 0
+	}
+	maxReachable := onAH + freeSlots
+	return maxReachable >= target
 }
 
 func cheapBuyFraction(item string, sellPrice, nacenka, step int, since time.Time) (float64, int) {
@@ -266,13 +322,11 @@ func adjustPrice(item string) {
 		}
 	}
 
-	stockNorm := cfg.NormalSales
-	if cfg.NormalCount > 0 {
-		stockNorm = cfg.NormalCount
-	}
+	stockNorm := normalStockTarget(cfg)
 
 	onAH := ahCounts[item]
 	totalStock := onAH + invCounts[item]
+	canRaisePrice := allowSellPriceIncreaseLocked(item, cfg, onAH, ahCounts)
 
 	changed := false
 	action := ""
@@ -293,11 +347,15 @@ func adjustPrice(item string) {
 			action = "nacenka_down_deficit"
 			changed = true
 			state.GoodStreak = 0
-		} else {
+		} else if canRaisePrice {
 			newPrice += step
 			action = "price_up_deficit"
 			changed = true
 			state.GoodStreak = 0
+		} else {
+			action = "hold_slots_blocked"
+			log.Printf("[ADJUST] %s: skip price_up — слоты заняты другими id (на АХ %d, цель %d, ёмкость типа %d)",
+				item, onAH, stockNorm, categoryAhCapacityLocked(cfg.Type))
 		}
 	} else if state.ExperimentCheck {
 		// 3. Проверка эксперимента (после +цена и +наценка)
@@ -326,12 +384,19 @@ func adjustPrice(item string) {
 		if profitNow >= profitPrev {
 			state.GoodStreak++
 			if state.GoodStreak >= 3 {
-				newPrice += step
-				nacenka += step
-				state.GoodStreak = 0
-				state.ExperimentCheck = true
-				action = "experiment_start"
-				changed = true
+				if canRaisePrice {
+					newPrice += step
+					nacenka += step
+					state.GoodStreak = 0
+					state.ExperimentCheck = true
+					action = "experiment_start"
+					changed = true
+				} else {
+					state.GoodStreak = 0
+					action = "hold_slots_blocked"
+					log.Printf("[ADJUST] %s: skip experiment — слоты заняты другими id (на АХ %d, цель %d)",
+						item, onAH, stockNorm)
+				}
 			}
 		} else {
 			state.GoodStreak = 0
