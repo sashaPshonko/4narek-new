@@ -29,6 +29,7 @@ type itemConfigJSON struct {
 	Num             int              `json:"num"`
 	Effects           []itemEffectJSON `json:"effects"`
 	ForbiddenEffects  []itemEffectJSON `json:"forbidden_effects,omitempty"`
+	MaxEffects        []itemEffectJSON `json:"max_effects,omitempty"`
 	LoreMatch         string           `json:"lore_match,omitempty"`
 }
 
@@ -66,6 +67,10 @@ func loadItemsConfig() error {
 		for i, e := range entry.ForbiddenEffects {
 			forbidden[i] = ItemEffect{Name: e.Name, Lvl: e.Lvl}
 		}
+		maxEffects := make([]ItemEffect, len(entry.MaxEffects))
+		for i, e := range entry.MaxEffects {
+			maxEffects[i] = ItemEffect{Name: e.Name, Lvl: e.Lvl}
+		}
 		itemsConfig[id] = ItemConfig{
 			ID:           id,
 			Name:         entry.Name,
@@ -80,6 +85,7 @@ func loadItemsConfig() error {
 			Num:          entry.Num,
 			Effects:          effects,
 			ForbiddenEffects: forbidden,
+			MaxEffects:       maxEffects,
 			LoreMatch:        entry.LoreMatch,
 		}
 	}

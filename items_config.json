@@ -1,7 +1,7 @@
 {
   "pochti-megasword-1.21": {
-    "base_price": 1000002,
-    "normal_sales": 8,
+    "base_price": 3000002,
+    "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
@@ -30,10 +30,10 @@
       }
     ],
     "nacenka": 300000,
-    "num": 4
+    "num": 5
   },
   "sword7-1.21": {
-    "base_price": 600003,
+    "base_price": 1400003,
     "normal_sales": 5,
     "normal_count": 7,
     "price_step": 100000,
@@ -58,7 +58,7 @@
     "num": 1
   },
   "megasword-1.21": {
-    "base_price": 1000004,
+    "base_price": 4000004,
     "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,
@@ -88,7 +88,42 @@
       }
     ],
     "nacenka": 400000,
-    "num": 5
+    "num": 6
+  },
+  "imba-sword-1.21": {
+    "base_price": 4000008,
+    "normal_sales": 5,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      { "name": "minecraft:unbreaking", "lvl": 3 },
+      { "name": "minecraft:sharpness", "lvl": 7 },
+      { "name": "minecraft:fire_aspect", "lvl": 1 },
+      { "name": "poison", "lvl": 3 },
+      { "name": "detection", "lvl": 3 }
+    ],
+    "nacenka": 400000,
+    "num": 8
+  },
+  "yad2-sword-1.21": {
+    "base_price": 800006,
+    "normal_sales": 5,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      { "name": "minecraft:unbreaking", "lvl": 4 },
+      { "name": "minecraft:sharpness", "lvl": 7 },
+      { "name": "minecraft:fire_aspect", "lvl": 1 },
+      { "name": "poison", "lvl": 2 }
+    ],
+    "nacenka": 300000,
+    "num": 4
   },
   "штаны-1.21": {
     "base_price": 600005,
@@ -355,7 +390,7 @@
     "num": 1
   },
   "шлем-позор-1.21": {
-    "base_price": 400011,
+    "base_price": 400012,
     "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,
@@ -370,7 +405,7 @@
     "num": 1
   },
   "штаны-позор-1.21": {
-    "base_price": 400005,
+    "base_price": 400014,
     "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,
@@ -385,7 +420,7 @@
     "num": 1
   },
   "ботинки-позор-1.21": {
-    "base_price": 400009,
+    "base_price": 400010,
     "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,

@@ -37,6 +37,7 @@ type CatalogItemOut struct {
 	Num     int          `json:"num"`
 	Effects          []ItemEffect `json:"effects"`
 	ForbiddenEffects []ItemEffect `json:"forbidden_effects,omitempty"`
+	MaxEffects       []ItemEffect `json:"max_effects,omitempty"`
 	LoreMatch        string       `json:"lore_match,omitempty"`
 }
 
@@ -97,6 +98,7 @@ type ItemConfig struct {
 	Num          int
 	Effects          []ItemEffect
 	ForbiddenEffects []ItemEffect
+	MaxEffects       []ItemEffect
 	LoreMatch        string
 }
 
@@ -239,6 +241,7 @@ func buildCatalogOut() []CatalogItemOut {
 			Num:              cfg.Num,
 			Effects:          cfg.Effects,
 			ForbiddenEffects: cfg.ForbiddenEffects,
+			MaxEffects:       cfg.MaxEffects,
 			LoreMatch:        cfg.LoreMatch,
 		})
 	}
