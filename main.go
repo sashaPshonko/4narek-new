@@ -455,6 +455,97 @@ func getConnectedClientsCount() int {
 	return len(clients)
 }
 
+// pruneStaleDataKeys удаляет из data_* id, которых нет в items_config (старые *-шипы и т.п.).
+func pruneStaleDataKeys() {
+	stale := make(map[string]struct{})
+	for item := range data.Prices {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
+	for item := range data.Nacenkas {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
+	for item := range data.AdjustState {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
+	for item := range data.BuyStats {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
+	for item := range data.SellStats {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
+	for item := range data.TrySellStats {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
+	for item := range data.BuySum {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
+	for item := range data.SellSum {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
+	if len(stale) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(stale))
+	for id := range stale {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		delete(data.Prices, id)
+		delete(dailyData.Prices, id)
+		delete(data.Nacenkas, id)
+		delete(dailyData.Nacenkas, id)
+		delete(data.AdjustState, id)
+		delete(dailyData.AdjustState, id)
+		delete(data.BuyStats, id)
+		delete(dailyData.BuyStats, id)
+		delete(data.SellStats, id)
+		delete(dailyData.SellStats, id)
+		delete(data.TrySellStats, id)
+		delete(dailyData.TrySellStats, id)
+		delete(data.BuySum, id)
+		delete(dailyData.BuySum, id)
+		delete(data.SellSum, id)
+		delete(dailyData.SellSum, id)
+	}
+	log.Printf("[DATA] убраны устаревшие id (%d): %s", len(ids), strings.Join(ids, ", "))
+}
+
+// syncPriceMarkersFromConfig выравнивает price % 100 с base_price % 100 из каталога.
+func syncPriceMarkersFromConfig() {
+	for item, cfg := range itemsConfig {
+		p, ok := data.Prices[item]
+		if !ok || p <= 0 {
+			continue
+		}
+		want := cfg.BasePrice % 100
+		got := p % 100
+		if got == want {
+			continue
+		}
+		fixed := (p/100)*100 + want
+		log.Printf("[DATA] %s: маркер %d→%d (цена %d→%d)", item, got, want, p, fixed)
+		data.Prices[item] = fixed
+		dailyData.Prices[item] = fixed
+	}
+}
+
 func loadDailyData(loc *time.Location) {
 	mutex.Lock()
 
@@ -515,6 +606,9 @@ func loadDailyData(loc *time.Location) {
 			log.Println("Данные успешно загружены из файла")
 		}
 	}
+
+	pruneStaleDataKeys()
+	syncPriceMarkersFromConfig()
 
 	for item, cfg := range itemsConfig {
 		if _, exists := data.Prices[item]; !exists {
