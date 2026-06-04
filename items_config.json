@@ -360,5 +360,53 @@
     "lore_match": "Обостряет реакции",
     "nacenka": 300000,
     "num": 1
+  },
+  "шлем-шипы-1.21": {
+    "base_price": 500011,
+    "normal_sales": 6,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_helmet",
+    "type": "netherite_armor-thorns-1.21",
+    "effects": [
+      { "name": "minecraft:unbreaking", "lvl": 4 },
+      { "name": "minecraft:protection", "lvl": 5 },
+      { "name": "minecraft:thorns", "lvl": 1 }
+    ],
+    "nacenka": 200000,
+    "num": 1
+  },
+  "штаны-шипы-1.21": {
+    "base_price": 500005,
+    "normal_sales": 6,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_leggings",
+    "type": "netherite_armor-thorns-1.21",
+    "effects": [
+      { "name": "minecraft:unbreaking", "lvl": 4 },
+      { "name": "minecraft:protection", "lvl": 5 },
+      { "name": "minecraft:thorns", "lvl": 1 }
+    ],
+    "nacenka": 200000,
+    "num": 1
+  },
+  "ботинки-шипы-1.21": {
+    "base_price": 500009,
+    "normal_sales": 6,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_boots",
+    "type": "netherite_armor-thorns-1.21",
+    "effects": [
+      { "name": "minecraft:unbreaking", "lvl": 4 },
+      { "name": "minecraft:protection", "lvl": 5 },
+      { "name": "minecraft:thorns", "lvl": 1 }
+    ],
+    "nacenka": 200000,
+    "num": 1
   }
 }
