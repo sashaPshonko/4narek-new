@@ -66,7 +66,6 @@ func loadItemsConfig() error {
 		for i, e := range entry.ForbiddenEffects {
 			forbidden[i] = ItemEffect{Name: e.Name, Lvl: e.Lvl}
 		}
-
 		itemsConfig[id] = ItemConfig{
 			ID:           id,
 			Name:         entry.Name,
