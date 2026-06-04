@@ -25,10 +25,6 @@
         "lvl": 1
       },
       {
-        "name": "vampirism",
-        "lvl": 1
-      },
-      {
         "name": "detection",
         "lvl": 1
       }
@@ -57,9 +53,6 @@
         "name": "minecraft:sharpness",
         "lvl": 7
       }
-    ],
-    "forbidden_effects": [
-      { "name": "minecraft:knockback" }
     ],
     "nacenka": 300000,
     "num": 1
@@ -90,7 +83,7 @@
         "lvl": 2
       },
       {
-        "name": "vampirism",
+        "name": "detection",
         "lvl": 2
       }
     ],
