@@ -380,23 +380,17 @@ func adjustPrice(item string) {
 			action = "experiment_ok"
 		}
 	} else {
-		// 4. Streak по прибыли → эксперимент роста
+		// 4. Streak по прибыли → эксперимент роста (+price и +nacenka).
+		// Слоты АХ не проверяем: цена покупки/наценка не влияют на ёмкость хранилища.
 		if profitNow >= profitPrev {
 			state.GoodStreak++
 			if state.GoodStreak >= 3 {
-				if canRaisePrice {
-					newPrice += step
-					nacenka += step
-					state.GoodStreak = 0
-					state.ExperimentCheck = true
-					action = "experiment_start"
-					changed = true
-				} else {
-					state.GoodStreak = 0
-					action = "hold_slots_blocked"
-					log.Printf("[ADJUST] %s: skip experiment — слоты заняты другими id (на АХ %d, цель %d)",
-						item, onAH, stockNorm)
-				}
+				newPrice += step
+				nacenka += step
+				state.GoodStreak = 0
+				state.ExperimentCheck = true
+				action = "experiment_start"
+				changed = true
 			}
 		} else {
 			state.GoodStreak = 0
