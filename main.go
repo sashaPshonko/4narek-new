@@ -729,20 +729,3 @@ func getMinPriceFromHistory(item string) int {
 	return min
 }
 
-// Получение минимальной цены из истории покупок
-func getMinPriceFromHistory(item string) int {
-	hist := priceHistory[item]
-	if hist == nil || len(hist.Records) == 0 {
-		return 0
-	}
-
-	min := hist.Records[0].Price
-	for _, r := range hist.Records {
-		if r.Price < min {
-			min = r.Price
-		}
-	}
-	return min
-}
-
-
