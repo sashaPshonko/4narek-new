@@ -1167,7 +1167,7 @@ func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales,
 	}
 
 	onlineCount := getOnlineCount()
-	// onHand, inInventory := getInventoryStats(item)
+	onHand, _ := getInventoryStats(item)
 
 	// msg := fmt.Sprintf(
 	// 	"*%s* %s\n"+
