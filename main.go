@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 	"maps"
-	"math/rand"
+	// "math/rand"
 	"net/http"
 	"os"
 	"sort"
@@ -63,7 +63,7 @@ var (
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
-	tgBot *bot.Bot
+	// tgBot *bot.Bot
 )
 
 var (
@@ -175,12 +175,12 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 
-	b, err := bot.New(token)
-	if err != nil {
-		log.Printf("Error creating bot: %v", err)
-		os.Exit(1)
-	}
-	tgBot = b
+	// b, err := bot.New(token)
+	// if err != nil {
+	// 	log.Printf("Error creating bot: %v", err)
+	// 	os.Exit(1)
+	// }
+	// tgBot = b
 
 	// Инициализация данных
 	data.Prices = make(map[string]int)
@@ -758,48 +758,48 @@ func updateTelegramMessageWithoutLocks(prices, buyStats, sellStats map[string]in
 		)
 	}
 
-	ctx := context.Background()
+	// ctx := context.Background()
 
-	var newMessageID int
-	if messageID == 0 {
-		msg, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   msgText,
-		})
-		if err != nil {
-			log.Printf("[Telegram error] Не удалось отправить новое сообщение: %v", err)
-			return
-		}
-		newMessageID = msg.ID
-	} else {
-		_, err := tgBot.EditMessageText(ctx, &bot.EditMessageTextParams{
-			ChatID:    chatID,
-			MessageID: messageID,
-			Text:      msgText,
-		})
-		if err != nil {
-			log.Printf("[Telegram error] Не удалось обновить сообщение: %v", err)
+	// var newMessageID int
+	// if messageID == 0 {
+		// msg, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
+		// 	ChatID: chatID,
+		// 	Text:   msgText,
+		// })
+		// if err != nil {
+		// 	log.Printf("[Telegram error] Не удалось отправить новое сообщение: %v", err)
+		// 	return
+		// }
+	// 	newMessageID = msg.ID
+	// } else {
+	// 	_, err := tgBot.EditMessageText(ctx, &bot.EditMessageTextParams{
+	// 		ChatID:    chatID,
+	// 		MessageID: messageID,
+	// 		Text:      msgText,
+	// 	})
+	// 	if err != nil {
+	// 		log.Printf("[Telegram error] Не удалось обновить сообщение: %v", err)
 
-			msg, sendErr := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: chatID,
-				Text:   msgText,
-			})
-			if sendErr == nil {
-				newMessageID = msg.ID
-			} else {
-				log.Printf("[Telegram error] Повторная отправка тоже не удалась: %v", sendErr)
-				return
-			}
-		}
-	}
+	// 		msg, sendErr := tgBot.SendMessage(ctx, &bot.SendMessageParams{
+	// 			ChatID: chatID,
+	// 			Text:   msgText,
+	// 		})
+	// 		if sendErr == nil {
+	// 			newMessageID = msg.ID
+	// 		} else {
+	// 			log.Printf("[Telegram error] Повторная отправка тоже не удалась: %v", sendErr)
+	// 			return
+	// 		}
+	// 	}
+	// }
 
-	if newMessageID != 0 {
-		mutex.Lock()
-		dailyData.MessageID = newMessageID
-		snap := cloneDailySnapshotLocked()
-		mutex.Unlock()
-		persistDailySnapshot(&snap)
-	}
+	// if newMessageID != 0 {
+	// 	mutex.Lock()
+	// 	dailyData.MessageID = newMessageID
+	// 	snap := cloneDailySnapshotLocked()
+	// 	mutex.Unlock()
+	// 	persistDailySnapshot(&snap)
+	// }
 }
 
 func updateTelegramMessageSimple() {
@@ -1169,34 +1169,34 @@ func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales,
 	onlineCount := getOnlineCount()
 	onHand, inInventory := getInventoryStats(item)
 
-	msg := fmt.Sprintf(
-		"*%s* %s\n"+
-			"⏳ Интервал: %s - %s\n"+
-			"📦 Покупки: *%.0f*\n"+
-			"🛒 Попытки продаж: *%.0f*\n"+
-			"📊 Продажи: *%.0f* из *%.0f* (норма)\n"+
-			"💰 Цена: %d → %d (%s)\n"+
-			"🎒 На аукционе: %d\n"+
-			"🎒 В инвентаре: %d\n"+
-			"👥 Онлайн: %d игроков",
-		item, status,
-		start.Format("15:04:05"), end.Format("15:04:05"),
-		buyCount, trySellCount,
-		actualSales, expectedSales,
-		oldPrice, newPrice,
-		getPriceChangeEmoji(oldPrice, newPrice),
-		onHand, inInventory, onlineCount,
-	)
+	// msg := fmt.Sprintf(
+	// 	"*%s* %s\n"+
+	// 		"⏳ Интервал: %s - %s\n"+
+	// 		"📦 Покупки: *%.0f*\n"+
+	// 		"🛒 Попытки продаж: *%.0f*\n"+
+	// 		"📊 Продажи: *%.0f* из *%.0f* (норма)\n"+
+	// 		"💰 Цена: %d → %d (%s)\n"+
+	// 		"🎒 На аукционе: %d\n"+
+	// 		"🎒 В инвентаре: %d\n"+
+	// 		"👥 Онлайн: %d игроков",
+	// 	item, status,
+	// 	start.Format("15:04:05"), end.Format("15:04:05"),
+	// 	buyCount, trySellCount,
+	// 	actualSales, expectedSales,
+	// 	oldPrice, newPrice,
+	// 	getPriceChangeEmoji(oldPrice, newPrice),
+	// 	onHand, inInventory, onlineCount,
+	// )
 
-    ctx := context.Background()
-    _, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-        ChatID:    -4633184325,
-        Text:      msg,
-        ParseMode: "Markdown",
-    })
-    if err != nil {
-        log.Printf("[Telegram] Ошибка при отправке интервал-статы: %v", err)
-    }
+    // ctx := context.Background()
+    // _, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
+    //     ChatID:    -4633184325,
+    //     Text:      msg,
+    //     ParseMode: "Markdown",
+    // })
+    // if err != nil {
+    //     log.Printf("[Telegram] Ошибка при отправке интервал-статы: %v", err)
+    // }
 
 	plainLog := fmt.Sprintf(
 		"%s [%s → %s] %s | Покупки: %.0f | Продажи: %.0f/%.0f | Цена: %d→%d | На руках: %d | Онлайн: %d\n",
