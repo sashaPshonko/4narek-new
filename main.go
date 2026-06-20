@@ -1,7 +1,7 @@
 package main
 
 import (
-	"context"
+	// "context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-telegram/bot"
+	// "github.com/go-telegram/bot"
 	"github.com/gorilla/websocket"
 )
 
@@ -1159,7 +1159,7 @@ func countRecentTrySells(item string, since time.Time) int {
 func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales, expectedSales, buyCount, trySellCount float64,
 	oldPrice, newPrice int) {
 
-	time.Sleep(time.Duration(rand.Intn(4000)+3000) * time.Millisecond)
+	// time.Sleep(time.Duration(rand.Intn(4000)+3000) * time.Millisecond)
 
 	status := "✅"
 	if actualSales < expectedSales {
@@ -1167,7 +1167,7 @@ func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales,
 	}
 
 	onlineCount := getOnlineCount()
-	onHand, inInventory := getInventoryStats(item)
+	// onHand, inInventory := getInventoryStats(item)
 
 	// msg := fmt.Sprintf(
 	// 	"*%s* %s\n"+
