@@ -156,7 +156,11 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_decisions_ts ON ml_decisions(logged_ts)`)
 
 	mlDB = db
+	initMLShadowTable()
 	log.Printf("[ML] SQLite %s (schema v%d, server min/max + nacenka context, profit reward)", mlDBPath, mlSchemaVersion)
+	if mlShadowEnabled() {
+		log.Printf("[ML-SHADOW] включён → %s (Go правила + лог сравнения с ML)", mlWSURL())
+	}
 }
 
 func categoryCycleSnapshotLocked(categoryType, triggerItem string, since, until time.Time) (mlItemCycleSnapshot, map[string]mlItemCycleSnapshot) {

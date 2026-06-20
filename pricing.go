@@ -290,6 +290,8 @@ func adjustPrice(item string) {
 	ensureNacenkasInitialized()
 
 	sales := countRecentSales(item, lastUpdate)
+	buys := countRecentBuys(item, lastUpdate)
+	trySells := countRecentTrySells(item, lastUpdate)
 	profitNow := profitInWindow(item, lastUpdate)
 	state := data.AdjustState[item]
 	profitPrev := state.LastCycleProfit
@@ -436,8 +438,43 @@ func adjustPrice(item string) {
 		now,
 	)
 
+	shadowSnap := mlAdjustSnapshot{}
+	if mlShadowEnabled() {
+		online, _ := fetchOnlineSnapshot()
+		normalCount := cfg.NormalCount
+		if normalCount <= 0 {
+			normalCount = cfg.NormalSales
+		}
+		shadowSnap = mlAdjustSnapshot{
+			At:             now,
+			Item:           item,
+			CategoryType:   cfg.Type,
+			GoAction:       actionTaken,
+			PriceBefore:    priceBefore,
+			NacenkaBefore:  nacenkaBefore,
+			GoPriceAfter:   newPrice,
+			GoNacenkaAfter: nacenka,
+			Sales:          sales,
+			Buys:           buys,
+			TrySells:       trySells,
+			ProfitNow:      profitNow,
+			OnAH:           onAH,
+			TotalStock:     totalStock,
+			NormalSales:    cfg.NormalSales,
+			NormalCount:    normalCount,
+			MinBuyHistory:  minPrice,
+			CanRaisePrice:  canRaisePrice,
+			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
+			PlayersOnline:  online,
+		}
+	}
+
 	needBroadcast := changed
 	mutex.Unlock()
+
+	if mlShadowEnabled() {
+		runMLShadowAsync(shadowSnap)
+	}
 
 	if needBroadcast {
 		publishPriceUpdate()
