@@ -174,6 +174,7 @@ func main() {
 	if err := loadItemsConfig(); err != nil {
 		log.Fatalf("%v", err)
 	}
+	initFleetRelistFlags()
 
 	// b, err := bot.New(token)
 	// if err != nil {
@@ -657,16 +658,6 @@ func getItemStatsForReporting(item string, since time.Time) (sales, buys, trySel
 	return
 }
 
-func getInventoryStats(item string) (onHand, inInventory int) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	onHand = getItemCount(item)
-	inInventory = getInventoryCount(item)
-
-	return
-}
-
 func adjustAndReport(item string, cfg ItemConfig) {
 	if !isMinecraftTypeActive(cfg.Type) {
 		log.Printf("[SKIP] %s: тип %s — нет активных ботов на оркестраторах", item, cfg.Type)
@@ -676,24 +667,12 @@ func adjustAndReport(item string, cfg ItemConfig) {
 	now := time.Now()
 	start := now.Add(-cfg.AnalysisTime)
 
-	sales, buys, trySells, price := getItemStatsForReporting(item, start)
+	sales, _, _, _ := getItemStatsForReporting(item, start)
 
 	log.Printf("[ANALYSIS] %s: анализ с %s по %s. Продажи: %d (норма: %d)",
 		item, start.Format("15:04:05"), now.Format("15:04:05"), sales, cfg.NormalSales)
 
 	adjustPrice(item)
-
-	newPrice := func() int {
-		mutex.Lock()
-		defer mutex.Unlock()
-		return data.Prices[item]
-	}()
-
-	sendIntervalStatsToTelegram(
-		item, start, now,
-		float64(sales), float64(cfg.NormalSales), float64(buys), float64(trySells),
-		price, newPrice,
-	)
 }
 
 // cloneDailySnapshotLocked — снимок dailyData; вызывать только под mutex.Lock.
@@ -1154,81 +1133,6 @@ func countRecentTrySells(item string, since time.Time) int {
 		}
 	}
 	return count
-}
-
-func sendIntervalStatsToTelegram(item string, start, end time.Time, actualSales, expectedSales, buyCount, trySellCount float64,
-	oldPrice, newPrice int) {
-
-	// time.Sleep(time.Duration(rand.Intn(4000)+3000) * time.Millisecond)
-
-	status := "✅"
-	if actualSales < expectedSales {
-		status = "⚠️"
-	}
-
-	onlineCount := getOnlineCount()
-	onHand, _ := getInventoryStats(item)
-
-	// msg := fmt.Sprintf(
-	// 	"*%s* %s\n"+
-	// 		"⏳ Интервал: %s - %s\n"+
-	// 		"📦 Покупки: *%.0f*\n"+
-	// 		"🛒 Попытки продаж: *%.0f*\n"+
-	// 		"📊 Продажи: *%.0f* из *%.0f* (норма)\n"+
-	// 		"💰 Цена: %d → %d (%s)\n"+
-	// 		"🎒 На аукционе: %d\n"+
-	// 		"🎒 В инвентаре: %d\n"+
-	// 		"👥 Онлайн: %d игроков",
-	// 	item, status,
-	// 	start.Format("15:04:05"), end.Format("15:04:05"),
-	// 	buyCount, trySellCount,
-	// 	actualSales, expectedSales,
-	// 	oldPrice, newPrice,
-	// 	getPriceChangeEmoji(oldPrice, newPrice),
-	// 	onHand, inInventory, onlineCount,
-	// )
-
-    // ctx := context.Background()
-    // _, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-    //     ChatID:    -4633184325,
-    //     Text:      msg,
-    //     ParseMode: "Markdown",
-    // })
-    // if err != nil {
-    //     log.Printf("[Telegram] Ошибка при отправке интервал-статы: %v", err)
-    // }
-
-	plainLog := fmt.Sprintf(
-		"%s [%s → %s] %s | Покупки: %.0f | Продажи: %.0f/%.0f | Цена: %d→%d | На руках: %d | Онлайн: %d\n",
-		item,
-		start.Format("15:04:05"), end.Format("15:04:05"),
-		status, buyCount, actualSales, expectedSales,
-		oldPrice, newPrice, onHand, onlineCount,
-	)
-
-    appendToFile("logs_interval.txt", plainLog)
-}
-
-func getPriceChangeEmoji(oldPrice, newPrice int) string {
-	if newPrice > oldPrice {
-		return "📈 +"
-	} else if newPrice < oldPrice {
-		return "📉 -"
-	}
-	return "↔️ ="
-}
-
-func appendToFile(filename, content string) {
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Printf("Ошибка открытия файла лога: %v", err)
-		return
-	}
-	defer f.Close()
-
-	if _, err := f.WriteString(content); err != nil {
-		log.Printf("Ошибка записи в файл лога: %v", err)
-	}
 }
 
 // Добавление цены покупки в историю
