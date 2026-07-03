@@ -167,14 +167,27 @@ var (
 )
 
 func main() {
+	for {
+		runSafe("server", runServer)
+		log.Println("[RESTART] сервер перезапускается через 2s...")
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func runServer() {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
-		log.Printf("Error loading location: %v", err)
-		os.Exit(1)
+		log.Printf("timezone %q: %v — используем UTC", timezone, err)
+		loc = time.UTC
 	}
 
-	if err := loadItemsConfig(); err != nil {
-		log.Fatalf("%v", err)
+	for {
+		if err := loadItemsConfig(); err != nil {
+			log.Printf("loadItemsConfig: %v — повтор через 5s", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
 	}
 	initFleetRelistFlags()
 
@@ -202,23 +215,19 @@ func main() {
 	initMLLog()
 
 	// Запускаем брокер рассылки
-	go broadcastBroker()
+	goImmortal("broadcastBroker", broadcastBroker)
 
 	// Запускаем очистку кэша
-	go startCacheCleanup()
+	goImmortal("cacheCleanup", startCacheCleanup)
 
-	// WebSocket сервер
-	http.HandleFunc("/ws", handleConnections)
-	go func() {
-		log.Println("Server started on :8080")
-		log.Print(http.ListenAndServe(":8080", nil))
-	}()
+	// WebSocket / HTTP
+	goImmortal("httpServer", startHTTPServer)
 
 	// Проверка смены дня
-	go checkDayChange(loc)
+	goImmortal("dayChange", func() { checkDayChange(loc) })
 
-	// Запускаем таймеры для каждого предмета
-	go startItemTimers()
+	// Таймеры предметов
+	startItemTimers()
 
 	select {}
 }
@@ -400,7 +409,13 @@ func publishPrices() {
 	publishPriceUpdate()
 }
 
-func wsWriteJSON(ws *websocket.Conn, v interface{}) error {
+func wsWriteJSON(ws *websocket.Conn, v interface{}) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logPanic("ws:write", recovered)
+			err = fmt.Errorf("websocket write panic: %v", recovered)
+		}
+	}()
 	mutex.RLock()
 	mu := clientWriteMu[ws]
 	mutex.RUnlock()
@@ -424,21 +439,23 @@ func removeClient(ws *websocket.Conn) {
 
 func broadcastBroker() {
 	for msg := range broadcast {
-		mutex.Lock()
-		clientsCopy := make([]*websocket.Conn, 0, len(clients))
-		for client := range clients {
-			clientsCopy = append(clientsCopy, client)
-		}
-		mutex.Unlock()
-
-		for _, client := range clientsCopy {
-			if err := wsWriteJSON(client, msg); err != nil {
-				log.Printf("Ошибка при отправке через брокер: %v", err)
-				mutex.Lock()
-				removeClient(client)
-				mutex.Unlock()
+		runSafe("broadcast:tick", func() {
+			mutex.Lock()
+			clientsCopy := make([]*websocket.Conn, 0, len(clients))
+			for client := range clients {
+				clientsCopy = append(clientsCopy, client)
 			}
-		}
+			mutex.Unlock()
+
+			for _, client := range clientsCopy {
+				if err := wsWriteJSON(client, msg); err != nil {
+					log.Printf("Ошибка при отправке через брокер: %v", err)
+					mutex.Lock()
+					removeClient(client)
+					mutex.Unlock()
+				}
+			}
+		})
 	}
 }
 
@@ -650,19 +667,20 @@ func loadDailyData(loc *time.Location) {
 
 func startItemTimers() {
 	for item, cfg := range itemsConfig {
-		go func(item string, cfg ItemConfig) {
+		item, cfg := item, cfg
+		name := "timer:" + item
+		goImmortal(name, func() {
 			log.Printf("[TIMER] Запущен таймер для %s (интервал: %v)", item, cfg.AnalysisTime)
 			time.Sleep(time.Duration(len(itemsConfig)-1) * time.Second)
 			ticker := time.NewTicker(cfg.AnalysisTime)
 			defer ticker.Stop()
 
-			for {
-				select {
-				case <-ticker.C:
+			for range ticker.C {
+				runSafe(name+":tick", func() {
 					adjustAndReport(item, cfg)
-				}
+				})
 			}
-		}(item, cfg)
+		})
 	}
 }
 
@@ -824,14 +842,15 @@ func updateTelegramMessageSimple() {
 
 func checkDayChange(loc *time.Location) {
 	for {
-		now := time.Now().In(loc)
-		nextDay := now.Add(24 * time.Hour)
-		nextDay = time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), 0, 0, 0, 0, loc)
-		time.Sleep(time.Until(nextDay))
+		runSafe("dayChange:tick", func() {
+			now := time.Now().In(loc)
+			nextDay := now.Add(24 * time.Hour)
+			nextDay = time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), 0, 0, 0, 0, loc)
+			time.Sleep(time.Until(nextDay))
 
-		saveDailyDataNoMessageUpdate()
-
-		loadDailyData(loc)
+			saveDailyDataNoMessageUpdate()
+			loadDailyData(loc)
+		})
 	}
 }
 
@@ -864,6 +883,12 @@ func saveDailyData() {
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logPanic("ws:connection", recovered)
+		}
+	}()
+
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print(err, " upgrade error")
@@ -932,141 +957,151 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		mutex.Lock()
-		switch msg.Action {
-		case "buy":
-			data.BuyStats[msg.Type]++
-			data.LastTrade[msg.Type] = time.Now()
-			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy", Price: msg.Price})
-			data.BuySum[msg.Type] += msg.Price
-			addPriceToHistory(msg.Type, msg.Price)
-			logTradeEventML(msg.Type, "buy", msg.Price)
-			mutex.Unlock()
-			saveDailyDataNoMessageUpdate()
+		runSafe("ws:message", func() {
+			handleWSMessage(ws, rawMsg, msg)
+		})
+	}
+}
 
-		case "sell":
-			data.SellStats[msg.Type]++
-			data.LastTrade[msg.Type] = time.Now()
-			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "sell", Price: msg.Price})
-			data.SellSum[msg.Type] += msg.Price
-			logTradeEventML(msg.Type, "sell", msg.Price)
-			mutex.Unlock()
-			saveDailyDataNoMessageUpdate()
+func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
+	Action        string         `json:"action"`
+	Type          string         `json:"type"`
+	Items         map[string]int `json:"items"`
+	Inventory     map[string]int `json:"inventory"`
+	Types         []string       `json:"types"`
+	ActiveTypes   []string       `json:"active_types"`
+	BotsPerType   map[string]int `json:"bots_per_type"`
+	Price         int            `json:"price"`
+	Floors        map[string]int `json:"floors"`
+	WindowStartMs int64          `json:"window_start_ms"`
+	WindowEndMs   int64          `json:"window_end_ms"`
+	WindowMs      int64          `json:"window_ms"`
+}) {
+	mutex.Lock()
+	switch msg.Action {
+	case "buy":
+		data.BuyStats[msg.Type]++
+		data.LastTrade[msg.Type] = time.Now()
+		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy", Price: msg.Price})
+		data.BuySum[msg.Type] += msg.Price
+		addPriceToHistory(msg.Type, msg.Price)
+		logTradeEventML(msg.Type, "buy", msg.Price)
+		mutex.Unlock()
+		saveDailyDataNoMessageUpdate()
 
-		case "try-sell":
-			data.TrySellStats[msg.Type]++
-			data.LastTrade[msg.Type] = time.Now()
-			data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{
-				Time: time.Now(), Type: "try-sell", Price: msg.Price,
-			})
-			logTradeEventML(msg.Type, "try-sell", msg.Price)
-			mutex.Unlock()
-			saveDailyDataNoMessageUpdate()
+	case "sell":
+		data.SellStats[msg.Type]++
+		data.LastTrade[msg.Type] = time.Now()
+		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "sell", Price: msg.Price})
+		data.SellSum[msg.Type] += msg.Price
+		logTradeEventML(msg.Type, "sell", msg.Price)
+		mutex.Unlock()
+		saveDailyDataNoMessageUpdate()
 
-		// case "ah_market_floor":
-		// 	floors := msg.Floors
-		// 	windowStart := msg.WindowStartMs
-		// 	windowEnd := msg.WindowEndMs
-		// 	windowMs := msg.WindowMs
-		// 	mutex.Unlock()
-		// 	applyMarketFloors(floors, windowStart, windowEnd, windowMs)
+	case "try-sell":
+		data.TrySellStats[msg.Type]++
+		data.LastTrade[msg.Type] = time.Now()
+		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{
+			Time: time.Now(), Type: "try-sell", Price: msg.Price,
+		})
+		logTradeEventML(msg.Type, "try-sell", msg.Price)
+		mutex.Unlock()
+		saveDailyDataNoMessageUpdate()
 
-		case "info":
-			mutex.Unlock()
-			if err := wsWriteJSON(ws, initialPricePayload()); err != nil {
-				log.Printf("ошибка info payload: %v", err)
-			}
-
-		case "fleet":
-			fleetTypes := msg.Types
-			if len(fleetTypes) == 0 {
-				fleetTypes = msg.ActiveTypes
-			}
-			setClientFleetTypes(ws, fleetTypes)
-			log.Printf("[FLEET] оркестратор подключился | заявленные типы: %v", typesMapKeys(clientFleetTypes[ws]))
-			mutex.Unlock()
-			logGlobalFleetState("[FLEET]")
-
-		case "presence":
-			clientItems[ws] = copyMap(msg.Items)
-			clientInventory[ws] = copyMap(msg.Inventory)
-			setClientActiveTypes(ws, msg.ActiveTypes)
-			setClientBotsPerType(ws, msg.BotsPerType)
-			updateTypeFleetActivityLocked()
-			mutex.Unlock()
-
-		case "add":
-			jsonData, exists := rawJSONField(rawMsg, "json_data")
-			if !exists || jsonData == "" {
-				mutex.Unlock()
-				continue
-			}
-
-			jsonCacheMu.Lock()
-			jsonCache[jsonData] = time.Now().Add(jsonCacheTTL)
-			jsonCacheMu.Unlock()
-
-			updatedList := getCurrentJsonList()
-
-			mutex.Unlock()
-
-			select {
-			case broadcast <- map[string]interface{}{
-				"action": "json_update",
-				"data":   updatedList,
-			}:
-			default:
-				log.Println("Буфер broadcast переполнен при отправке json_update")
-			}
-
-			saveDailyDataNoMessageUpdate()
-
-		case "set_min_price":
-			if msg.Type == "" || msg.Price == 0 {
-				mutex.Unlock()
-				continue
-			}
-			if _, exists := itemsConfig[msg.Type]; !exists {
-				mutex.Unlock()
-				continue
-			}
-			if data.Prices[msg.Type] == msg.Price {
-				mutex.Unlock()
-				continue
-			}
-			oldPrice := data.Prices[msg.Type]
-			data.Prices[msg.Type] = msg.Price
-			data.LastManualUpdate[msg.Type] = time.Now()
-			recordExternalPriceChangeLocked(msg.Type, "server_min", oldPrice, msg.Price)
-			log.Printf("[CONFIG] %s: min -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
-			mutex.Unlock()
-			publishPrices()
-			saveDailyDataNoMessageUpdate()
-
-		case "set_max_price":
-			if msg.Type == "" || msg.Price == 0 {
-				mutex.Unlock()
-				continue
-			}
-			if _, exists := itemsConfig[msg.Type]; !exists {
-				mutex.Unlock()
-				continue
-			}
-			oldPrice := data.Prices[msg.Type]
-			if msg.Price >= oldPrice {
-				mutex.Unlock()
-				continue
-			}
-			data.Prices[msg.Type] = msg.Price
-			data.LastManualUpdate[msg.Type] = time.Now()
-			recordExternalPriceChangeLocked(msg.Type, "server_max", oldPrice, msg.Price)
-			log.Printf("[CONFIG] %s: max -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
-			mutex.Unlock()
-			publishPrices()
-			saveDailyDataNoMessageUpdate()
-		default:
-			mutex.Unlock()
+	case "info":
+		mutex.Unlock()
+		if err := wsWriteJSON(ws, initialPricePayload()); err != nil {
+			log.Printf("ошибка info payload: %v", err)
 		}
+
+	case "fleet":
+		fleetTypes := msg.Types
+		if len(fleetTypes) == 0 {
+			fleetTypes = msg.ActiveTypes
+		}
+		setClientFleetTypes(ws, fleetTypes)
+		log.Printf("[FLEET] оркестратор подключился | заявленные типы: %v", typesMapKeys(clientFleetTypes[ws]))
+		mutex.Unlock()
+		logGlobalFleetState("[FLEET]")
+
+	case "presence":
+		clientItems[ws] = copyMap(msg.Items)
+		clientInventory[ws] = copyMap(msg.Inventory)
+		setClientActiveTypes(ws, msg.ActiveTypes)
+		setClientBotsPerType(ws, msg.BotsPerType)
+		updateTypeFleetActivityLocked()
+		mutex.Unlock()
+
+	case "add":
+		jsonData, exists := rawJSONField(rawMsg, "json_data")
+		if !exists || jsonData == "" {
+			mutex.Unlock()
+			return
+		}
+
+		jsonCacheMu.Lock()
+		jsonCache[jsonData] = time.Now().Add(jsonCacheTTL)
+		jsonCacheMu.Unlock()
+
+		updatedList := getCurrentJsonList()
+		mutex.Unlock()
+
+		select {
+		case broadcast <- map[string]interface{}{
+			"action": "json_update",
+			"data":   updatedList,
+		}:
+		default:
+			log.Println("Буфер broadcast переполнен при отправке json_update")
+		}
+
+		saveDailyDataNoMessageUpdate()
+
+	case "set_min_price":
+		if msg.Type == "" || msg.Price == 0 {
+			mutex.Unlock()
+			return
+		}
+		if _, exists := itemsConfig[msg.Type]; !exists {
+			mutex.Unlock()
+			return
+		}
+		if data.Prices[msg.Type] == msg.Price {
+			mutex.Unlock()
+			return
+		}
+		oldPrice := data.Prices[msg.Type]
+		data.Prices[msg.Type] = msg.Price
+		data.LastManualUpdate[msg.Type] = time.Now()
+		recordExternalPriceChangeLocked(msg.Type, "server_min", oldPrice, msg.Price)
+		log.Printf("[CONFIG] %s: min -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
+		mutex.Unlock()
+		publishPrices()
+		saveDailyDataNoMessageUpdate()
+
+	case "set_max_price":
+		if msg.Type == "" || msg.Price == 0 {
+			mutex.Unlock()
+			return
+		}
+		if _, exists := itemsConfig[msg.Type]; !exists {
+			mutex.Unlock()
+			return
+		}
+		oldPrice := data.Prices[msg.Type]
+		if msg.Price >= oldPrice {
+			mutex.Unlock()
+			return
+		}
+		data.Prices[msg.Type] = msg.Price
+		data.LastManualUpdate[msg.Type] = time.Now()
+		recordExternalPriceChangeLocked(msg.Type, "server_max", oldPrice, msg.Price)
+		log.Printf("[CONFIG] %s: max -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
+		mutex.Unlock()
+		publishPrices()
+		saveDailyDataNoMessageUpdate()
+	default:
+		mutex.Unlock()
 	}
 }
 

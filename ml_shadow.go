@@ -106,60 +106,62 @@ func runMLShadowAsync(s mlAdjustSnapshot) {
 		return
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), mlPredictTimeout()+2*time.Second)
-		defer cancel()
+		runSafe("ml-shadow", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), mlPredictTimeout()+2*time.Second)
+			defer cancel()
 
-		resp, err := mlPredict(ctx, shadowPayloadFromSnap(s))
-		if err != nil {
-			log.Printf("[ML-SHADOW] %s: predict failed: %v", s.Item, err)
-			return
-		}
-		if strFromAny(resp["action"]) == "error" {
-			log.Printf("[ML-SHADOW] %s: %v", s.Item, resp["error"])
-			return
-		}
+			resp, err := mlPredict(ctx, shadowPayloadFromSnap(s))
+			if err != nil {
+				log.Printf("[ML-SHADOW] %s: predict failed: %v", s.Item, err)
+				return
+			}
+			if strFromAny(resp["action"]) == "error" {
+				log.Printf("[ML-SHADOW] %s: %v", s.Item, resp["error"])
+				return
+			}
 
-		mlPD := intFromAny(resp["price_delta"])
-		mlND := intFromAny(resp["nacenka_delta"])
+			mlPD := intFromAny(resp["price_delta"])
+			mlND := intFromAny(resp["nacenka_delta"])
 
-		goPriceDelta := s.GoPriceAfter - s.PriceBefore
-		goNacDelta := s.GoNacenkaAfter - s.NacenkaBefore
-		agrees := goPriceDelta == mlPD && goNacDelta == mlND
+			goPriceDelta := s.GoPriceAfter - s.PriceBefore
+			goNacDelta := s.GoNacenkaAfter - s.NacenkaBefore
+			agrees := goPriceDelta == mlPD && goNacDelta == mlND
 
-		raw, _ := json.Marshal(resp)
+			raw, _ := json.Marshal(resp)
 
-		mlDBMu.Lock()
-		defer mlDBMu.Unlock()
-		_, err = mlDB.Exec(`
+			mlDBMu.Lock()
+			defer mlDBMu.Unlock()
+			_, err = mlDB.Exec(`
 INSERT INTO ml_shadow (
-	ts, item_id, category_type, regime, go_action, ml_action,
-	go_price_delta, ml_price_delta, go_nacenka_delta, ml_nacenka_delta,
-	predicted_reward, predicted_gain_vs_hold,
-	sales, total_stock, agrees, response_json
+ts, item_id, category_type, regime, go_action, ml_action,
+go_price_delta, ml_price_delta, go_nacenka_delta, ml_nacenka_delta,
+predicted_reward, predicted_gain_vs_hold,
+sales, total_stock, agrees, response_json
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			s.At.UTC().Format(time.RFC3339),
-			s.Item, s.CategoryType, strFromAny(resp["regime"]),
-			s.GoAction, strFromAny(resp["model_action"]),
-			goPriceDelta, mlPD, goNacDelta, mlND,
-			intFromAny(resp["predicted_reward"]),
-			intFromAny(resp["predicted_gain_vs_hold"]),
-			s.Sales, s.TotalStock,
-			boolToInt(agrees),
-			string(raw),
-		)
-		if err != nil {
-			log.Printf("[ML-SHADOW] insert: %v", err)
-			return
-		}
-
-		if !agrees {
-			log.Printf("[ML-SHADOW] %s | Go: %s (%+d/%+d) | ML: %s (%+d/%+d) | reward~%d | %s",
-				s.Item, s.GoAction, goPriceDelta, goNacDelta,
-				strFromAny(resp["model_action"]), mlPD, mlND,
+				s.At.UTC().Format(time.RFC3339),
+				s.Item, s.CategoryType, strFromAny(resp["regime"]),
+				s.GoAction, strFromAny(resp["model_action"]),
+				goPriceDelta, mlPD, goNacDelta, mlND,
 				intFromAny(resp["predicted_reward"]),
-				strFromAny(resp["regime_label"]),
+				intFromAny(resp["predicted_gain_vs_hold"]),
+				s.Sales, s.TotalStock,
+				boolToInt(agrees),
+				string(raw),
 			)
-		}
+			if err != nil {
+				log.Printf("[ML-SHADOW] insert: %v", err)
+				return
+			}
+
+			if !agrees {
+				log.Printf("[ML-SHADOW] %s | Go: %s (%+d/%+d) | ML: %s (%+d/%+d) | reward~%d | %s",
+					s.Item, s.GoAction, goPriceDelta, goNacDelta,
+					strFromAny(resp["model_action"]), mlPD, mlND,
+					intFromAny(resp["predicted_reward"]),
+					strFromAny(resp["regime_label"]),
+				)
+			}
+		})
 	}()
 }
 
