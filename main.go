@@ -143,6 +143,8 @@ var (
 	// Нельзя: Lock и в той же горутине RLock/publishPrices — дедлок RWMutex.
 	mutex   = sync.RWMutex{}
 	clients = make(map[*websocket.Conn]bool)
+	// Gorilla WebSocket: не более одной Write* на соединение одновременно.
+	clientWriteMu = make(map[*websocket.Conn]*sync.Mutex)
 
 	currentDay string
 	dailyData  DailyData
@@ -398,6 +400,28 @@ func publishPrices() {
 	publishPriceUpdate()
 }
 
+func wsWriteJSON(ws *websocket.Conn, v interface{}) error {
+	mutex.RLock()
+	mu := clientWriteMu[ws]
+	mutex.RUnlock()
+	if mu == nil {
+		return fmt.Errorf("websocket write lock missing")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	return ws.WriteJSON(v)
+}
+
+func removeClient(ws *websocket.Conn) {
+	delete(clients, ws)
+	delete(clientWriteMu, ws)
+	delete(clientItems, ws)
+	delete(clientInventory, ws)
+	delete(clientActiveTypes, ws)
+	delete(clientFleetTypes, ws)
+	delete(clientBotsPerType, ws)
+}
+
 func broadcastBroker() {
 	for msg := range broadcast {
 		mutex.Lock()
@@ -408,15 +432,10 @@ func broadcastBroker() {
 		mutex.Unlock()
 
 		for _, client := range clientsCopy {
-			if err := client.WriteJSON(msg); err != nil {
+			if err := wsWriteJSON(client, msg); err != nil {
 				log.Printf("Ошибка при отправке через брокер: %v", err)
 				mutex.Lock()
-				delete(clients, client)
-				delete(clientItems, client)
-				delete(clientInventory, client)
-				delete(clientActiveTypes, client)
-				delete(clientFleetTypes, client)
-				delete(clientBotsPerType, client)
+				removeClient(client)
 				mutex.Unlock()
 			}
 		}
@@ -854,6 +873,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	mutex.Lock()
 	clients[ws] = true
+	clientWriteMu[ws] = &sync.Mutex{}
 	clientItems[ws] = make(map[string]int)
 	clientInventory[ws] = make(map[string]int)
 	clientActiveTypes[ws] = make(map[string]struct{})
@@ -863,19 +883,15 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		mutex.Lock()
-		delete(clients, ws)
-		delete(clientItems, ws)
-		delete(clientInventory, ws)
-		delete(clientActiveTypes, ws)
-		delete(clientBotsPerType, ws)
 		logClientFleetDisconnect(ws)
+		removeClient(ws)
 		mutex.Unlock()
 	}()
 
 	// Отправляем начальные данные
 	jsonList := getCurrentJsonList()
 
-	if err := ws.WriteJSON(initialPricePayload()); err != nil {
+	if err := wsWriteJSON(ws, initialPricePayload()); err != nil {
 		log.Printf("ошибка отправки каталога: %v", err)
 	}
 
@@ -957,7 +973,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		case "info":
 			mutex.Unlock()
-			if err := ws.WriteJSON(initialPricePayload()); err != nil {
+			if err := wsWriteJSON(ws, initialPricePayload()); err != nil {
 				log.Printf("ошибка info payload: %v", err)
 			}
 
