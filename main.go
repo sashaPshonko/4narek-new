@@ -189,8 +189,6 @@ func runServer() {
 		}
 		break
 	}
-	initFleetRelistFlags()
-
 	// b, err := bot.New(token)
 	// if err != nil {
 	// 	log.Printf("Error creating bot: %v", err)
