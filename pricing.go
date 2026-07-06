@@ -2,10 +2,47 @@ package main
 
 import (
 	"log"
+	"os"
+	"strings"
 	"time"
 )
 
 const cheapBuyFractionThreshold = 0.65
+
+// Слотов «Хранилище» на АХ у одного бота (4NAREK.mjs STORAGE_AH_SLOTS).
+const ahStorageSlotsPerBot = 5
+
+// typeRelistDisabled — go-типы в режиме «без перевыставления» (FLEET_ABSORB_TYPES, через запятую).
+var typeRelistDisabled map[string]struct{}
+
+func initFleetRelistFlags() {
+	typeRelistDisabled = make(map[string]struct{})
+	raw := strings.TrimSpace(os.Getenv("FLEET_ABSORB_TYPES"))
+	if raw == "" {
+		return
+	}
+	for _, t := range strings.Split(raw, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			typeRelistDisabled[t] = struct{}{}
+		}
+	}
+	if len(typeRelistDisabled) > 0 {
+		types := make([]string, 0, len(typeRelistDisabled))
+		for t := range typeRelistDisabled {
+			types = append(types, t)
+		}
+		log.Printf("[FLEET] без перевыставления (absorb): %v", types)
+	}
+}
+
+func isTypeRelistEnabled(minecraftType string) bool {
+	if typeRelistDisabled == nil {
+		return true
+	}
+	_, off := typeRelistDisabled[minecraftType]
+	return !off
+}
 
 const (
 	marketFloorWindow    = 10 * time.Minute
@@ -102,6 +139,79 @@ func stockNormFromConfig(cfg ItemConfig) int {
 		return cfg.NormalCount
 	}
 	return cfg.NormalSales
+}
+
+// categoryAhCapacityLocked — ёмкость хранилища АХ по типу (боты × 5 слотов). Только под mutex.Lock.
+func categoryAhCapacityLocked(minecraftType string) int {
+	bots := aggregateBotsPerTypeLocked()[minecraftType]
+	if bots <= 0 {
+		return 0
+	}
+	return bots * ahStorageSlotsPerBot
+}
+
+// maxReachableStockOnAHLocked — сколько лотов этого id может быть на АХ с учётом занятых слотов другими id.
+// Только под mutex.Lock.
+func maxReachableStockOnAHLocked(item string, cfg ItemConfig, onAH int, ahCounts map[string]int) int {
+	capacity := categoryAhCapacityLocked(cfg.Type)
+	if capacity <= 0 {
+		return onAH
+	}
+
+	occupiedOthers := 0
+	for name, count := range ahCounts {
+		if name == item || count <= 0 {
+			continue
+		}
+		other, ok := itemsConfig[name]
+		if !ok || other.Type != cfg.Type {
+			continue
+		}
+		occupiedOthers += count
+	}
+	if occupiedOthers == 0 {
+		return capacity
+	}
+
+	totalOccupied := onAH + occupiedOthers
+	freeSlots := capacity - totalOccupied
+	if freeSlots < 0 {
+		freeSlots = 0
+	}
+	return onAH + freeSlots
+}
+
+// stockNormReachableOnAHLocked — сток-норма из конфига достижима на АХ (слоты не забиты другими id).
+func stockNormReachableOnAHLocked(item string, cfg ItemConfig, onAH int, ahCounts map[string]int, stockNorm int) bool {
+	if !isTypeRelistEnabled(cfg.Type) {
+		return true
+	}
+	if stockNorm <= 0 {
+		return true
+	}
+	maxReachable := maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts)
+	return maxReachable >= stockNorm
+}
+
+// effectiveStockForOverstock — при перевыставлении переизбыток только по лотам на АХ (инвентарь — буфер).
+func effectiveStockForOverstock(onAH, totalStock int, relistEnabled bool) int {
+	if relistEnabled {
+		return onAH
+	}
+	return totalStock
+}
+
+// allowSellPriceIncreaseLocked — не поднимать цену, если другие id забили слоты
+// и предмет физически не может дойти до сток-нормы из конфига.
+func allowSellPriceIncreaseLocked(item string, cfg ItemConfig, onAH int, ahCounts map[string]int, stockNorm int) bool {
+	if !isTypeRelistEnabled(cfg.Type) {
+		return true
+	}
+	if stockNorm <= 0 {
+		return true
+	}
+	maxReachable := maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts)
+	return maxReachable >= stockNorm
 }
 
 func cheapBuyFraction(item string, sellPrice, nacenka, step int, since time.Time) (float64, int) {
@@ -276,21 +386,32 @@ func adjustPrice(item string) {
 	}
 
 	stockNorm := stockNormFromConfig(cfg)
+	relistEnabled := isTypeRelistEnabled(cfg.Type)
 
 	onAH := ahCounts[item]
 	totalStock := onAH + invCounts[item]
+	effectiveStock := effectiveStockForOverstock(onAH, totalStock, relistEnabled)
+	canRaisePrice := allowSellPriceIncreaseLocked(item, cfg, onAH, ahCounts, stockNorm)
+	normReachable := stockNormReachableOnAHLocked(item, cfg, onAH, ahCounts, stockNorm)
 
 	changed := false
 	action := ""
 
-	// 1. Переизбыток: много стока, мало продаж → цена вниз
-	if totalStock > stockNorm && sales < cfg.NormalSales {
-		priceFloor := minPrice + nacenka
-		if newPrice-step > priceFloor {
-			newPrice -= step
-			action = "price_down_overstock"
-			changed = true
-			state.GoodStreak = 0
+	// 1. Переизбыток: много стока, мало продаж → цена вниз (если норма достижима на АХ)
+	if effectiveStock > stockNorm && sales < cfg.NormalSales {
+		if !normReachable {
+			action = "hold_norm_unreachable"
+			log.Printf("[ADJUST] %s: skip price_down — сток-норма %d недостижима (на АХ %d, max %d, ёмкость типа %d)",
+				item, stockNorm, onAH, maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts),
+				categoryAhCapacityLocked(cfg.Type))
+		} else {
+			priceFloor := minPrice + nacenka
+			if newPrice-step > priceFloor {
+				newPrice -= step
+				action = "price_down_overstock"
+				changed = true
+				state.GoodStreak = 0
+			}
 		}
 	} else if sales < cfg.NormalSales {
 		// 2. Мало продаж, сток не переизбыток → наценка вниз, иначе цена вверх
@@ -299,11 +420,15 @@ func adjustPrice(item string) {
 			action = "nacenka_down_deficit"
 			changed = true
 			state.GoodStreak = 0
-		} else {
+		} else if canRaisePrice {
 			newPrice += step
 			action = "price_up_deficit"
 			changed = true
 			state.GoodStreak = 0
+		} else {
+			action = "hold_slots_blocked"
+			log.Printf("[ADJUST] %s: skip price_up — слоты заняты другими id (на АХ %d, норма %d, ёмкость типа %d)",
+				item, onAH, stockNorm, categoryAhCapacityLocked(cfg.Type))
 		}
 	} else if state.ExperimentCheck {
 		// 3. Проверка эксперимента (после +цена и +наценка)
@@ -405,7 +530,7 @@ func adjustPrice(item string) {
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice:  true,
+			CanRaisePrice:  canRaisePrice,
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  online,
 		}
