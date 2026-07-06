@@ -414,21 +414,22 @@ func adjustPrice(item string) {
 			}
 		}
 	} else if sales < cfg.NormalSales {
-		// 2. Мало продаж, сток не переизбыток → наценка вниз, иначе цена вверх
-		if nacenka > minNacenka {
+		// 2. Мало продаж, сток не переизбыток → наценка вниз или цена вверх (если норма достижима на АХ)
+		if !canRaisePrice {
+			action = "hold_slots_blocked"
+			log.Printf("[ADJUST] %s: skip deficit adjust — слоты заняты, норма %d недостижима (на АХ %d, max %d, ёмкость типа %d)",
+				item, stockNorm, onAH, maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts),
+				categoryAhCapacityLocked(cfg.Type))
+		} else if nacenka > minNacenka {
 			nacenka -= step
 			action = "nacenka_down_deficit"
 			changed = true
 			state.GoodStreak = 0
-		} else if canRaisePrice {
+		} else {
 			newPrice += step
 			action = "price_up_deficit"
 			changed = true
 			state.GoodStreak = 0
-		} else {
-			action = "hold_slots_blocked"
-			log.Printf("[ADJUST] %s: skip price_up — слоты заняты другими id (на АХ %d, норма %d, ёмкость типа %d)",
-				item, onAH, stockNorm, categoryAhCapacityLocked(cfg.Type))
 		}
 	} else if state.ExperimentCheck {
 		// 3. Проверка эксперимента (после +цена и +наценка)
