@@ -18,7 +18,6 @@ import (
 
 const (
 	token    = "7209712528:AAF7o20ysTcpgQb8JlVH4_CLmqH_iz5GiL8"
-	chatID   = -4709535234
 	timezone = "Asia/Tashkent"
 )
 
@@ -164,6 +163,10 @@ var (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "-list-tg-chats" {
+		runListTelegramChats()
+		return
+	}
 	for {
 		runSafe("server", runServer)
 		log.Println("[RESTART] сервер перезапускается через 2s...")

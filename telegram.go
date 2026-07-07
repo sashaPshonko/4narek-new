@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -19,8 +20,8 @@ import (
 )
 
 const (
-	telegramIntervalChatID = -4633184325
 	telegramProxyDefault   = "socks5h://127.0.0.1:1080"
+	telegramChatID         = -4709535234
 )
 
 var tgBot *bot.Bot
@@ -197,6 +198,88 @@ func initTelegramBot() {
 	log.Println("[Telegram] бот готов (api.telegram.org через xray)")
 }
 
+// fetchAndLogTelegramChats — getUpdates: id чатов, куда бот получал сообщения.
+func fetchAndLogTelegramChats() error {
+	if err := ensureTelegramXray(); err != nil {
+		return err
+	}
+	client := telegramHTTPClient(resolveTelegramProxyURL())
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?limit=100", token)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+
+	var payload struct {
+		OK     bool `json:"ok"`
+		Result []struct {
+			Message *struct {
+				Chat struct {
+					ID    int64  `json:"id"`
+					Title string `json:"title"`
+					Type  string `json:"type"`
+				} `json:"chat"`
+				Text string `json:"text"`
+			} `json:"message"`
+			ChannelPost *struct {
+				Chat struct {
+					ID    int64  `json:"id"`
+					Title string `json:"title"`
+					Type  string `json:"type"`
+				} `json:"chat"`
+			} `json:"channel_post"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+	if !payload.OK {
+		return fmt.Errorf("getUpdates: %s", string(body))
+	}
+
+	seen := make(map[int64]string)
+	for _, u := range payload.Result {
+		if u.Message != nil {
+			c := u.Message.Chat
+			title := c.Title
+			if title == "" {
+				title = strings.TrimSpace(u.Message.Text)
+			}
+			seen[c.ID] = fmt.Sprintf("%s (%s)", title, c.Type)
+		}
+		if u.ChannelPost != nil {
+			c := u.ChannelPost.Chat
+			seen[c.ID] = fmt.Sprintf("%s (channel)", c.Title)
+		}
+	}
+	if len(seen) == 0 {
+		log.Println("[Telegram] чатов в getUpdates нет — напиши что-нибудь в группу с ботом и повтори")
+		return nil
+	}
+	log.Println("[Telegram] chat id из getUpdates:")
+	for id, label := range seen {
+		log.Printf("  %d  %s", id, label)
+	}
+	return nil
+}
+
+func runListTelegramChats() {
+	if err := fetchAndLogTelegramChats(); err != nil {
+		log.Fatalf("[Telegram] %v", err)
+	}
+}
+
 func getInventoryStats(item string) (onHand, inInventory int) {
 	mutex.RLock()
 	defer mutex.RUnlock()
@@ -272,7 +355,7 @@ func sendIntervalStatsToTelegram(
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	_, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:    telegramIntervalChatID,
+		ChatID:    telegramChatID,
 		Text:      msg,
 		ParseMode: "Markdown",
 	})
@@ -320,7 +403,7 @@ func updateTelegramMessageWithoutLocks(prices, buyStats, sellStats map[string]in
 	var newMessageID int
 	if messageID == 0 {
 		msg, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
+			ChatID:    telegramChatID,
 			Text:   msgText,
 		})
 		if err != nil {
@@ -330,14 +413,14 @@ func updateTelegramMessageWithoutLocks(prices, buyStats, sellStats map[string]in
 		newMessageID = msg.ID
 	} else {
 		_, err := tgBot.EditMessageText(ctx, &bot.EditMessageTextParams{
-			ChatID:    chatID,
+			ChatID:    telegramChatID,
 			MessageID: messageID,
 			Text:      msgText,
 		})
 		if err != nil {
 			log.Printf("[Telegram] дашборд edit: %v", err)
 			msg, sendErr := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: chatID,
+				ChatID:    telegramChatID,
 				Text:   msgText,
 			})
 			if sendErr != nil {
