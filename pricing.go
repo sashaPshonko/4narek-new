@@ -361,9 +361,9 @@ func adjustPrice(item string) {
 
 	newPrice := data.Prices[item]
 	priceBefore := newPrice
-	nacenka := getNacenka(item)
-	nacenkaBefore := nacenka
-	minNacenka := resolveNacenkaMin(cfg)
+	// Наценка зафиксирована из конфига: отключены динамика и эксперименты.
+	nacenka := cfg.Nacenka
+	nacenkaBefore := cfg.Nacenka
 	step := cfg.PriceStep
 	minPrice := getMinPriceFromHistory(item)
 
@@ -414,81 +414,32 @@ func adjustPrice(item string) {
 			}
 		}
 	} else if sales < cfg.NormalSales {
-		// 2. Мало продаж, сток не переизбыток → наценка вниз или цена вверх (если норма достижима на АХ)
+		// 2. Мало продаж, сток не переизбыток → только цена вверх (наценка фиксирована)
 		if !canRaisePrice {
 			action = "hold_slots_blocked"
 			log.Printf("[ADJUST] %s: skip deficit adjust — слоты заняты, норма %d недостижима (на АХ %d, max %d, ёмкость типа %d)",
 				item, stockNorm, onAH, maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts),
 				categoryAhCapacityLocked(cfg.Type))
-		} else if nacenka > minNacenka {
-			nacenka -= step
-			action = "nacenka_down_deficit"
-			changed = true
-			state.GoodStreak = 0
 		} else {
 			newPrice += step
 			action = "price_up_deficit"
 			changed = true
 			state.GoodStreak = 0
 		}
-	} else if state.ExperimentCheck {
-		// 3. Проверка эксперимента (после +цена и +наценка)
-		state.ExperimentCheck = false
-		if profitNow < profitPrev {
-			if nacenka > minNacenka {
-				nacenka -= step
-				if nacenka < minNacenka {
-					nacenka = minNacenka
-				}
-			}
-			priceFloor := minPrice + nacenka
-			if newPrice-step > priceFloor {
-				newPrice -= step
-			} else if newPrice > priceFloor {
-				newPrice = priceFloor
-			}
-			action = "experiment_rollback"
-			changed = true
-			state.GoodStreak = 0
-		} else {
-			action = "experiment_ok"
-		}
 	} else {
-		// 4. Streak по прибыли → эксперимент роста (+price и +nacenka).
-		// Слоты АХ не проверяем: цена покупки/наценка не влияют на ёмкость хранилища.
-		if profitNow >= profitPrev {
-			state.GoodStreak++
-			if state.GoodStreak >= 3 {
-				newPrice += step
-				nacenka += step
-				state.GoodStreak = 0
-				state.ExperimentCheck = true
-				action = "experiment_start"
-				changed = true
-			}
-		} else {
-			state.GoodStreak = 0
-		}
-
-		// 5. Дешёвые покупки → наценка вверх
-		if !changed {
-			frac, n := cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
-			if n > 0 && frac >= cheapBuyFractionThreshold {
-				nacenka += step
-				action = "nacenka_up_cheap_buys"
-				changed = true
-			}
-		}
+		// 3. Эксперименты и работа с наценкой отключены.
+		state.GoodStreak = 0
+		state.ExperimentCheck = false
+		action = "hold_no_experiment"
 	}
 
 	state.LastCycleProfit = profitNow
 	data.AdjustState[item] = state
 	dailyData.AdjustState[item] = state
 
-	if nacenka != nacenkaBefore {
-		data.Nacenkas[item] = nacenka
-		dailyData.Nacenkas[item] = nacenka
-	}
+	// Всегда держим фиксированную наценку из конфига.
+	data.Nacenkas[item] = cfg.Nacenka
+	dailyData.Nacenkas[item] = cfg.Nacenka
 	if newPrice != priceBefore {
 		data.Prices[item] = newPrice
 		dailyData.Prices[item] = newPrice
