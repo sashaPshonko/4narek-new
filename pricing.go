@@ -324,6 +324,14 @@ func applyMarketFloors(floors map[string]int, windowStartMs, windowEndMs, window
 	*/
 }
 
+func sellPriceFloor(cfg ItemConfig, minBuy, nacenka int) int {
+	floor := minBuy + nacenka
+	if cfg.BasePrice > floor {
+		floor = cfg.BasePrice
+	}
+	return floor
+}
+
 func adjustPrice(item string) {
 	cfg, ok := itemsConfig[item]
 	if !ok {
@@ -386,51 +394,33 @@ func adjustPrice(item string) {
 	}
 
 	stockNorm := stockNormFromConfig(cfg)
-	relistEnabled := isTypeRelistEnabled(cfg.Type)
 
 	onAH := ahCounts[item]
-	totalStock := onAH + invCounts[item]
-	effectiveStock := effectiveStockForOverstock(onAH, totalStock, relistEnabled)
-	canRaisePrice := allowSellPriceIncreaseLocked(item, cfg, onAH, ahCounts, stockNorm)
-	normReachable := stockNormReachableOnAHLocked(item, cfg, onAH, ahCounts, stockNorm)
+	invCount := invCounts[item]
+	totalHeld := onAH + invCount
 
 	changed := false
 	action := ""
 
-	// 1. Переизбыток: много стока, мало продаж → цена вниз (если норма достижима на АХ)
-	if effectiveStock > stockNorm && sales < cfg.NormalSales {
-		if !normReachable {
-			action = "hold_norm_unreachable"
-			log.Printf("[ADJUST] %s: skip price_down — сток-норма %d недостижима (на АХ %d, max %d, ёмкость типа %d)",
-				item, stockNorm, onAH, maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts),
-				categoryAhCapacityLocked(cfg.Type))
-		} else {
-			priceFloor := minPrice + nacenka
-			if newPrice-step > priceFloor {
-				newPrice -= step
-				action = "price_down_overstock"
-				changed = true
-				state.GoodStreak = 0
-			}
-		}
-	} else if sales < cfg.NormalSales {
-		// 2. Мало продаж, сток не переизбыток → только цена вверх (наценка фиксирована)
-		if !canRaisePrice {
-			action = "hold_slots_blocked"
-			log.Printf("[ADJUST] %s: skip deficit adjust — слоты заняты, норма %d недостижима (на АХ %d, max %d, ёмкость типа %d)",
-				item, stockNorm, onAH, maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts),
-				categoryAhCapacityLocked(cfg.Type))
-		} else {
-			newPrice += step
-			action = "price_up_deficit"
+	// oldoldold.go: АХ + инвентарь ниже нормы продаж → цена вверх.
+	if totalHeld < cfg.NormalSales {
+		newPrice += step
+		action = "price_up_low_stock"
+		changed = true
+		state.GoodStreak = 0
+	} else if onAH > sales && onAH > cfg.NormalSales && sales < cfg.NormalSales {
+		// oldoldold.go: много лотов на АХ, продаж мало → цена вниз.
+		priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
+		if newPrice-step >= priceFloor {
+			newPrice -= step
+			action = "price_down_ah_overstock"
 			changed = true
 			state.GoodStreak = 0
 		}
 	} else {
-		// 3. Эксперименты и работа с наценкой отключены.
 		state.GoodStreak = 0
 		state.ExperimentCheck = false
-		action = "hold_no_experiment"
+		action = "hold"
 	}
 
 	state.LastCycleProfit = profitNow
@@ -451,8 +441,8 @@ func adjustPrice(item string) {
 		actionTaken = "hold"
 	}
 	if changed {
-		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d→%d | прибыль %d (было %d) | продажи %d | сток %d",
-			item, action, priceBefore, newPrice, nacenkaBefore, nacenka, profitNow, profitPrev, sales, totalStock)
+		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d | прибыль %d (было %d) | продажи %d | на АХ %d | в инв %d | всего %d",
+			item, action, priceBefore, newPrice, nacenka, profitNow, profitPrev, sales, onAH, invCount, totalHeld)
 	}
 
 	queueMLDecisionLocked(
@@ -478,11 +468,11 @@ func adjustPrice(item string) {
 			TrySells:       trySells,
 			ProfitNow:      profitNow,
 			OnAH:           onAH,
-			TotalStock:     totalStock,
+			TotalStock:     totalHeld,
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice:  canRaisePrice,
+			CanRaisePrice:  totalHeld < cfg.NormalSales,
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  online,
 		}
