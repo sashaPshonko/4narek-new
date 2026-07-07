@@ -1,7 +1,6 @@
 package main
 
 import (
-	// "context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	// "github.com/go-telegram/bot"
 	"github.com/gorilla/websocket"
 )
 
@@ -63,7 +61,6 @@ var (
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
-	// tgBot *bot.Bot
 )
 
 var (
@@ -190,12 +187,6 @@ func runServer() {
 		break
 	}
 	initFleetRelistFlags()
-	// b, err := bot.New(token)
-	// if err != nil {
-	// 	log.Printf("Error creating bot: %v", err)
-	// 	os.Exit(1)
-	// }
-	// tgBot = b
 
 	// Инициализация данных
 	data.Prices = make(map[string]int)
@@ -212,6 +203,7 @@ func runServer() {
 
 	loadDailyData(loc)
 	initMLLog()
+	initTelegramBot()
 
 	// Запускаем брокер рассылки
 	goImmortal("broadcastBroker", broadcastBroker)
@@ -703,12 +695,25 @@ func adjustAndReport(item string, cfg ItemConfig) {
 	now := time.Now()
 	start := now.Add(-cfg.AnalysisTime)
 
-	sales, _, _, _ := getItemStatsForReporting(item, start)
+	sales, buys, trySells, priceBefore := getItemStatsForReporting(item, start)
+	onAH, inInv := getInventoryStats(item)
 
 	log.Printf("[ANALYSIS] %s: анализ с %s по %s. Продажи: %d (норма: %d)",
 		item, start.Format("15:04:05"), now.Format("15:04:05"), sales, cfg.NormalSales)
 
 	adjustPrice(item)
+
+	mutex.RLock()
+	priceAfter := data.Prices[item]
+	mutex.RUnlock()
+
+	onlineCount := getOnlineCount()
+	sendIntervalStatsToTelegram(
+		item, start, now,
+		float64(sales), float64(cfg.NormalSales), float64(buys), float64(trySells),
+		priceBefore, priceAfter,
+		onAH, inInv, onlineCount,
+	)
 }
 
 // cloneDailySnapshotLocked — снимок dailyData; вызывать только под mutex.Lock.
@@ -756,87 +761,6 @@ func saveDailyDataNoMessageUpdate() {
 	snap := cloneDailySnapshotLocked()
 	mutex.Unlock()
 	persistDailySnapshot(&snap)
-}
-
-func updateTelegramMessageWithoutLocks(prices, buyStats, sellStats map[string]int, date string, messageID int) {
-	currentTime := time.Now().Format("2006-01-02 15:04:05")
-
-	msgText := fmt.Sprintf("📊 Статистика за %s\nПоследнее обновление: %s\n\n", date, currentTime)
-
-	for item := range itemsConfig {
-		msgText += fmt.Sprintf(
-			"🔹 %s: %d ₽\n🛒 Куплено: %d\n💰 Продано: %d\n\n",
-			item,
-			prices[item],
-			buyStats[item],
-			sellStats[item],
-		)
-	}
-
-	// ctx := context.Background()
-
-	// var newMessageID int
-	// if messageID == 0 {
-		// msg, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-		// 	ChatID: chatID,
-		// 	Text:   msgText,
-		// })
-		// if err != nil {
-		// 	log.Printf("[Telegram error] Не удалось отправить новое сообщение: %v", err)
-		// 	return
-		// }
-	// 	newMessageID = msg.ID
-	// } else {
-	// 	_, err := tgBot.EditMessageText(ctx, &bot.EditMessageTextParams{
-	// 		ChatID:    chatID,
-	// 		MessageID: messageID,
-	// 		Text:      msgText,
-	// 	})
-	// 	if err != nil {
-	// 		log.Printf("[Telegram error] Не удалось обновить сообщение: %v", err)
-
-	// 		msg, sendErr := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-	// 			ChatID: chatID,
-	// 			Text:   msgText,
-	// 		})
-	// 		if sendErr == nil {
-	// 			newMessageID = msg.ID
-	// 		} else {
-	// 			log.Printf("[Telegram error] Повторная отправка тоже не удалась: %v", sendErr)
-	// 			return
-	// 		}
-	// 	}
-	// }
-
-	// if newMessageID != 0 {
-	// 	mutex.Lock()
-	// 	dailyData.MessageID = newMessageID
-	// 	snap := cloneDailySnapshotLocked()
-	// 	mutex.Unlock()
-	// 	persistDailySnapshot(&snap)
-	// }
-}
-
-func updateTelegramMessageSimple() {
-	mutex.Lock()
-	prices := make(map[string]int)
-	buyStats := make(map[string]int)
-	sellStats := make(map[string]int)
-	date := dailyData.Date
-	messageID := dailyData.MessageID
-
-	for k, v := range data.Prices {
-		prices[k] = v
-	}
-	for k, v := range data.BuyStats {
-		buyStats[k] = v
-	}
-	for k, v := range data.SellStats {
-		sellStats[k] = v
-	}
-	mutex.Unlock()
-
-	updateTelegramMessageWithoutLocks(prices, buyStats, sellStats, date, messageID)
 }
 
 func checkDayChange(loc *time.Location) {
