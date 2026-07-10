@@ -477,9 +477,10 @@ func adjustPrice(item string) {
 			state.GoodStreak = 0
 			state.StockVsSalesCooldown = 3
 		}
-	} else if buys < sales {
-		// Покупок меньше продаж, но в доле предмета хватает места докупить разницу → цена вверх.
+	} else if buys < sales && totalHeld < cfg.NormalSales*2 {
+		// Покупок меньше продаж, сток ещё ниже нормы, и в доле хватает места докупить разницу → цена вверх.
 		// доля = (32 × боты_категории) / предметов_в_категории; свободно = доля − наличие.
+		// Если наличие уже ≥ normal_sales — не поднимаем.
 		share := itemSlotShareLocked(cfg.Type)
 		okSpace, free, need := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
 		if okSpace {

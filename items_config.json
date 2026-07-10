@@ -1,7 +1,7 @@
 {
   "pochti-megasword-1.21": {
     "base_price": 1500002,
-    "normal_sales": 4,
+    "normal_sales": 6,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
