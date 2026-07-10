@@ -52,9 +52,10 @@ const (
 
 // ItemAdjustState — streak / эксперимент / прибыль прошлого цикла.
 type ItemAdjustState struct {
-	GoodStreak      int  `json:"good_streak"`
-	ExperimentCheck bool `json:"experiment_check"`
-	LastCycleProfit int  `json:"last_cycle_profit"`
+	GoodStreak             int  `json:"good_streak"`
+	ExperimentCheck        bool `json:"experiment_check"`
+	LastCycleProfit        int  `json:"last_cycle_profit"`
+	StockVsSalesCooldown   int  `json:"stock_vs_sales_cooldown"` // циклов до следующего price_down_stock_vs_sales
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -417,20 +418,26 @@ func adjustPrice(item string) {
 			changed = true
 			state.GoodStreak = 0
 		}
-	} else if totalHeld > 0 && totalHeld >= sales*3.5 {
+	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3 {
 		// наличие (АХ+инв) ≥ 3× продаж за окно → цена вниз
 		// (даже если продажи уже ≥ нормы — иначе затоваривание держит hold)
+		// после срабатывания — пауза 3 цикла на этом предмете
 		priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
 		if newPrice-step >= priceFloor {
 			newPrice -= step
 			action = "price_down_stock_vs_sales"
 			changed = true
 			state.GoodStreak = 0
+			state.StockVsSalesCooldown = 3
 		}
 	} else {
 		state.GoodStreak = 0
 		state.ExperimentCheck = false
 		action = "hold"
+	}
+
+	if action != "price_down_stock_vs_sales" && state.StockVsSalesCooldown > 0 {
+		state.StockVsSalesCooldown--
 	}
 
 	state.LastCycleProfit = profitNow
