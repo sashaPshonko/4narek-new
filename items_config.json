@@ -59,7 +59,7 @@
   },
   "megasword-1.21": {
     "base_price": 2000004,
-    "normal_sales": 4,
+    "normal_sales": 5,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
@@ -92,7 +92,7 @@
   },
   "штаны-1.21": {
     "base_price": 600005,
-    "normal_sales": 6,
+    "normal_sales": 8,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
@@ -113,7 +113,7 @@
   },
   "нагрудник-1.21": {
     "base_price": 600007,
-    "normal_sales": 5,
+    "normal_sales": 8,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
@@ -134,7 +134,7 @@
   },
   "ботинки-1.21": {
     "base_price": 600009,
-    "normal_sales": 6,
+    "normal_sales": 8,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
@@ -155,7 +155,7 @@
   },
   "шлем-1.21": {
     "base_price": 600011,
-    "normal_sales": 6,
+    "normal_sales": 8,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
