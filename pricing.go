@@ -53,12 +53,13 @@ const (
 	marketFloorMaxStale  = 2 * time.Minute
 )
 
-// ItemAdjustState — streak / эксперимент / прибыль прошлого цикла.
+// ItemAdjustState — streak / эксперимент / метрики прошлого цикла.
 type ItemAdjustState struct {
-	GoodStreak             int  `json:"good_streak"`
-	ExperimentCheck        bool `json:"experiment_check"`
-	LastCycleProfit        int  `json:"last_cycle_profit"`
-	StockVsSalesCooldown   int  `json:"stock_vs_sales_cooldown"` // циклов до следующего price_down_stock_vs_sales
+	GoodStreak           int  `json:"good_streak"`
+	ExperimentCheck      bool `json:"experiment_check"`
+	LastCycleProfit      int  `json:"last_cycle_profit"`
+	LastCycleNacenkaSum  int  `json:"last_cycle_nacenka_sum"` // сумма наценок продаж за прошлый цикл
+	StockVsSalesCooldown int  `json:"stock_vs_sales_cooldown"`
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -136,6 +137,27 @@ func profitInWindow(item string, since time.Time) int {
 		}
 	}
 	return profit
+}
+
+// nacenkaSumInWindow — сумма наценок по продажам в окне (успех эксперимента).
+// Если у старых записей Nacenka=0 — берём текущую getNacenka как fallback.
+func nacenkaSumInWindow(item string, since time.Time) int {
+	sum := 0
+	fallback := getNacenka(item)
+	for _, trade := range data.TradeHistory[item] {
+		if !trade.Time.After(since) {
+			continue
+		}
+		if trade.Type != "sell" {
+			continue
+		}
+		n := trade.Nacenka
+		if n <= 0 {
+			n = fallback
+		}
+		sum += n
+	}
+	return sum
 }
 
 func stockNormFromConfig(cfg ItemConfig) int {
@@ -407,21 +429,18 @@ func adjustPrice(item string) {
 	trySells := countRecentTrySells(item, lastUpdate)
 	profitNow := profitInWindow(item, lastUpdate)
 	state := data.AdjustState[item]
-	profitPrev := state.LastCycleProfit
 
 	tryAdvanceCategoryMLOutcomesLocked(cfg.Type, now)
 
 	newPrice := data.Prices[item]
 	priceBefore := newPrice
-	// Наценка зафиксирована из конфига: отключены динамика и эксперименты.
-	nacenka := cfg.Nacenka
-	nacenkaBefore := cfg.Nacenka
-	// Было (динамика наценки) — раскомментировать вместе с блоком ниже:
-	// nacenka := getNacenka(item)
-	// nacenkaBefore := nacenka
-	// minNacenka := resolveNacenkaMin(cfg)
+	nacenka := getNacenka(item)
+	nacenkaBefore := nacenka
+	minNacenka := resolveNacenkaMin(cfg)
 	step := cfg.PriceStep
 	minPrice := getMinPriceFromHistory(item)
+	nacenkaSumNow := nacenkaSumInWindow(item, lastUpdate)
+	nacenkaSumPrev := state.LastCycleNacenkaSum
 
 	ahCounts := make(map[string]int)
 	invCounts := make(map[string]int)
@@ -449,15 +468,47 @@ func adjustPrice(item string) {
 
 	changed := false
 	action := ""
+	var experimentTG *experimentTelegramEvent
 
-	// oldoldold.go: АХ + инвентарь ниже нормы продаж → цена вверх.
-	if totalHeld < cfg.NormalSales {
+	// 0. Сначала закрываем эксперимент прошлого цикла (метрика — сумма наценок продаж).
+	if state.ExperimentCheck {
+		state.ExperimentCheck = false
+		if nacenkaSumNow < nacenkaSumPrev {
+			if nacenka > minNacenka {
+				nacenka -= step
+				if nacenka < minNacenka {
+					nacenka = minNacenka
+				}
+			}
+			priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
+			if newPrice-step > priceFloor {
+				newPrice -= step
+			} else if newPrice > priceFloor {
+				newPrice = priceFloor
+			}
+			action = "experiment_rollback"
+			changed = true
+			state.GoodStreak = 0
+		} else {
+			action = "experiment_ok"
+		}
+		experimentTG = &experimentTelegramEvent{
+			Item:           item,
+			Action:         action,
+			PriceBefore:    priceBefore,
+			PriceAfter:     newPrice,
+			NacenkaBefore:  nacenkaBefore,
+			NacenkaAfter:   nacenka,
+			NacenkaSumNow:  nacenkaSumNow,
+			NacenkaSumPrev: nacenkaSumPrev,
+			Sales:          sales,
+		}
+	} else if totalHeld < cfg.NormalSales {
 		newPrice += step
 		action = "price_up_low_stock"
 		changed = true
 		state.GoodStreak = 0
 	} else if onAH > sales && onAH > cfg.NormalSales && sales < cfg.NormalSales {
-		// oldoldold.go: много лотов на АХ, продаж мало → цена вниз.
 		priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
 		if newPrice-step >= priceFloor {
 			newPrice -= step
@@ -466,9 +517,6 @@ func adjustPrice(item string) {
 			state.GoodStreak = 0
 		}
 	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*4 {
-		// наличие (АХ+инв) ≥ 4× продаж за окно → цена вниз
-		// (даже если продажи уже ≥ нормы — иначе затоваривание держит hold)
-		// после срабатывания — пауза 3 цикла на этом предмете
 		priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
 		if newPrice-step >= priceFloor {
 			newPrice -= step
@@ -478,9 +526,6 @@ func adjustPrice(item string) {
 			state.StockVsSalesCooldown = 3
 		}
 	} else if buys < sales && totalHeld < cfg.NormalSales*2 {
-		// Покупок меньше продаж, сток ещё ниже нормы, и в доле хватает места докупить разницу → цена вверх.
-		// доля = (32 × боты_категории) / предметов_в_категории; свободно = доля − наличие.
-		// Если наличие уже ≥ normal_sales — не поднимаем.
 		share := itemSlotShareLocked(cfg.Type)
 		okSpace, free, need := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
 		if okSpace {
@@ -491,83 +536,18 @@ func adjustPrice(item string) {
 			log.Printf("[ADJUST] %s: buy_deficit space ok | buys=%d sales=%d need=%d free=%d share=%d held=%d bots=%d items=%d",
 				item, buys, sales, need, free, share, totalHeld,
 				aggregateBotsPerTypeLocked()[cfg.Type], countItemsInCategoryLocked(cfg.Type))
-		} else {
-			state.GoodStreak = 0
-			state.ExperimentCheck = false
-			action = "hold"
 		}
-	} else {
-		state.GoodStreak = 0
-		state.ExperimentCheck = false
-		action = "hold"
 	}
 
-	if action != "price_down_stock_vs_sales" && state.StockVsSalesCooldown > 0 {
-		state.StockVsSalesCooldown--
-	}
-
-	/*
-		=== ОТКЛЮЧЕНО: динамика наценки + эксперименты (было до фиксации cfg.Nacenka) ===
-		Чтобы вернуть: вместо фиксированного nacenka := cfg.Nacenka использовать
-		getNacenka / resolveNacenkaMin выше, и вместо текущего if/else по цене —
-		старую ветку (или встроить куски ниже в else после price_down_*).
-
-		Нужны: minNacenka, stockNorm, relistEnabled, effectiveStock, canRaisePrice,
-		normReachable, totalStock — см. git 837e654e^:pricing.go adjustPrice.
-
-		// 1. Переизбыток: много стока, мало продаж → цена вниз (если норма достижима на АХ)
-		if effectiveStock > stockNorm && sales < cfg.NormalSales {
-			if !normReachable {
-				action = "hold_norm_unreachable"
-			} else {
-				priceFloor := minPrice + nacenka
-				if newPrice-step > priceFloor {
-					newPrice -= step
-					action = "price_down_overstock"
-					changed = true
-					state.GoodStreak = 0
-				}
-			}
-		} else if sales < cfg.NormalSales {
-			// 2. Мало продаж, сток не переизбыток → наценка вниз или цена вверх
-			if !canRaisePrice {
-				action = "hold_slots_blocked"
-			} else if nacenka > minNacenka {
-				nacenka -= step
-				action = "nacenka_down_deficit"
-				changed = true
-				state.GoodStreak = 0
-			} else {
-				newPrice += step
-				action = "price_up_deficit"
-				changed = true
-				state.GoodStreak = 0
-			}
-		} else if state.ExperimentCheck {
-			// 3. Проверка эксперимента (после +цена и +наценка)
-			state.ExperimentCheck = false
-			if profitNow < profitPrev {
-				if nacenka > minNacenka {
-					nacenka -= step
-					if nacenka < minNacenka {
-						nacenka = minNacenka
-					}
-				}
-				priceFloor := minPrice + nacenka
-				if newPrice-step > priceFloor {
-					newPrice -= step
-				} else if newPrice > priceFloor {
-					newPrice = priceFloor
-				}
-				action = "experiment_rollback"
-				changed = true
-				state.GoodStreak = 0
-			} else {
-				action = "experiment_ok"
-			}
+	// Динамика наценки + старт эксперимента (если цена ещё не менялась).
+	if !changed {
+		if sales < cfg.NormalSales && nacenka > minNacenka {
+			nacenka -= step
+			action = "nacenka_down_deficit"
+			changed = true
+			state.GoodStreak = 0
 		} else {
-			// 4. Streak по прибыли → эксперимент роста (+price и +nacenka)
-			if profitNow >= profitPrev {
+			if nacenkaSumNow >= nacenkaSumPrev {
 				state.GoodStreak++
 				if state.GoodStreak >= 3 {
 					newPrice += step
@@ -576,12 +556,22 @@ func adjustPrice(item string) {
 					state.ExperimentCheck = true
 					action = "experiment_start"
 					changed = true
+					experimentTG = &experimentTelegramEvent{
+						Item:           item,
+						Action:         action,
+						PriceBefore:    priceBefore,
+						PriceAfter:     newPrice,
+						NacenkaBefore:  nacenkaBefore,
+						NacenkaAfter:   nacenka,
+						NacenkaSumNow:  nacenkaSumNow,
+						NacenkaSumPrev: nacenkaSumPrev,
+						Sales:          sales,
+					}
 				}
 			} else {
 				state.GoodStreak = 0
 			}
 
-			// 5. Дешёвые покупки → наценка вверх
 			if !changed {
 				frac, n := cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
 				if n > 0 && frac >= cheapBuyFractionThreshold {
@@ -591,21 +581,24 @@ func adjustPrice(item string) {
 				}
 			}
 		}
-
-		if nacenka != nacenkaBefore {
-			data.Nacenkas[item] = nacenka
-			dailyData.Nacenkas[item] = nacenka
+		if action == "" {
+			action = "hold"
 		}
-		=== конец отключённого блока наценок ===
-	*/
+	}
+
+	if action != "price_down_stock_vs_sales" && state.StockVsSalesCooldown > 0 {
+		state.StockVsSalesCooldown--
+	}
 
 	state.LastCycleProfit = profitNow
+	state.LastCycleNacenkaSum = nacenkaSumNow
 	data.AdjustState[item] = state
 	dailyData.AdjustState[item] = state
 
-	// Всегда держим фиксированную наценку из конфига.
-	data.Nacenkas[item] = cfg.Nacenka
-	dailyData.Nacenkas[item] = cfg.Nacenka
+	if nacenka != nacenkaBefore {
+		data.Nacenkas[item] = nacenka
+		dailyData.Nacenkas[item] = nacenka
+	}
 	if newPrice != priceBefore {
 		data.Prices[item] = newPrice
 		dailyData.Prices[item] = newPrice
@@ -617,8 +610,8 @@ func adjustPrice(item string) {
 		actionTaken = "hold"
 	}
 	if changed {
-		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d | прибыль %d (было %d) | продажи %d | на АХ %d | в инв %d | всего %d",
-			item, action, priceBefore, newPrice, nacenka, profitNow, profitPrev, sales, onAH, invCount, totalHeld)
+		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d→%d | Σнаценок %d (было %d) | продажи %d | на АХ %d | в инв %d | всего %d",
+			item, action, priceBefore, newPrice, nacenkaBefore, nacenka, nacenkaSumNow, nacenkaSumPrev, sales, onAH, invCount, totalHeld)
 	}
 
 	queueMLDecisionLocked(
@@ -656,6 +649,10 @@ func adjustPrice(item string) {
 
 	needBroadcast := changed
 	mutex.Unlock()
+
+	if experimentTG != nil {
+		enqueueExperimentTelegram(*experimentTG)
+	}
 
 	if mlShadowEnabled() {
 		runMLShadowAsync(shadowSnap)

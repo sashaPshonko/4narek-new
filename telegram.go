@@ -16,15 +16,38 @@ import (
 	"time"
 
 	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 	"golang.org/x/net/proxy"
 )
 
 const (
-	telegramProxyDefault   = "socks5h://127.0.0.1:1080"
-	telegramChatID         = -4709535234
+	telegramProxyDefault = "socks5h://127.0.0.1:1080"
+	telegramChatID       = -4709535234
+	telegramMinInterval  = 1200 * time.Millisecond // ~50 msg/min — ниже лимита TG
+	telegramQueueSize    = 256
 )
 
 var tgBot *bot.Bot
+
+type tgQueuedMsg struct {
+	text      string
+	parseMode string
+}
+
+var tgOutbox chan tgQueuedMsg
+
+// experimentTelegramEvent — лог эксперимента в TG (после unlock adjustPrice).
+type experimentTelegramEvent struct {
+	Item           string
+	Action         string
+	PriceBefore    int
+	PriceAfter     int
+	NacenkaBefore  int
+	NacenkaAfter   int
+	NacenkaSumNow  int
+	NacenkaSumPrev int
+	Sales          int
+}
 
 func resolveTelegramProxyURL() string {
 	v := strings.TrimSpace(os.Getenv("TELEGRAM_PROXY"))
@@ -195,7 +218,90 @@ func initTelegramBot() {
 		return
 	}
 	tgBot = b
+	startTelegramOutbox()
 	log.Println("[Telegram] бот готов (api.telegram.org через xray)")
+}
+
+func startTelegramOutbox() {
+	if tgOutbox != nil {
+		return
+	}
+	tgOutbox = make(chan tgQueuedMsg, telegramQueueSize)
+	go func() {
+		for msg := range tgOutbox {
+			sendTelegramNow(msg.text, msg.parseMode)
+			time.Sleep(telegramMinInterval)
+		}
+	}()
+	log.Printf("[Telegram] outbox: пауза %v между сообщениями", telegramMinInterval)
+}
+
+func sendTelegramNow(text, parseMode string) {
+	if tgBot == nil || text == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	params := &bot.SendMessageParams{
+		ChatID: telegramChatID,
+		Text:   text,
+	}
+	if parseMode != "" {
+		params.ParseMode = models.ParseMode(parseMode)
+	}
+	if _, err := tgBot.SendMessage(ctx, params); err != nil {
+		log.Printf("[Telegram] send: %v", err)
+	}
+}
+
+/** Поставить сообщение в очередь (не блокирует adjustPrice). */
+func enqueueTelegramMessage(text, parseMode string) {
+	if tgBot == nil || text == "" {
+		return
+	}
+	if tgOutbox == nil {
+		startTelegramOutbox()
+	}
+	select {
+	case tgOutbox <- tgQueuedMsg{text: text, parseMode: parseMode}:
+	default:
+		log.Printf("[Telegram] очередь полна — дроп (%d символов)", len(text))
+	}
+}
+
+func enqueueExperimentTelegram(ev experimentTelegramEvent) {
+	var title, body string
+	switch ev.Action {
+	case "experiment_start":
+		title = "🧪 Эксперимент СТАРТ"
+		body = "3 цикла роста Σнаценок → +цена и +наценка. Ждём следующий цикл."
+	case "experiment_ok":
+		title = "🧪 Эксперимент OK"
+		body = "Σнаценок продаж не упала — оставляем цену/наценку."
+	case "experiment_rollback":
+		title = "🧪 Эксперимент FAIL"
+		body = "Σнаценок продаж упала — откат цены/наценки."
+	default:
+		title = "🧪 Эксперимент"
+		body = ev.Action
+	}
+	msg := fmt.Sprintf(
+		"*%s*\n"+
+			"📦 `%s`\n"+
+			"%s\n"+
+			"💰 Цена: %d → %d\n"+
+			"🏷 Наценка: %d → %d\n"+
+			"Σ наценок продаж: *%d* (было %d)\n"+
+			"📊 Продаж в окне: %d",
+		title,
+		ev.Item,
+		body,
+		ev.PriceBefore, ev.PriceAfter,
+		ev.NacenkaBefore, ev.NacenkaAfter,
+		ev.NacenkaSumNow, ev.NacenkaSumPrev,
+		ev.Sales,
+	)
+	enqueueTelegramMessage(msg, "Markdown")
 }
 
 // fetchAndLogTelegramChats — getUpdates: id чатов, куда бот получал сообщения.
@@ -352,16 +458,7 @@ func sendIntervalStatsToTelegram(
 		onlineCount,
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	_, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:    telegramChatID,
-		Text:      msg,
-		ParseMode: "Markdown",
-	})
-	if err != nil {
-		log.Printf("[Telegram] интервал-стата %s: %v", item, err)
-	}
+	enqueueTelegramMessage(msg, "Markdown")
 
 	plainLog := fmt.Sprintf(
 		"%s [%s → %s] %s | Покупки: %.0f | Продажи: %.0f/%.0f | Цена: %d→%d | АХ: %d | Инв: %d | Онлайн: %d\n",

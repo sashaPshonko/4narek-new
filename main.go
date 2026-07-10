@@ -114,9 +114,10 @@ type DailyData struct {
 var itemsConfig map[string]ItemConfig
 
 type TradeLog struct {
-	Time  time.Time
-	Type  string // "buy", "sell" или "try-sell"
-	Price int
+	Time    time.Time
+	Type    string // "buy", "sell" или "try-sell"
+	Price   int
+	Nacenka int // наценка на момент sell (для экспериментов)
 }
 
 type Data struct {
@@ -918,7 +919,12 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	case "sell":
 		data.SellStats[msg.Type]++
 		data.LastTrade[msg.Type] = time.Now()
-		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "sell", Price: msg.Price})
+		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{
+			Time:    time.Now(),
+			Type:    "sell",
+			Price:   msg.Price,
+			Nacenka: getNacenka(msg.Type),
+		})
 		data.SellSum[msg.Type] += msg.Price
 		logTradeEventML(msg.Type, "sell", msg.Price)
 		mutex.Unlock()
