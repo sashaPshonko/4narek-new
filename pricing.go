@@ -418,7 +418,7 @@ func adjustPrice(item string) {
 			changed = true
 			state.GoodStreak = 0
 		}
-	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3.5 {
+	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3 {
 		// наличие (АХ+инв) ≥ 3× продаж за окно → цена вниз
 		// (даже если продажи уже ≥ нормы — иначе затоваривание держит hold)
 		// после срабатывания — пауза 3 цикла на этом предмете
