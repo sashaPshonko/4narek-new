@@ -12,6 +12,9 @@ const cheapBuyFractionThreshold = 0.65
 // Слотов «Хранилище» на АХ у одного бота (4NAREK.mjs STORAGE_AH_SLOTS).
 const ahStorageSlotsPerBot = 5
 
+// Всего слотов у бота под лоты категории: инвентарь + АХ.
+const botTotalSlots = 32
+
 // typeRelistDisabled — go-типы в режиме «без перевыставления» (FLEET_ABSORB_TYPES, через запятую).
 var typeRelistDisabled map[string]struct{}
 
@@ -333,6 +336,46 @@ func sellPriceFloor(cfg ItemConfig, minBuy, nacenka int) int {
 	return floor
 }
 
+// countItemsInCategoryLocked — сколько id в items_config с данным go-типом. Только под mutex.Lock.
+func countItemsInCategoryLocked(minecraftType string) int {
+	n := 0
+	for _, conf := range itemsConfig {
+		if conf.Type == minecraftType {
+			n++
+		}
+	}
+	return n
+}
+
+// itemSlotShareLocked — доля слотов категории на один предмет:
+// (32 × боты_в_категории) / число_предметов_в_категории.
+// Только под mutex.Lock.
+func itemSlotShareLocked(minecraftType string) int {
+	bots := aggregateBotsPerTypeLocked()[minecraftType]
+	nItems := countItemsInCategoryLocked(minecraftType)
+	if bots <= 0 || nItems <= 0 {
+		return 0
+	}
+	return (botTotalSlots * bots) / nItems
+}
+
+// hasSpaceToCoverBuyDeficit — хватает ли свободной доли предмета, чтобы докупить (sales−buys).
+// free = share − totalHeld; need = sales − buys (только при buys < sales).
+func hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys int) (ok bool, free, need int) {
+	if buys >= sales {
+		return false, 0, 0
+	}
+	need = sales - buys
+	if share <= 0 {
+		return false, 0, need
+	}
+	free = share - totalHeld
+	if free < 0 {
+		free = 0
+	}
+	return free >= need, free, need
+}
+
 func adjustPrice(item string) {
 	cfg, ok := itemsConfig[item]
 	if !ok {
@@ -423,7 +466,7 @@ func adjustPrice(item string) {
 			state.GoodStreak = 0
 		}
 	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*4 {
-		// наличие (АХ+инв) ≥ 3× продаж за окно → цена вниз
+		// наличие (АХ+инв) ≥ 4× продаж за окно → цена вниз
 		// (даже если продажи уже ≥ нормы — иначе затоваривание держит hold)
 		// после срабатывания — пауза 3 цикла на этом предмете
 		priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
@@ -433,6 +476,24 @@ func adjustPrice(item string) {
 			changed = true
 			state.GoodStreak = 0
 			state.StockVsSalesCooldown = 3
+		}
+	} else if buys < sales {
+		// Покупок меньше продаж, но в доле предмета хватает места докупить разницу → цена вверх.
+		// доля = (32 × боты_категории) / предметов_в_категории; свободно = доля − наличие.
+		share := itemSlotShareLocked(cfg.Type)
+		okSpace, free, need := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
+		if okSpace {
+			newPrice += step
+			action = "price_up_buy_deficit_with_space"
+			changed = true
+			state.GoodStreak = 0
+			log.Printf("[ADJUST] %s: buy_deficit space ok | buys=%d sales=%d need=%d free=%d share=%d held=%d bots=%d items=%d",
+				item, buys, sales, need, free, share, totalHeld,
+				aggregateBotsPerTypeLocked()[cfg.Type], countItemsInCategoryLocked(cfg.Type))
+		} else {
+			state.GoodStreak = 0
+			state.ExperimentCheck = false
+			action = "hold"
 		}
 	} else {
 		state.GoodStreak = 0
