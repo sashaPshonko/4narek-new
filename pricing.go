@@ -373,6 +373,10 @@ func adjustPrice(item string) {
 	// Наценка зафиксирована из конфига: отключены динамика и эксперименты.
 	nacenka := cfg.Nacenka
 	nacenkaBefore := cfg.Nacenka
+	// Было (динамика наценки) — раскомментировать вместе с блоком ниже:
+	// nacenka := getNacenka(item)
+	// nacenkaBefore := nacenka
+	// minNacenka := resolveNacenkaMin(cfg)
 	step := cfg.PriceStep
 	minPrice := getMinPriceFromHistory(item)
 
@@ -418,7 +422,7 @@ func adjustPrice(item string) {
 			changed = true
 			state.GoodStreak = 0
 		}
-	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3 {
+	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*4 {
 		// наличие (АХ+инв) ≥ 3× продаж за окно → цена вниз
 		// (даже если продажи уже ≥ нормы — иначе затоваривание держит hold)
 		// после срабатывания — пауза 3 цикла на этом предмете
@@ -439,6 +443,99 @@ func adjustPrice(item string) {
 	if action != "price_down_stock_vs_sales" && state.StockVsSalesCooldown > 0 {
 		state.StockVsSalesCooldown--
 	}
+
+	/*
+		=== ОТКЛЮЧЕНО: динамика наценки + эксперименты (было до фиксации cfg.Nacenka) ===
+		Чтобы вернуть: вместо фиксированного nacenka := cfg.Nacenka использовать
+		getNacenka / resolveNacenkaMin выше, и вместо текущего if/else по цене —
+		старую ветку (или встроить куски ниже в else после price_down_*).
+
+		Нужны: minNacenka, stockNorm, relistEnabled, effectiveStock, canRaisePrice,
+		normReachable, totalStock — см. git 837e654e^:pricing.go adjustPrice.
+
+		// 1. Переизбыток: много стока, мало продаж → цена вниз (если норма достижима на АХ)
+		if effectiveStock > stockNorm && sales < cfg.NormalSales {
+			if !normReachable {
+				action = "hold_norm_unreachable"
+			} else {
+				priceFloor := minPrice + nacenka
+				if newPrice-step > priceFloor {
+					newPrice -= step
+					action = "price_down_overstock"
+					changed = true
+					state.GoodStreak = 0
+				}
+			}
+		} else if sales < cfg.NormalSales {
+			// 2. Мало продаж, сток не переизбыток → наценка вниз или цена вверх
+			if !canRaisePrice {
+				action = "hold_slots_blocked"
+			} else if nacenka > minNacenka {
+				nacenka -= step
+				action = "nacenka_down_deficit"
+				changed = true
+				state.GoodStreak = 0
+			} else {
+				newPrice += step
+				action = "price_up_deficit"
+				changed = true
+				state.GoodStreak = 0
+			}
+		} else if state.ExperimentCheck {
+			// 3. Проверка эксперимента (после +цена и +наценка)
+			state.ExperimentCheck = false
+			if profitNow < profitPrev {
+				if nacenka > minNacenka {
+					nacenka -= step
+					if nacenka < minNacenka {
+						nacenka = minNacenka
+					}
+				}
+				priceFloor := minPrice + nacenka
+				if newPrice-step > priceFloor {
+					newPrice -= step
+				} else if newPrice > priceFloor {
+					newPrice = priceFloor
+				}
+				action = "experiment_rollback"
+				changed = true
+				state.GoodStreak = 0
+			} else {
+				action = "experiment_ok"
+			}
+		} else {
+			// 4. Streak по прибыли → эксперимент роста (+price и +nacenka)
+			if profitNow >= profitPrev {
+				state.GoodStreak++
+				if state.GoodStreak >= 3 {
+					newPrice += step
+					nacenka += step
+					state.GoodStreak = 0
+					state.ExperimentCheck = true
+					action = "experiment_start"
+					changed = true
+				}
+			} else {
+				state.GoodStreak = 0
+			}
+
+			// 5. Дешёвые покупки → наценка вверх
+			if !changed {
+				frac, n := cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
+				if n > 0 && frac >= cheapBuyFractionThreshold {
+					nacenka += step
+					action = "nacenka_up_cheap_buys"
+					changed = true
+				}
+			}
+		}
+
+		if nacenka != nacenkaBefore {
+			data.Nacenkas[item] = nacenka
+			dailyData.Nacenkas[item] = nacenka
+		}
+		=== конец отключённого блока наценок ===
+	*/
 
 	state.LastCycleProfit = profitNow
 	data.AdjustState[item] = state
