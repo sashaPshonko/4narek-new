@@ -417,7 +417,7 @@ func adjustPrice(item string) {
 			changed = true
 			state.GoodStreak = 0
 		}
-	} else if totalHeld > 0 && totalHeld >= sales*3 {
+	} else if totalHeld > 0 && totalHeld >= sales*3.5 {
 		// наличие (АХ+инв) ≥ 3× продаж за окно → цена вниз
 		// (даже если продажи уже ≥ нормы — иначе затоваривание держит hold)
 		priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
