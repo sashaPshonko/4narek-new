@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const cheapBuyFractionThreshold = 0.65
+const cheapBuyFractionThreshold = 0.50
 
 // Слотов «Хранилище» на АХ у одного бота (4NAREK.mjs STORAGE_AH_SLOTS).
 const ahStorageSlotsPerBot = 5
@@ -240,19 +240,20 @@ func allowSellPriceIncreaseLocked(item string, cfg ItemConfig, onAH int, ahCount
 	return maxReachable >= stockNorm
 }
 
+// cheapBuyFraction — доля покупок ≥ на price_step ниже buy-потолка (sell − nacenka).
 func cheapBuyFraction(item string, sellPrice, nacenka, step int, since time.Time) (float64, int) {
 	hist := priceHistory[item]
 	if hist == nil || len(hist.Records) == 0 {
 		return 0, 0
 	}
-	threshold := sellPrice - nacenka - step
+	buyMax := sellPrice - nacenka
 	cheap, total := 0, 0
 	for _, r := range hist.Records {
 		if !r.Time.After(since) {
 			continue
 		}
 		total++
-		if r.Price < threshold {
+		if buyMax-r.Price >= step {
 			cheap++
 		}
 	}
@@ -516,14 +517,23 @@ func adjustPrice(item string) {
 			changed = true
 			state.GoodStreak = 0
 		}
-	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*4 {
-		priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
-		if newPrice-step >= priceFloor {
-			newPrice -= step
-			action = "price_down_stock_vs_sales"
+	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3 {
+		// наличие ≥ 3× продаж: продажи в норме → наценка вверх; иначе sell вниз
+		if sales >= cfg.NormalSales {
+			nacenka += step
+			action = "nacenka_up_stock_vs_sales"
 			changed = true
 			state.GoodStreak = 0
 			state.StockVsSalesCooldown = 3
+		} else {
+			priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
+			if newPrice-step >= priceFloor {
+				newPrice -= step
+				action = "price_down_stock_vs_sales"
+				changed = true
+				state.GoodStreak = 0
+				state.StockVsSalesCooldown = 3
+			}
 		}
 	} else if buys < sales && totalHeld < cfg.NormalSales*2 {
 		share := itemSlotShareLocked(cfg.Type)
@@ -586,7 +596,7 @@ func adjustPrice(item string) {
 		}
 	}
 
-	if action != "price_down_stock_vs_sales" && state.StockVsSalesCooldown > 0 {
+	if action != "nacenka_up_stock_vs_sales" && action != "price_down_stock_vs_sales" && state.StockVsSalesCooldown > 0 {
 		state.StockVsSalesCooldown--
 	}
 
