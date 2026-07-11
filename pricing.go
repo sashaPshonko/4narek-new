@@ -530,13 +530,14 @@ func adjustPrice(item string) {
 			}
 		} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3 {
 			// наличие ≥ 3× продаж: продажи в норме → наценка вверх; иначе sell вниз
+			// (вниз только если onAH или trySells выше нормы — иначе при sales=0 любое наличие бьёт цену)
 			if sales >= cfg.NormalSales {
 				nacenka += step
 				action = "nacenka_up_stock_vs_sales"
 				changed = true
 				state.GoodStreak = 0
 				state.StockVsSalesCooldown = 3
-			} else if !noOverstockDown {
+			} else if !noOverstockDown && (onAH > cfg.NormalSales || trySells > cfg.NormalSales) {
 				priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
 				if newPrice-step >= priceFloor {
 					newPrice -= step
