@@ -452,7 +452,9 @@ func actionReasonRU(action string) string {
 	case "nacenka_up_stock_vs_sales":
 		return "сток ≥ 3× продаж, но продажи уже в норме → поднимаем наценку (покупаем агрессивнее)"
 	case "price_up_buy_deficit_with_space":
-		return "покупок меньше продаж, в доле слотов есть место → поднимаем цену"
+		return "покупок меньше продаж, есть место, наценка уже на мин → поднимаем цену"
+	case "nacenka_down_buy_deficit_with_space":
+		return "покупок меньше продаж, есть место → сначала снижаем наценку"
 	case "nacenka_down_deficit":
 		return "продаж меньше нормы, цену не трогали → снижаем наценку"
 	case "nacenka_up_cheap_buys":
@@ -765,13 +767,20 @@ func adjustPrice(item string) AdjustReport {
 			okSpace, f, n := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
 			free, need = f, n
 			if okSpace {
-				newPrice += step
-				action = "price_up_buy_deficit_with_space"
+				if nacenka > minNacenka {
+					nacenka -= step
+					if nacenka < minNacenka {
+						nacenka = minNacenka
+					}
+					action = "nacenka_down_buy_deficit_with_space"
+				} else {
+					newPrice += step
+					action = "price_up_buy_deficit_with_space"
+				}
 				changed = true
 				state.GoodStreak = 0
-				log.Printf("[ADJUST] %s: buy_deficit space ok | buys=%d sales=%d need=%d free=%d share=%d held=%d bots=%d items=%d",
-					item, buys, sales, need, free, share, totalHeld,
-					aggregateBotsPerTypeLocked()[cfg.Type], countItemsInCategoryLocked(cfg.Type))
+				log.Printf("[ADJUST] %s: buy_deficit %s | buys=%d sales=%d need=%d free=%d share=%d held=%d nacenka=%d→%d price=%d",
+					item, action, buys, sales, need, free, share, totalHeld, nacenkaBefore, nacenka, newPrice)
 			} else {
 				notes = append(notes, fmt.Sprintf("buy-deficit: buys<sales, но места мало (free=%d need=%d share=%d)", free, need, share))
 			}
