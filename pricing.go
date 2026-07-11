@@ -83,13 +83,13 @@ const (
 	marketFloorMaxStale  = 2 * time.Minute
 )
 
-// ItemAdjustState — streak / эксперимент / метрики прошлого цикла.
+// ItemAdjustState — состояние CAPITAL-контроллера между циклами.
 type ItemAdjustState struct {
-	GoodStreak           int  `json:"good_streak"`
-	ExperimentCheck      bool `json:"experiment_check"`
+	GoodStreak           int  `json:"good_streak"`            // тихие циклы с непадающей Σнаценок (для skim)
+	ExperimentCheck      bool `json:"experiment_check"`       // проверить прошлый skim в этом цикле
 	LastCycleProfit      int  `json:"last_cycle_profit"`
-	LastCycleNacenkaSum  int  `json:"last_cycle_nacenka_sum"` // сумма наценок продаж за прошлый цикл
-	StockVsSalesCooldown int  `json:"stock_vs_sales_cooldown"`
+	LastCycleNacenkaSum  int  `json:"last_cycle_nacenka_sum"`
+	StockVsSalesCooldown int  `json:"stock_vs_sales_cooldown"` // refractory после dump −P
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -437,42 +437,29 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 
 func actionReasonRU(action string) string {
 	switch action {
-	case "price_up_low_stock":
-		return "сток ниже нормы, наценка уже на мин → поднимаем цену"
-	case "nacenka_down_low_stock":
-		return "сток ниже нормы → сначала снижаем наценку"
-	case "price_down_ah_overstock":
-		return "явный перебор стока (≥2× нормы) и продаж мало → снижаем цену"
-	case "price_down_stock_vs_sales":
-		return "явный перебор стока (≥2× нормы) и продаж мало → снижаем цену"
-	case "price_down_overstock_held":
-		return "сигнал витрины + продаж < нормы → снижаем цену"
-	case "price_down_overstock_and_nacenka_buy_deficit":
-		return "витрина+мало продаж → −цена; buys<sales и есть место → −наценка"
+	case "capital_hold":
+		return "капитал: hold — нет давления выше порога (не крутим винты зря)"
+	case "capital_dump":
+		return "капитал: dump — витрина трется (try/onAH), sales слабые → −цена"
+	case "capital_fill":
+		return "капитал: fill — слоты простаивают / недокупка → −наценка"
+	case "capital_fill_price":
+		return "капитал: fill — N на полу, buys отстают → +цена (поднять buy-потолок)"
+	case "capital_skim":
+		return "капитал: skim — поток 1:1 и маржа толстая на столе → +наценка"
+	case "capital_rollback":
+		return "капитал: откат неудачного skim"
 	case "price_down_buy_surge":
-		return "резкий выкуп: surge ≥2× нормы и продаж < нормы → цена сразу вниз"
-	case "nacenka_up_stock_vs_sales":
-		return "сток ≥2× нормы, продажи в норме → поднимаем наценку (покупаем агрессивнее)"
-	case "price_up_buy_deficit_with_space":
-		return "покупок меньше продаж, есть место, наценка уже на мин → поднимаем цену"
-	case "nacenka_down_buy_deficit_with_space":
-		return "покупок меньше продаж, есть место → снижаем наценку"
-	case "nacenka_down_deficit":
-		return "продаж меньше нормы и сток ещё ниже нормы → снижаем наценку"
-	case "nacenka_up_cheap_buys":
-		return "≥50% покупок дешевле buy-потолка на step → поднимаем наценку"
-	case "experiment_start":
-		return "3 цикла подряд Σ наценок продаж не хуже → эксперимент: +цена и +наценка"
-	case "experiment_ok":
-		return "эксперимент: Σ наценок не упала — оставляем как есть"
-	case "experiment_rollback":
-		return "эксперимент: Σ наценок упала — откат цены/наценки"
+		return "surge: выкуп ≥2×нормы при слабых sales → −цена"
+	// legacy aliases (старые логи/БД)
 	case "hold":
-		return "ни одно условие изменения не сработало"
+		return "hold"
 	case "skip_inactive":
 		return "пропуск: нет активных ботов этого типа"
 	case "skip_manual":
-		return "пропуск: недавно было ручное изменение цены (min/max)"
+		return "пропуск: min/max от оркестратора — цикл на паузе"
+	case "experiment_ok", "experiment_rollback", "experiment_start":
+		return action
 	default:
 		if action == "" {
 			return "нет решения"
@@ -676,189 +663,187 @@ func adjustPrice(item string) AdjustReport {
 	var notes []string
 	var experimentTG *experimentTelegramEvent
 
-	noNacenkaUp, freeDef, needDef := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
-	if noNacenkaUp {
+	underbuyOK, freeDef, needDef := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
+	if underbuyOK {
 		free, need = freeDef, needDef
 	}
 
-	// 0. Сначала закрываем эксперимент прошлого цикла (метрика — сумма наценок продаж).
+	// ═══════════════════════════════════════════════════════════════════
+	// CAPITAL v1 — с нуля по pricing.db (2026-07-11).
+	//
+	// Аксиомы (из данных, не из идеологии старых if'ов):
+	//  1) HOLD часто бьёт любое действие по forward-profit → порог вмешательства высокий.
+	//  2) +P коррелирует с убытком (−18M на шлеме) → +P почти запрещён.
+	//  3) held>0 кормит кассу → цель держать сток около нормы, не «паниковать от 2×».
+	//  4) P двигает разгрузку витрины; N — загрузку слотов / толщину маржи.
+	//  5) min/max от оркестратора священны (skip_manual выше) — рынок сказал цену.
+	// ═══════════════════════════════════════════════════════════════════
+
+	normal := cfg.NormalSales
+	if normal < 1 {
+		normal = 1
+	}
+	target := normal // целевой сток ≈ норма продаж за цикл
+	stepN := step
+	stepP := step
+	canMoveP := state.StockVsSalesCooldown <= 0
+
+	// Давления 0..~3
+	tryRatio := 0.0
+	if sales > 0 {
+		tryRatio = float64(trySells) / float64(sales)
+	} else if trySells > 0 {
+		tryRatio = float64(trySells) // голые попытки без продаж = ад
+	}
+	salesGap := float64(normal-sales) / float64(normal)
+	if salesGap < 0 {
+		salesGap = 0
+	}
+	stockLoad := float64(totalHeld) / float64(target)
+	emptyFrac := 0.0
+	if totalHeld < target {
+		emptyFrac = float64(target-totalHeld) / float64(target)
+	}
+	buyGap := 0.0
+	if sales > buys {
+		buyGap = float64(sales-buys) / float64(sales)
+	}
+
+	// DUMP: витрина трётся и sales не тянут. try/sell≥2 у мечей — системный сигнал.
+	dumpScore := 0.0
+	if sales < normal {
+		if tryRatio >= 2.0 {
+			dumpScore += 1.2
+		} else if trySells > normal {
+			dumpScore += 0.8
+		}
+		if onAH > normal {
+			dumpScore += 0.7
+		}
+		dumpScore += 0.6 * salesGap
+		if stockLoad > 1.5 {
+			dumpScore += 0.5 * (stockLoad - 1.5)
+		}
+	}
+
+	// FILL: слоты/недокупка. Режем N только когда есть смысл докупать.
+	fillScore := 0.0
+	if underbuyOK {
+		fillScore += 1.4 + 0.8*buyGap
+	}
+	if emptyFrac > 0.4 && sales >= buys && sales > 0 {
+		// продаём, стока мало → надо наполнять (не +P!)
+		fillScore += 0.9 * emptyFrac
+	}
+	if sales == 0 && totalHeld < target && trySells == 0 && buys == 0 {
+		// мёртвый рынок — НЕ fill (нечего кормить)
+		fillScore = 0
+	}
+
+	// SKIM: забрать маржу только на здоровом 1:1 потоке.
+	skimScore := 0.0
+	flowOK := sales >= normal && buys >= (normal+1)/2 && buys >= sales-2 && stockLoad <= 1.8 && stockLoad >= 0.4
+	if flowOK && !underbuyOK {
+		frac, nCheap := cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
+		if nCheap >= 3 && frac >= cheapBuyFractionThreshold {
+			skimScore = 1.0 + frac
+			notes = append(notes, fmt.Sprintf("cheap=%.0f%%/%d", frac*100, nCheap))
+		} else if nacenkaSumNow > nacenkaSumPrev && nacenkaSumPrev > 0 && state.GoodStreak >= 2 {
+			skimScore = 0.85
+		}
+	}
+
+	const actThreshold = 1.15 // hold bias: из БД hold med > любых moves
+
+	notes = append(notes, fmt.Sprintf("dump=%.2f fill=%.2f skim=%.2f try/s=%.2f load=%.2f", dumpScore, fillScore, skimScore, tryRatio, stockLoad))
+
+	// Откат неудачного skim: прошлый цикл поднял N (ExperimentCheck как флажок «проверить»).
 	if state.ExperimentCheck {
 		state.ExperimentCheck = false
 		if nacenkaSumNow < nacenkaSumPrev {
 			if nacenka > minNacenka {
-				nacenka -= step
+				nacenka -= stepN
 				if nacenka < minNacenka {
 					nacenka = minNacenka
 				}
 			}
-			priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
-			if newPrice-step > priceFloor {
-				newPrice -= step
-			} else if newPrice > priceFloor {
-				newPrice = priceFloor
-			}
-			action = "experiment_rollback"
+			action = "capital_rollback"
 			changed = true
 			state.GoodStreak = 0
+			notes = append(notes, "skim не окупился → −N")
 		} else {
-			action = "experiment_ok"
-			notes = append(notes, "закрыт эксперимент — остальные ветки в этом цикле не смотрели")
+			notes = append(notes, "skim ок, оставляем")
+			action = "capital_hold"
 		}
-		experimentTG = &experimentTelegramEvent{
-			Item:           item,
-			Action:         action,
-			PriceBefore:    priceBefore,
-			PriceAfter:     newPrice,
-			NacenkaBefore:  nacenkaBefore,
-			NacenkaAfter:   nacenka,
-			NacenkaSumNow:  nacenkaSumNow,
-			NacenkaSumPrev: nacenkaSumPrev,
-			Sales:          sales,
-		}
-	} else if totalHeld < cfg.NormalSales {
-		if nacenka > minNacenka {
-			nacenka -= step
-			if nacenka < minNacenka {
-				nacenka = minNacenka
-			}
-			action = "nacenka_down_low_stock"
-		} else {
-			newPrice += step
-			action = "price_up_low_stock"
-		}
-		changed = true
-		state.GoodStreak = 0
 	} else {
-		// Перебор: сигнал витрины (onAH или try > нормы) + продаж < нормы → −цена.
-		ahSignal := onAH > cfg.NormalSales || trySells > cfg.NormalSales
-		canStockAct := state.StockVsSalesCooldown <= 0
-		salesLow := sales < cfg.NormalSales
-		overstockDump := ahSignal && salesLow
-		priceChanged := false
+		// Один главный рычаг: max pressure.
+		best := "hold"
+		bestScore := actThreshold
+		if dumpScore >= bestScore {
+			best, bestScore = "dump", dumpScore
+		}
+		if fillScore > bestScore {
+			best, bestScore = "fill", fillScore
+		}
+		if skimScore > bestScore {
+			best, bestScore = "skim", skimScore
+		}
 
-		if overstockDump {
-			if !canStockAct {
-				notes = append(notes, fmt.Sprintf("перебор (витрина) на кулдауне (%d цикл.)", state.StockVsSalesCooldown))
+		switch best {
+		case "dump":
+			if !canMoveP {
+				notes = append(notes, fmt.Sprintf("dump на cd=%d", state.StockVsSalesCooldown))
+				action = "capital_hold"
 			} else {
 				priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
-				if newPrice-step >= priceFloor {
-					newPrice -= step
-					action = "price_down_overstock_held"
+				if newPrice-stepP >= priceFloor {
+					newPrice -= stepP
+					action = "capital_dump"
 					changed = true
-					priceChanged = true
 					state.GoodStreak = 0
 					state.StockVsSalesCooldown = 3
 				} else {
-					notes = append(notes, fmt.Sprintf("перебор хотел −цену, но упёрлись в пол %d", priceFloor))
+					notes = append(notes, fmt.Sprintf("dump упёрся в пол %d", priceFloor))
+					action = "capital_hold"
 				}
 			}
-		} else if totalHeld >= cfg.NormalSales*2 && sales >= cfg.NormalSales && canStockAct {
-			// Отдельно: залежь при нормальных продажах → наценку вверх (покупаем агрессивнее).
-			if noNacenkaUp {
-				notes = append(notes, "nacenka↑ не применили: buys<sales и есть место — сначала докупать")
-			} else {
-				nacenka += step
-				action = "nacenka_up_stock_vs_sales"
+		case "fill":
+			if nacenka > minNacenka {
+				nacenka -= stepN
+				if nacenka < minNacenka {
+					nacenka = minNacenka
+				}
+				action = "capital_fill"
 				changed = true
 				state.GoodStreak = 0
-				state.StockVsSalesCooldown = 3
-			}
-		}
-
-		// Отдельно: buys < sales и есть место → −наценка (или +цена, если наценка на мин).
-		if buys < sales {
-			okSpace, f, n := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
-			free, need = f, n
-			if okSpace {
-				if nacenka > minNacenka {
-					nacenka -= step
-					if nacenka < minNacenka {
-						nacenka = minNacenka
-					}
-					if priceChanged {
-						action = "price_down_overstock_and_nacenka_buy_deficit"
-					} else {
-						action = "nacenka_down_buy_deficit_with_space"
-					}
-					changed = true
-					state.GoodStreak = 0
-				} else if !changed {
-					newPrice += step
-					action = "price_up_buy_deficit_with_space"
-					changed = true
-					state.GoodStreak = 0
-				}
-				if changed {
-					log.Printf("[ADJUST] %s: buy_deficit %s | buys=%d sales=%d need=%d free=%d share=%d held=%d nacenka=%d→%d price=%d",
-						item, action, buys, sales, need, free, share, totalHeld, nacenkaBefore, nacenka, newPrice)
-				}
+			} else if underbuyOK {
+				// Единственный легальный +P: N на полу и реально недокупаем.
+				// Поднимает buy-потолок (sell−N), не «low stock ради low stock».
+				newPrice += stepP
+				action = "capital_fill_price"
+				changed = true
+				state.GoodStreak = 0
 			} else {
-				notes = append(notes, fmt.Sprintf("buy-deficit: buys<sales, но места мало (free=%d need=%d share=%d)", free, need, share))
+				notes = append(notes, "fill: N на мин и нет underbuy → hold")
+				action = "capital_hold"
 			}
-		}
-	}
-
-	// Динамика наценки + старт эксперимента (если цена ещё не менялась).
-	if !changed {
-		if sales < cfg.NormalSales && totalHeld < cfg.NormalSales && nacenka > minNacenka {
-			nacenka -= step
-			action = "nacenka_down_deficit"
+		case "skim":
+			nacenka += stepN
+			action = "capital_skim"
 			changed = true
 			state.GoodStreak = 0
-		} else {
-			if sales < cfg.NormalSales && totalHeld >= cfg.NormalSales {
-				notes = append(notes, "продаж < нормы, но сток уже ≥ нормы — наценку не снижаем (не усугубляем залежь)")
-			} else if sales < cfg.NormalSales && nacenka <= minNacenka {
-				notes = append(notes, fmt.Sprintf("продаж < нормы, но наценка уже на минимуме (%d)", minNacenka))
-			}
+			state.ExperimentCheck = true // проверить Σнаценок в след. цикле
+		default:
+			action = "capital_hold"
 			if nacenkaSumNow >= nacenkaSumPrev {
 				state.GoodStreak++
-				if state.GoodStreak >= 3 {
-					newPrice += step
-					nacenka += step
-					state.GoodStreak = 0
-					state.ExperimentCheck = true
-					action = "experiment_start"
-					changed = true
-					experimentTG = &experimentTelegramEvent{
-						Item:           item,
-						Action:         action,
-						PriceBefore:    priceBefore,
-						PriceAfter:     newPrice,
-						NacenkaBefore:  nacenkaBefore,
-						NacenkaAfter:   nacenka,
-						NacenkaSumNow:  nacenkaSumNow,
-						NacenkaSumPrev: nacenkaSumPrev,
-						Sales:          sales,
-					}
-				} else {
-					notes = append(notes, fmt.Sprintf("streak Σнаценок %d/3 — до эксперимента рано", state.GoodStreak))
-				}
 			} else {
 				state.GoodStreak = 0
 			}
-
-			if !changed {
-				frac, n := cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
-				if n > 0 && frac >= cheapBuyFractionThreshold {
-					if noNacenkaUp {
-						notes = append(notes, "cheap-buys nacenka↑ не применили: buys<sales и есть место")
-					} else {
-						nacenka += step
-						action = "nacenka_up_cheap_buys"
-						changed = true
-					}
-				} else if n > 0 {
-					notes = append(notes, fmt.Sprintf("дешёвых покупок %.0f%% из %d (порог %.0f%%)", frac*100, n, cheapBuyFractionThreshold*100))
-				}
-			}
-		}
-		if action == "" {
-			action = "hold"
 		}
 	}
 
-	if action != "nacenka_up_stock_vs_sales" && action != "price_down_overstock_held" && action != "price_down_overstock_and_nacenka_buy_deficit" && state.StockVsSalesCooldown > 0 {
+	if action != "capital_dump" && state.StockVsSalesCooldown > 0 {
 		state.StockVsSalesCooldown--
 	}
 
@@ -952,7 +937,7 @@ func adjustPrice(item string) AdjustReport {
 		NacenkaSumNow:   nacenkaSumNow,
 		NacenkaSumPrev:  nacenkaSumPrev,
 		GoodStreak:     state.GoodStreak,
-		BlockNacenkaUp: noNacenkaUp,
+		BlockNacenkaUp: underbuyOK,
 	}
 
 	needBroadcast := changed
