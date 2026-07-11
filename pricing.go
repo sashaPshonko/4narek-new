@@ -463,7 +463,7 @@ func actionReasonRU(action string) string {
 	case "price_down_overstock_held":
 		return "сток ≥2× нормы, продаж мало, сигнал витрины → снижаем цену"
 	case "price_down_overstock_held_with_nacenka":
-		return "сток ≥2× нормы, продаж мало, есть свободная доля → снижаем цену и наценку"
+		return "сток ≥2× нормы, продаж мало, покупок < нормы и есть место в доле → снижаем цену и наценку"
 	case "price_down_buy_surge":
 		return "резкий выкуп: surge ≥2× нормы и продаж < нормы → цена сразу вниз"
 	case "nacenka_up_stock_vs_sales":
@@ -762,9 +762,9 @@ func adjustPrice(item string) AdjustReport {
 				if newPrice-step >= priceFloor {
 					newPrice -= step
 					action = "price_down_overstock_held"
-					// наценку вниз только если есть свободное место в доле (есть куда докупать после смягчения buy)
+					// наценку вниз только если покупки слабые и в доле ещё есть место
 					freeSlots := share - totalHeld
-					if freeSlots > 0 && nacenka > minNacenka {
+					if buys < cfg.NormalSales && freeSlots > 0 && nacenka > minNacenka {
 						nacenka -= step
 						if nacenka < minNacenka {
 							nacenka = minNacenka
