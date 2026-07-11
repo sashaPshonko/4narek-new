@@ -399,6 +399,13 @@ func hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys int) (ok bool, free
 	return free >= need, free, need
 }
 
+// skipOverstockPriceDown — покупок меньше продаж и в доле слотов хватает места под дефицит:
+// не роняем sell из‑за «переизбытка» (место есть — проблема в недокупке).
+func skipOverstockPriceDown(share, totalHeld, sales, buys int) bool {
+	ok, _, _ := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
+	return ok
+}
+
 func adjustPrice(item string) {
 	cfg, ok := itemsConfig[item]
 	if !ok {
@@ -509,43 +516,49 @@ func adjustPrice(item string) {
 		action = "price_up_low_stock"
 		changed = true
 		state.GoodStreak = 0
-	} else if onAH > sales && onAH > cfg.NormalSales && sales < cfg.NormalSales {
-		priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
-		if newPrice-step >= priceFloor {
-			newPrice -= step
-			action = "price_down_ah_overstock"
-			changed = true
-			state.GoodStreak = 0
-		}
-	} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3 {
-		// наличие ≥ 3× продаж: продажи в норме → наценка вверх; иначе sell вниз
-		if sales >= cfg.NormalSales {
-			nacenka += step
-			action = "nacenka_up_stock_vs_sales"
-			changed = true
-			state.GoodStreak = 0
-			state.StockVsSalesCooldown = 3
-		} else {
+	} else {
+		share := itemSlotShareLocked(cfg.Type)
+		noOverstockDown := skipOverstockPriceDown(share, totalHeld, sales, buys)
+
+		if !noOverstockDown && onAH > sales && onAH > cfg.NormalSales && sales < cfg.NormalSales {
 			priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
 			if newPrice-step >= priceFloor {
 				newPrice -= step
-				action = "price_down_stock_vs_sales"
+				action = "price_down_ah_overstock"
+				changed = true
+				state.GoodStreak = 0
+			}
+		} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3 {
+			// наличие ≥ 3× продаж: продажи в норме → наценка вверх; иначе sell вниз
+			if sales >= cfg.NormalSales {
+				nacenka += step
+				action = "nacenka_up_stock_vs_sales"
 				changed = true
 				state.GoodStreak = 0
 				state.StockVsSalesCooldown = 3
+			} else if !noOverstockDown {
+				priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
+				if newPrice-step >= priceFloor {
+					newPrice -= step
+					action = "price_down_stock_vs_sales"
+					changed = true
+					state.GoodStreak = 0
+					state.StockVsSalesCooldown = 3
+				}
 			}
 		}
-	} else if buys < sales && totalHeld < cfg.NormalSales*2 {
-		share := itemSlotShareLocked(cfg.Type)
-		okSpace, free, need := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
-		if okSpace {
-			newPrice += step
-			action = "price_up_buy_deficit_with_space"
-			changed = true
-			state.GoodStreak = 0
-			log.Printf("[ADJUST] %s: buy_deficit space ok | buys=%d sales=%d need=%d free=%d share=%d held=%d bots=%d items=%d",
-				item, buys, sales, need, free, share, totalHeld,
-				aggregateBotsPerTypeLocked()[cfg.Type], countItemsInCategoryLocked(cfg.Type))
+
+		if !changed && buys < sales && totalHeld < cfg.NormalSales*2 {
+			okSpace, free, need := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
+			if okSpace {
+				newPrice += step
+				action = "price_up_buy_deficit_with_space"
+				changed = true
+				state.GoodStreak = 0
+				log.Printf("[ADJUST] %s: buy_deficit space ok | buys=%d sales=%d need=%d free=%d share=%d held=%d bots=%d items=%d",
+					item, buys, sales, need, free, share, totalHeld,
+					aggregateBotsPerTypeLocked()[cfg.Type], countItemsInCategoryLocked(cfg.Type))
+			}
 		}
 	}
 
