@@ -699,25 +699,16 @@ func adjustAndReport(item string, cfg ItemConfig) {
 	now := time.Now()
 	start := now.Add(-cfg.AnalysisTime)
 
-	sales, buys, trySells, priceBefore := getItemStatsForReporting(item, start)
-	onAH, inInv := getInventoryStats(item)
+	log.Printf("[ANALYSIS] %s: анализ с %s по %s",
+		item, start.Format("15:04:05"), now.Format("15:04:05"))
 
-	log.Printf("[ANALYSIS] %s: анализ с %s по %s. Продажи: %d (норма: %d)",
-		item, start.Format("15:04:05"), now.Format("15:04:05"), sales, cfg.NormalSales)
-
-	adjustPrice(item)
-
-	mutex.RLock()
-	priceAfter := data.Prices[item]
-	mutex.RUnlock()
+	rep := adjustPrice(item)
+	if rep.NormalSales == 0 {
+		rep.NormalSales = cfg.NormalSales
+	}
 
 	onlineCount := getOnlineCount()
-	sendIntervalStatsToTelegram(
-		item, start, now,
-		float64(sales), float64(cfg.NormalSales), float64(buys), float64(trySells),
-		priceBefore, priceAfter,
-		onAH, inInv, onlineCount,
-	)
+	sendIntervalStatsToTelegram(item, start, now, onlineCount, rep)
 }
 
 // cloneDailySnapshotLocked — снимок dailyData; вызывать только под mutex.Lock.

@@ -417,62 +417,91 @@ func appendToFile(filename, content string) {
 func sendIntervalStatsToTelegram(
 	item string,
 	start, end time.Time,
-	actualSales, expectedSales, buyCount, trySellCount float64,
-	oldPrice, newPrice int,
-	onAH, inInv, onlineCount int,
+	onlineCount int,
+	rep AdjustReport,
 ) {
 	if tgBot == nil {
 		return
 	}
 
 	status := "✅"
-	if actualSales < expectedSales {
+	if rep.Sales < rep.NormalSales {
 		status = "⚠️"
 	}
+	if rep.Skipped {
+		status = "⏸"
+	}
 
-	nacenka := getNacenka(item)
+	priceEmoji := getPriceChangeEmoji(rep.PriceBefore, rep.PriceAfter)
+	nacenkaLine := fmt.Sprintf("%d", rep.NacenkaAfter)
+	if rep.NacenkaBefore != rep.NacenkaAfter {
+		nacenkaLine = fmt.Sprintf("%d → %d", rep.NacenkaBefore, rep.NacenkaAfter)
+	}
+
+	decisionMark := "↔️"
+	switch {
+	case rep.Skipped:
+		decisionMark = "⏸"
+	case rep.PriceAfter > rep.PriceBefore || rep.NacenkaAfter > rep.NacenkaBefore:
+		decisionMark = "📈"
+	case rep.PriceAfter < rep.PriceBefore || rep.NacenkaAfter < rep.NacenkaBefore:
+		decisionMark = "📉"
+	}
+
 	msg := fmt.Sprintf(
 		"*%s* %s\n"+
 			"⏳ Интервал: %s - %s\n"+
-			"📦 Покупки: *%.0f*\n"+
-			"🛒 Попытки продаж: *%.0f*\n"+
-			"📊 Продажи: *%.0f* из *%.0f* (норма)\n"+
+			"📦 Покупки: *%d*\n"+
+			"🛒 Попытки продаж: *%d*\n"+
+			"📊 Продажи: *%d* из *%d* (норма)\n"+
 			"💰 Цена: %d → %d (%s)\n"+
-			"🏷 Наценка: %d\n"+
-			"🎒 На аукционе: %d\n"+
-			"🎒 В инвентаре: %d\n"+
-			"👥 Онлайн: %d игроков",
+			"🏷 Наценка: %s\n"+
+			"🎒 АХ: %d | Инв: %d | Всего: %d\n"+
+			"📐 Доля слотов: %d (свободно %d, нужно %d)\n"+
+			"🧱 Пол цены: %d | step: %d\n"+
+			"Σ наценок продаж: %d (прошлый цикл %d) | streak %d/3 | cd %d\n"+
+			"👥 Онлайн: %d\n"+
+			"\n"+
+			"%s *Решение:* `%s`\n"+
+			"💬 %s",
 		item,
 		status,
 		start.Format("15:04:05"),
 		end.Format("15:04:05"),
-		buyCount,
-		trySellCount,
-		actualSales,
-		expectedSales,
-		oldPrice, newPrice,
-		getPriceChangeEmoji(oldPrice, newPrice),
-		nacenka,
-		onAH,
-		inInv,
+		rep.Buys,
+		rep.TrySells,
+		rep.Sales,
+		rep.NormalSales,
+		rep.PriceBefore, rep.PriceAfter,
+		priceEmoji,
+		nacenkaLine,
+		rep.OnAH, rep.Inv, rep.Held,
+		rep.Share, rep.Free, rep.Need,
+		rep.PriceFloor, rep.Step,
+		rep.NacenkaSumNow, rep.NacenkaSumPrev, rep.GoodStreak, rep.Cooldown,
 		onlineCount,
+		decisionMark,
+		rep.Action,
+		rep.Reason,
 	)
+	if rep.NoOverstockDown {
+		msg += "\n🛡 Защита: не понижаем (сток>нормы, buys<sales, есть место)"
+	}
 
 	enqueueTelegramMessage(msg, "Markdown")
 
 	plainLog := fmt.Sprintf(
-		"%s [%s → %s] %s | Покупки: %.0f | Продажи: %.0f/%.0f | Цена: %d→%d | АХ: %d | Инв: %d | Онлайн: %d\n",
+		"%s [%s → %s] %s %s | buys=%d try=%d sales=%d/%d | price %d→%d nac %d→%d | AH=%d inv=%d held=%d share=%d | %s | %s\n",
 		item,
 		start.Format("15:04:05"),
 		end.Format("15:04:05"),
 		status,
-		buyCount,
-		actualSales,
-		expectedSales,
-		oldPrice, newPrice,
-		onAH,
-		inInv,
-		onlineCount,
+		rep.Action,
+		rep.Buys, rep.TrySells, rep.Sales, rep.NormalSales,
+		rep.PriceBefore, rep.PriceAfter, rep.NacenkaBefore, rep.NacenkaAfter,
+		rep.OnAH, rep.Inv, rep.Held, rep.Share,
+		rep.Reason,
+		decisionMark,
 	)
 	appendToFile("logs_interval.txt", plainLog)
 }

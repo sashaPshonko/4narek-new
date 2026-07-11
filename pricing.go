@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -14,6 +15,35 @@ const ahStorageSlotsPerBot = 5
 
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
+
+// AdjustReport — итог цикла adjustPrice для TG/логов.
+type AdjustReport struct {
+	Item              string
+	Action            string
+	Reason            string
+	Skipped           bool
+	PriceBefore       int
+	PriceAfter        int
+	NacenkaBefore     int
+	NacenkaAfter      int
+	Sales             int
+	Buys              int
+	TrySells          int
+	OnAH              int
+	Inv               int
+	Held              int
+	NormalSales       int
+	Share             int
+	Free              int
+	Need              int
+	PriceFloor        int
+	Step              int
+	Cooldown          int
+	NacenkaSumNow     int
+	NacenkaSumPrev    int
+	GoodStreak        int
+	NoOverstockDown   bool
+}
 
 // typeRelistDisabled — go-типы в режиме «без перевыставления» (FLEET_ABSORB_TYPES, через запятую).
 var typeRelistDisabled map[string]struct{}
@@ -409,10 +439,46 @@ func skipOverstockPriceDown(share, totalHeld, sales, buys, normalSales int) bool
 	return ok
 }
 
-func adjustPrice(item string) {
+func actionReasonRU(action string) string {
+	switch action {
+	case "price_up_low_stock":
+		return "сток ниже нормы продаж → поднимаем цену"
+	case "price_down_ah_overstock":
+		return "на АХ больше продаж за окно и (АХ или try-sell выше нормы), продаж мало → снижаем цену"
+	case "price_down_stock_vs_sales":
+		return "сток ≥ 3× продаж, продаж мало, есть сигнал переизбытка (АХ или try-sell > нормы) → снижаем цену"
+	case "nacenka_up_stock_vs_sales":
+		return "сток ≥ 3× продаж, но продажи уже в норме → поднимаем наценку (покупаем агрессивнее)"
+	case "price_up_buy_deficit_with_space":
+		return "покупок меньше продаж, в доле слотов есть место → поднимаем цену"
+	case "nacenka_down_deficit":
+		return "продаж меньше нормы, цену не трогали → снижаем наценку"
+	case "nacenka_up_cheap_buys":
+		return "≥50% покупок дешевле buy-потолка на step → поднимаем наценку"
+	case "experiment_start":
+		return "3 цикла подряд Σ наценок продаж не хуже → эксперимент: +цена и +наценка"
+	case "experiment_ok":
+		return "эксперимент: Σ наценок не упала — оставляем как есть"
+	case "experiment_rollback":
+		return "эксперимент: Σ наценок упала — откат цены/наценки"
+	case "hold":
+		return "ни одно условие изменения не сработало"
+	case "skip_inactive":
+		return "пропуск: нет активных ботов этого типа"
+	case "skip_manual":
+		return "пропуск: недавно было ручное изменение цены (min/max)"
+	default:
+		if action == "" {
+			return "нет решения"
+		}
+		return action
+	}
+}
+
+func adjustPrice(item string) AdjustReport {
 	cfg, ok := itemsConfig[item]
 	if !ok {
-		return
+		return AdjustReport{Item: item, Action: "skip", Reason: "нет в items_config", Skipped: true}
 	}
 
 	mutex.Lock()
@@ -420,17 +486,29 @@ func adjustPrice(item string) {
 	swordTimes[item] = now
 	lastUpdate := now.Add(-cfg.AnalysisTime)
 
+	rep := AdjustReport{Item: item, NormalSales: cfg.NormalSales, Step: cfg.PriceStep}
+
 	if !isMinecraftTypeActiveLocked(cfg.Type) {
 		log.Printf("[SKIP] %s: тип %s — нет активных ботов", item, cfg.Type)
 		mutex.Unlock()
-		return
+		rep.Action = "skip_inactive"
+		rep.Reason = actionReasonRU(rep.Action)
+		rep.Skipped = true
+		return rep
 	}
 
 	if time.Since(data.LastManualUpdate[item]) < cfg.AnalysisTime {
-		log.Printf("[SKIP] %s: ручное изменение %v назад, пропускаем анализ",
-			item, time.Since(data.LastManualUpdate[item]))
+		ago := time.Since(data.LastManualUpdate[item])
+		log.Printf("[SKIP] %s: ручное изменение %v назад, пропускаем анализ", item, ago)
+		price := data.Prices[item]
+		nac := getNacenka(item)
 		mutex.Unlock()
-		return
+		rep.Action = "skip_manual"
+		rep.Reason = actionReasonRU(rep.Action) + fmt.Sprintf(" (%v назад)", ago.Round(time.Second))
+		rep.Skipped = true
+		rep.PriceBefore, rep.PriceAfter = price, price
+		rep.NacenkaBefore, rep.NacenkaAfter = nac, nac
+		return rep
 	}
 
 	ensureNacenkasInitialized()
@@ -452,6 +530,7 @@ func adjustPrice(item string) {
 	minPrice := getMinPriceFromHistory(item)
 	nacenkaSumNow := nacenkaSumInWindow(item, lastUpdate)
 	nacenkaSumPrev := state.LastCycleNacenkaSum
+	priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
 
 	ahCounts := make(map[string]int)
 	invCounts := make(map[string]int)
@@ -477,9 +556,22 @@ func adjustPrice(item string) {
 	invCount := invCounts[item]
 	totalHeld := onAH + invCount
 
+	share := itemSlotShareLocked(cfg.Type)
+	free, need := 0, 0
+	if buys < sales && share > 0 {
+		free = share - totalHeld
+		if free < 0 {
+			free = 0
+		}
+		need = sales - buys
+	}
+
 	changed := false
 	action := ""
+	var notes []string
 	var experimentTG *experimentTelegramEvent
+
+	noOverstockDown := skipOverstockPriceDown(share, totalHeld, sales, buys, cfg.NormalSales)
 
 	// 0. Сначала закрываем эксперимент прошлого цикла (метрика — сумма наценок продаж).
 	if state.ExperimentCheck {
@@ -491,7 +583,7 @@ func adjustPrice(item string) {
 					nacenka = minNacenka
 				}
 			}
-			priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
+			priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
 			if newPrice-step > priceFloor {
 				newPrice -= step
 			} else if newPrice > priceFloor {
@@ -502,6 +594,7 @@ func adjustPrice(item string) {
 			state.GoodStreak = 0
 		} else {
 			action = "experiment_ok"
+			notes = append(notes, "закрыт эксперимент — остальные ветки в этом цикле не смотрели")
 		}
 		experimentTG = &experimentTelegramEvent{
 			Item:           item,
@@ -520,40 +613,56 @@ func adjustPrice(item string) {
 		changed = true
 		state.GoodStreak = 0
 	} else {
-		share := itemSlotShareLocked(cfg.Type)
-		noOverstockDown := skipOverstockPriceDown(share, totalHeld, sales, buys, cfg.NormalSales)
+		ahSignal := onAH > cfg.NormalSales || trySells > cfg.NormalSales
+		ahOverstockCond := onAH > sales && ahSignal && sales < cfg.NormalSales
+		stockRatioCond := state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3
 
-		if !noOverstockDown && onAH > sales && (onAH > cfg.NormalSales || trySells > cfg.NormalSales) && sales < cfg.NormalSales {
-			priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
-			if newPrice-step >= priceFloor {
-				newPrice -= step
-				action = "price_down_ah_overstock"
-				changed = true
-				state.GoodStreak = 0
+		if ahOverstockCond {
+			if noOverstockDown {
+				notes = append(notes, "AH-overstock не применили: сток>нормы, buys<sales и есть место в доле (недокупка)")
+			} else {
+				priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
+				if newPrice-step >= priceFloor {
+					newPrice -= step
+					action = "price_down_ah_overstock"
+					changed = true
+					state.GoodStreak = 0
+				} else {
+					notes = append(notes, fmt.Sprintf("AH-overstock хотел −step, но упёрлись в пол %d", priceFloor))
+				}
 			}
-		} else if state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3 {
-			// наличие ≥ 3× продаж: продажи в норме → наценка вверх; иначе sell вниз
-			// (вниз только если onAH или trySells выше нормы — иначе при sales=0 любое наличие бьёт цену)
+		} else if stockRatioCond {
 			if sales >= cfg.NormalSales {
 				nacenka += step
 				action = "nacenka_up_stock_vs_sales"
 				changed = true
 				state.GoodStreak = 0
 				state.StockVsSalesCooldown = 3
-			} else if !noOverstockDown && (onAH > cfg.NormalSales || trySells > cfg.NormalSales) {
-				priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
+			} else if noOverstockDown {
+				notes = append(notes, "stock×3 вниз не применили: сток>нормы, buys<sales и есть место в доле")
+			} else if !ahSignal {
+				notes = append(notes, "stock×3: сток большой и продаж мало, но нет сигнала (нужно onAH>нормы или trySells>нормы)")
+			} else {
+				priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
 				if newPrice-step >= priceFloor {
 					newPrice -= step
 					action = "price_down_stock_vs_sales"
 					changed = true
 					state.GoodStreak = 0
 					state.StockVsSalesCooldown = 3
+				} else {
+					notes = append(notes, fmt.Sprintf("stock×3 хотел −step, но упёрлись в пол %d", priceFloor))
 				}
+			}
+		} else {
+			if totalHeld > 0 && totalHeld >= sales*3 && state.StockVsSalesCooldown > 0 {
+				notes = append(notes, fmt.Sprintf("stock×3 на кулдауне (%d цикл.)", state.StockVsSalesCooldown))
 			}
 		}
 
 		if !changed && buys < sales && totalHeld < cfg.NormalSales*2 {
-			okSpace, free, need := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
+			okSpace, f, n := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
+			free, need = f, n
 			if okSpace {
 				newPrice += step
 				action = "price_up_buy_deficit_with_space"
@@ -562,6 +671,8 @@ func adjustPrice(item string) {
 				log.Printf("[ADJUST] %s: buy_deficit space ok | buys=%d sales=%d need=%d free=%d share=%d held=%d bots=%d items=%d",
 					item, buys, sales, need, free, share, totalHeld,
 					aggregateBotsPerTypeLocked()[cfg.Type], countItemsInCategoryLocked(cfg.Type))
+			} else {
+				notes = append(notes, fmt.Sprintf("buy-deficit: buys<sales, но места мало (free=%d need=%d share=%d)", free, need, share))
 			}
 		}
 	}
@@ -574,6 +685,9 @@ func adjustPrice(item string) {
 			changed = true
 			state.GoodStreak = 0
 		} else {
+			if sales < cfg.NormalSales && nacenka <= minNacenka {
+				notes = append(notes, fmt.Sprintf("продаж < нормы, но наценка уже на минимуме (%d)", minNacenka))
+			}
 			if nacenkaSumNow >= nacenkaSumPrev {
 				state.GoodStreak++
 				if state.GoodStreak >= 3 {
@@ -594,6 +708,8 @@ func adjustPrice(item string) {
 						NacenkaSumPrev: nacenkaSumPrev,
 						Sales:          sales,
 					}
+				} else {
+					notes = append(notes, fmt.Sprintf("streak Σнаценок %d/3 — до эксперимента рано", state.GoodStreak))
 				}
 			} else {
 				state.GoodStreak = 0
@@ -605,6 +721,8 @@ func adjustPrice(item string) {
 					nacenka += step
 					action = "nacenka_up_cheap_buys"
 					changed = true
+				} else if n > 0 {
+					notes = append(notes, fmt.Sprintf("дешёвых покупок %.0f%% из %d (порог %.0f%%)", frac*100, n, cheapBuyFractionThreshold*100))
 				}
 			}
 		}
@@ -636,9 +754,17 @@ func adjustPrice(item string) {
 	if actionTaken == "" {
 		actionTaken = "hold"
 	}
+	reason := actionReasonRU(actionTaken)
+	if len(notes) > 0 {
+		reason = reason + " | " + strings.Join(notes, " · ")
+	}
+
 	if changed {
-		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d→%d | Σнаценок %d (было %d) | продажи %d | на АХ %d | в инв %d | всего %d",
-			item, action, priceBefore, newPrice, nacenkaBefore, nacenka, nacenkaSumNow, nacenkaSumPrev, sales, onAH, invCount, totalHeld)
+		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d→%d | Σнаценок %d (было %d) | продажи %d | на АХ %d | в инв %d | всего %d | %s",
+			item, action, priceBefore, newPrice, nacenkaBefore, nacenka, nacenkaSumNow, nacenkaSumPrev, sales, onAH, invCount, totalHeld, reason)
+	} else {
+		log.Printf("[HOLD] %s: %s | цена %d | наценка %d | продажи %d buys=%d try=%d | АХ %d инв %d | %s",
+			item, actionTaken, newPrice, nacenka, sales, buys, trySells, onAH, invCount, reason)
 	}
 
 	queueMLDecisionLocked(
@@ -674,6 +800,34 @@ func adjustPrice(item string) {
 		}
 	}
 
+	rep = AdjustReport{
+		Item:            item,
+		Action:          actionTaken,
+		Reason:          reason,
+		Skipped:         false,
+		PriceBefore:     priceBefore,
+		PriceAfter:      newPrice,
+		NacenkaBefore:   nacenkaBefore,
+		NacenkaAfter:    nacenka,
+		Sales:           sales,
+		Buys:            buys,
+		TrySells:        trySells,
+		OnAH:            onAH,
+		Inv:             invCount,
+		Held:            totalHeld,
+		NormalSales:     cfg.NormalSales,
+		Share:           share,
+		Free:            free,
+		Need:            need,
+		PriceFloor:      sellPriceFloor(cfg, minPrice, nacenka),
+		Step:            step,
+		Cooldown:        state.StockVsSalesCooldown,
+		NacenkaSumNow:   nacenkaSumNow,
+		NacenkaSumPrev:  nacenkaSumPrev,
+		GoodStreak:      state.GoodStreak,
+		NoOverstockDown: noOverstockDown,
+	}
+
 	needBroadcast := changed
 	mutex.Unlock()
 
@@ -689,4 +843,5 @@ func adjustPrice(item string) {
 		publishPriceUpdate()
 	}
 	saveDailyDataNoMessageUpdate()
+	return rep
 }
