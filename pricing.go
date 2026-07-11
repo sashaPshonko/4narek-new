@@ -442,7 +442,9 @@ func skipOverstockPriceDown(share, totalHeld, sales, buys, normalSales int) bool
 func actionReasonRU(action string) string {
 	switch action {
 	case "price_up_low_stock":
-		return "сток ниже нормы продаж → поднимаем цену"
+		return "сток ниже нормы, наценка уже на мин → поднимаем цену"
+	case "nacenka_down_low_stock":
+		return "сток ниже нормы → сначала снижаем наценку"
 	case "price_down_ah_overstock":
 		return "на АХ больше продаж за окно и (АХ или try-sell выше нормы), продаж мало → снижаем цену"
 	case "price_down_stock_vs_sales":
@@ -711,8 +713,16 @@ func adjustPrice(item string) AdjustReport {
 			Sales:          sales,
 		}
 	} else if totalHeld < cfg.NormalSales {
-		newPrice += step
-		action = "price_up_low_stock"
+		if nacenka > minNacenka {
+			nacenka -= step
+			if nacenka < minNacenka {
+				nacenka = minNacenka
+			}
+			action = "nacenka_down_low_stock"
+		} else {
+			newPrice += step
+			action = "price_up_low_stock"
+		}
 		changed = true
 		state.GoodStreak = 0
 	} else {
