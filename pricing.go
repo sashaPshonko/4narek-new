@@ -399,9 +399,12 @@ func hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys int) (ok bool, free
 	return free >= need, free, need
 }
 
-// skipOverstockPriceDown — покупок меньше продаж и в доле слотов хватает места под дефицит:
-// не роняем sell из‑за «переизбытка» (место есть — проблема в недокупке).
-func skipOverstockPriceDown(share, totalHeld, sales, buys int) bool {
+// skipOverstockPriceDown — сток выше нормы, покупок меньше продаж, есть место докупить:
+// не роняем sell (проблема в недокупке, не в переизбытке).
+func skipOverstockPriceDown(share, totalHeld, sales, buys, normalSales int) bool {
+	if normalSales <= 0 || totalHeld <= normalSales {
+		return false
+	}
 	ok, _, _ := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
 	return ok
 }
@@ -518,7 +521,7 @@ func adjustPrice(item string) {
 		state.GoodStreak = 0
 	} else {
 		share := itemSlotShareLocked(cfg.Type)
-		noOverstockDown := skipOverstockPriceDown(share, totalHeld, sales, buys)
+		noOverstockDown := skipOverstockPriceDown(share, totalHeld, sales, buys, cfg.NormalSales)
 
 		if !noOverstockDown && onAH > sales && (onAH > cfg.NormalSales || trySells > cfg.NormalSales) && sales < cfg.NormalSales {
 			priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
