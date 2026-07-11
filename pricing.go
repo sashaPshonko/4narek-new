@@ -446,13 +446,15 @@ func actionReasonRU(action string) string {
 	case "nacenka_down_low_stock":
 		return "сток ниже нормы → сначала снижаем наценку"
 	case "price_down_ah_overstock":
-		return "на АХ больше продаж за окно и (АХ или try-sell выше нормы), продаж мало → снижаем цену"
+		return "явный перебор стока (≥2× нормы) и продаж мало → снижаем цену"
 	case "price_down_stock_vs_sales":
-		return "сток ≥ 3× продаж, продаж мало, есть сигнал переизбытка (АХ или try-sell > нормы) → снижаем цену"
+		return "явный перебор стока (≥2× нормы) и продаж мало → снижаем цену"
+	case "price_down_overstock_held":
+		return "сток ≥2× нормы, продаж мало, и (onAH или try > нормы) → снижаем цену"
 	case "price_down_buy_surge":
 		return "резкий выкуп: surge ≥2× нормы и продаж < нормы → цена сразу вниз"
 	case "nacenka_up_stock_vs_sales":
-		return "сток ≥ 3× продаж, но продажи уже в норме → поднимаем наценку (покупаем агрессивнее)"
+		return "сток ≥2× нормы, продажи в норме → поднимаем наценку (покупаем агрессивнее)"
 	case "price_up_buy_deficit_with_space":
 		return "покупок меньше продаж, есть место, наценка уже на мин → поднимаем цену"
 	case "nacenka_down_buy_deficit_with_space":
@@ -726,51 +728,38 @@ func adjustPrice(item string) AdjustReport {
 		changed = true
 		state.GoodStreak = 0
 	} else {
+		// Явный перебор: held ≥ 2×normal + сигнал витрины (onAH или try > нормы).
+		stockHeavy := totalHeld >= cfg.NormalSales*2
 		ahSignal := onAH > cfg.NormalSales || trySells > cfg.NormalSales
-		ahOverstockCond := onAH > sales && ahSignal && sales < cfg.NormalSales
-		stockRatioCond := state.StockVsSalesCooldown <= 0 && totalHeld > 0 && totalHeld >= sales*3
+		canStockAct := state.StockVsSalesCooldown <= 0
 
-		if ahOverstockCond {
+		if stockHeavy && sales < cfg.NormalSales {
 			if noOverstockDown {
-				notes = append(notes, "AH-overstock не применили: сток>нормы, buys<sales и есть место в доле (недокупка)")
-			} else {
-				priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
-				if newPrice-step >= priceFloor {
-					newPrice -= step
-					action = "price_down_ah_overstock"
-					changed = true
-					state.GoodStreak = 0
-				} else {
-					notes = append(notes, fmt.Sprintf("AH-overstock хотел −step, но упёрлись в пол %d", priceFloor))
-				}
-			}
-		} else if stockRatioCond {
-			if sales >= cfg.NormalSales {
-				nacenka += step
-				action = "nacenka_up_stock_vs_sales"
-				changed = true
-				state.GoodStreak = 0
-				state.StockVsSalesCooldown = 3
-			} else if noOverstockDown {
-				notes = append(notes, "stock×3 вниз не применили: сток>нормы, buys<sales и есть место в доле")
+				notes = append(notes, "overstock по стоку не применили: buys<sales и есть место в доле (недокупка)")
 			} else if !ahSignal {
-				notes = append(notes, "stock×3: сток большой и продаж мало, но нет сигнала (нужно onAH>нормы или trySells>нормы)")
+				notes = append(notes, "сток ≥2×нормы и продаж мало, но нет сигнала витрины (нужно onAH>нормы или trySells>нормы)")
+			} else if !canStockAct {
+				notes = append(notes, fmt.Sprintf("overstock по стоку на кулдауне (%d цикл.)", state.StockVsSalesCooldown))
 			} else {
 				priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
 				if newPrice-step >= priceFloor {
 					newPrice -= step
-					action = "price_down_stock_vs_sales"
+					action = "price_down_overstock_held"
 					changed = true
 					state.GoodStreak = 0
 					state.StockVsSalesCooldown = 3
 				} else {
-					notes = append(notes, fmt.Sprintf("stock×3 хотел −step, но упёрлись в пол %d", priceFloor))
+					notes = append(notes, fmt.Sprintf("overstock по стоку хотел −step, но упёрлись в пол %d", priceFloor))
 				}
 			}
-		} else {
-			if totalHeld > 0 && totalHeld >= sales*3 && state.StockVsSalesCooldown > 0 {
-				notes = append(notes, fmt.Sprintf("stock×3 на кулдауне (%d цикл.)", state.StockVsSalesCooldown))
-			}
+		} else if stockHeavy && sales >= cfg.NormalSales && canStockAct {
+			nacenka += step
+			action = "nacenka_up_stock_vs_sales"
+			changed = true
+			state.GoodStreak = 0
+			state.StockVsSalesCooldown = 3
+		} else if totalHeld >= cfg.NormalSales && totalHeld < cfg.NormalSales*2 && sales < cfg.NormalSales {
+			notes = append(notes, fmt.Sprintf("сток %d ещё < 2×нормы (%d) — перебор неявный, цену не трогаем", totalHeld, cfg.NormalSales*2))
 		}
 
 		if !changed && buys < sales && totalHeld < cfg.NormalSales*2 {
@@ -853,7 +842,7 @@ func adjustPrice(item string) AdjustReport {
 		}
 	}
 
-	if action != "nacenka_up_stock_vs_sales" && action != "price_down_stock_vs_sales" && state.StockVsSalesCooldown > 0 {
+	if action != "nacenka_up_stock_vs_sales" && action != "price_down_stock_vs_sales" && action != "price_down_overstock_held" && state.StockVsSalesCooldown > 0 {
 		state.StockVsSalesCooldown--
 	}
 
