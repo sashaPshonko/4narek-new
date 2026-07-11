@@ -304,6 +304,25 @@ func enqueueExperimentTelegram(ev experimentTelegramEvent) {
 	enqueueTelegramMessage(msg, "Markdown")
 }
 
+func enqueueBuySurgeTelegram(ev BuySurgeEvent) {
+	if !ev.Dropped {
+		return
+	}
+	msg := fmt.Sprintf(
+		"⚡ *Buy surge* — цена сразу вниз\n"+
+			"📦 `%s`\n"+
+			"💬 surge-счётчик ≥2× нормы и продаж < нормы (цикл не трогаем)\n"+
+			"⚡ Surge: *%d* / %d → сброс в 0\n"+
+			"📊 Продажи в окне: *%d* из *%d*\n"+
+			"💰 Цена: %d → %d (−%d)",
+		ev.Item,
+		ev.SurgeCount, ev.Threshold,
+		ev.Sales, ev.NormalSales,
+		ev.PriceBefore, ev.PriceAfter, ev.Step,
+	)
+	enqueueTelegramMessage(msg, "Markdown")
+}
+
 // fetchAndLogTelegramChats — getUpdates: id чатов, куда бот получал сообщения.
 func fetchAndLogTelegramChats() error {
 	if err := ensureTelegramXray(); err != nil {

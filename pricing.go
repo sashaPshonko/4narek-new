@@ -447,6 +447,8 @@ func actionReasonRU(action string) string {
 		return "на АХ больше продаж за окно и (АХ или try-sell выше нормы), продаж мало → снижаем цену"
 	case "price_down_stock_vs_sales":
 		return "сток ≥ 3× продаж, продаж мало, есть сигнал переизбытка (АХ или try-sell > нормы) → снижаем цену"
+	case "price_down_buy_surge":
+		return "резкий выкуп: surge ≥2× нормы и продаж < нормы → цена сразу вниз"
 	case "nacenka_up_stock_vs_sales":
 		return "сток ≥ 3× продаж, но продажи уже в норме → поднимаем наценку (покупаем агрессивнее)"
 	case "price_up_buy_deficit_with_space":
@@ -475,6 +477,88 @@ func actionReasonRU(action string) string {
 	}
 }
 
+// BuySurgeEvent — мгновенное снижение цены из‑за всплеска покупок.
+type BuySurgeEvent struct {
+	Dropped     bool
+	Item        string
+	PriceBefore int
+	PriceAfter  int
+	SurgeCount  int
+	Sales       int
+	Threshold   int
+	NormalSales int
+	Step        int
+}
+
+// maybeBuySurgePriceDownLocked — на каждый buy: отдельный счётчик +=1;
+// если счётчик ≥ 2×normal и sales < normal → −step, счётчик = 0.
+// Сделки/статы основного цикла не трогаем. Только под mutex.Lock.
+func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
+	ev := BuySurgeEvent{Item: item}
+	cfg, ok := itemsConfig[item]
+	if !ok || cfg.NormalSales <= 0 || cfg.PriceStep <= 0 {
+		return ev
+	}
+	if !isMinecraftTypeActiveLocked(cfg.Type) {
+		return ev
+	}
+	if time.Since(data.LastManualUpdate[item]) < cfg.AnalysisTime {
+		return ev
+	}
+
+	if data.BuySurgeCount == nil {
+		data.BuySurgeCount = make(map[string]int)
+	}
+	data.BuySurgeCount[item]++
+	surgeCount := data.BuySurgeCount[item]
+	threshold := cfg.NormalSales * 2
+
+	now := time.Now()
+	since := now.Add(-cfg.AnalysisTime)
+	if t, ok := data.LastCycleAt[item]; ok && !t.IsZero() {
+		elapsed := now.Sub(t)
+		if elapsed > 0 && elapsed <= cfg.AnalysisTime+time.Minute {
+			since = t
+		}
+	}
+	sales := countRecentSales(item, since)
+
+	ev.SurgeCount, ev.Sales, ev.Threshold = surgeCount, sales, threshold
+	ev.NormalSales, ev.Step = cfg.NormalSales, cfg.PriceStep
+
+	if surgeCount < threshold || sales >= cfg.NormalSales {
+		return ev
+	}
+
+	priceBefore := data.Prices[item]
+	if priceBefore <= 0 {
+		return ev
+	}
+	nacenka := getNacenka(item)
+	minBuy := getMinPriceFromHistory(item)
+	floor := sellPriceFloor(cfg, minBuy, nacenka)
+	newPrice := priceBefore - cfg.PriceStep
+	if newPrice < floor {
+		newPrice = floor
+	}
+	if newPrice >= priceBefore {
+		return ev
+	}
+
+	data.Prices[item] = newPrice
+	dailyData.Prices[item] = newPrice
+	lastPriceUpdate[item] = now
+	// сброс только surge-счётчика — цикл/TradeHistory не трогаем
+	data.BuySurgeCount[item] = 0
+
+	ev.Dropped = true
+	ev.PriceBefore = priceBefore
+	ev.PriceAfter = newPrice
+	log.Printf("[SURGE] %s: surge=%d thr=%d sales=%d/%d | цена %d→%d | surge→0",
+		item, surgeCount, threshold, sales, cfg.NormalSales, priceBefore, newPrice)
+	return ev
+}
+
 func adjustPrice(item string) AdjustReport {
 	cfg, ok := itemsConfig[item]
 	if !ok {
@@ -489,6 +573,11 @@ func adjustPrice(item string) AdjustReport {
 	}
 	prevCycleAt := data.LastCycleAt[item]
 	data.LastCycleAt[item] = now
+	// новый цикл — только surge-счётчик, статы цикла не трогаем
+	if data.BuySurgeCount == nil {
+		data.BuySurgeCount = make(map[string]int)
+	}
+	delete(data.BuySurgeCount, item)
 	lastUpdate := now.Add(-cfg.AnalysisTime)
 	// продолжение прерванного цикла: окно от прошлого якоря (не если просрочили >1м)
 	if !prevCycleAt.IsZero() {

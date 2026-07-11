@@ -121,6 +121,7 @@ type RuntimePersist struct {
 	TradeHistory     map[string][]TradeLog      `json:"trade_history"`
 	PriceHistory     map[string][]PriceRecord   `json:"price_history"`
 	AdjustState      map[string]ItemAdjustState `json:"adjust_state"`
+	BuySurgeCount map[string]int `json:"buy_surge_count"` // отдельный счётчик всплеска; не трогает цикл
 }
 
 var itemsConfig map[string]ItemConfig
@@ -145,6 +146,7 @@ type Data struct {
 	SellSum          map[string]int
 	LastManualUpdate map[string]time.Time
 	LastCycleAt      map[string]time.Time // конец последнего adjust (= старт текущего окна)
+	BuySurgeCount map[string]int // отдельный счётчик buy-surge (не влияет на цикл)
 }
 
 var (
@@ -218,6 +220,7 @@ func runServer() {
 	data.SellSum = make(map[string]int)
 	data.LastManualUpdate = make(map[string]time.Time)
 	data.LastCycleAt = make(map[string]time.Time)
+	data.BuySurgeCount = make(map[string]int)
 
 	loadDailyData(loc)
 	loadRuntimeState()
@@ -583,6 +586,7 @@ func pruneStaleDataKeys() {
 		delete(data.LastCycleAt, id)
 		delete(data.TradeHistory, id)
 		delete(data.LastManualUpdate, id)
+		delete(data.BuySurgeCount, id)
 		delete(swordTimes, id)
 		delete(priceHistory, id)
 	}
@@ -750,6 +754,7 @@ func buildRuntimePersistLocked() RuntimePersist {
 		TradeHistory:     trades,
 		PriceHistory:     clonePriceHistoryLocked(),
 		AdjustState:      maps.Clone(data.AdjustState),
+		BuySurgeCount: maps.Clone(data.BuySurgeCount),
 	}
 }
 
@@ -796,6 +801,9 @@ func loadRuntimeState() {
 
 	if data.LastCycleAt == nil {
 		data.LastCycleAt = make(map[string]time.Time)
+	}
+	if data.BuySurgeCount == nil {
+		data.BuySurgeCount = make(map[string]int)
 	}
 	if data.LastManualUpdate == nil {
 		data.LastManualUpdate = make(map[string]time.Time)
@@ -857,6 +865,12 @@ func loadRuntimeState() {
 		dailyData.AdjustState[item] = st
 		nAdj++
 	}
+	for item, n := range snap.BuySurgeCount {
+		if _, ok := itemsConfig[item]; !ok || n <= 0 {
+			continue
+		}
+		data.BuySurgeCount[item] = n
+	}
 
 	log.Printf("[RUNTIME] загружено: якорей циклов=%d, сделок=%d, adjust_state=%d (saved_at=%v)",
 		nCycle, nTrades, nAdj, snap.SavedAt.Format(time.RFC3339))
@@ -884,6 +898,7 @@ func firstCycleDelay(item string, cfg ItemConfig) time.Duration {
 		delete(data.LastCycleAt, item)
 		delete(swordTimes, item)
 		delete(data.TradeHistory, item)
+		delete(data.BuySurgeCount, item)
 		rt := buildRuntimePersistLocked()
 		mutex.Unlock()
 		persistRuntimeState(&rt)
@@ -1157,8 +1172,13 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		data.BuySum[msg.Type] += msg.Price
 		addPriceToHistory(msg.Type, msg.Price)
 		logTradeEventML(msg.Type, "buy", msg.Price)
+		surge := maybeBuySurgePriceDownLocked(msg.Type)
 		mutex.Unlock()
 		saveDailyDataNoMessageUpdate()
+		if surge.Dropped {
+			publishPriceUpdate()
+			enqueueBuySurgeTelegram(surge)
+		}
 
 	case "sell":
 		data.SellStats[msg.Type]++
