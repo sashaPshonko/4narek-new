@@ -1,8 +1,8 @@
 {
   "pochti-megasword-1.21": {
     "base_price": 1500002,
-    "normal_sales": 6,
-    "normal_count": 5,
+    "normal_sales": 4,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -34,8 +34,8 @@
   },
   "sword7-1.21": {
     "base_price": 700003,
-    "normal_sales": 7,
-    "normal_count": 7,
+    "normal_sales": 4,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -59,8 +59,8 @@
   },
   "megasword-1.21": {
     "base_price": 2000004,
-    "normal_sales": 5,
-    "normal_count": 5,
+    "normal_sales": 2,
+    "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -92,8 +92,8 @@
   },
   "штаны-1.21": {
     "base_price": 600005,
-    "normal_sales": 8,
-    "normal_count": 5,
+    "normal_sales": 7,
+    "normal_count": 7,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
@@ -113,7 +113,7 @@
   },
   "нагрудник-1.21": {
     "base_price": 600007,
-    "normal_sales": 8,
+    "normal_sales": 4,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
@@ -134,8 +134,8 @@
   },
   "ботинки-1.21": {
     "base_price": 600009,
-    "normal_sales": 8,
-    "normal_count": 5,
+    "normal_sales": 6,
+    "normal_count": 6,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
@@ -155,8 +155,8 @@
   },
   "шлем-1.21": {
     "base_price": 600011,
-    "normal_sales": 8,
-    "normal_count": 5,
+    "normal_sales": 7,
+    "normal_count": 7,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
@@ -176,8 +176,8 @@
   },
   "фарм-1.21": {
     "base_price": 600013,
-    "normal_sales": 5,
-    "normal_count": 5,
+    "normal_sales": 3,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -205,8 +205,8 @@
   },
   "бульдозер-1-1.21": {
     "base_price": 300017,
-    "normal_sales": 5,
-    "normal_count": 5,
+    "normal_sales": 4,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
@@ -230,8 +230,8 @@
   },
   "бульдозер-2-1.21": {
     "base_price": 600018,
-    "normal_sales": 5,
-    "normal_count": 5,
+    "normal_sales": 4,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
@@ -263,8 +263,8 @@
   },
   "кирка_крутая-1.21": {
     "base_price": 600019,
-    "normal_sales": 4,
-    "normal_count": 5,
+    "normal_sales": 2,
+    "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
@@ -292,45 +292,63 @@
   },
   "шлем-позор-1.21": {
     "base_price": 400012,
-    "normal_sales": 5,
-    "normal_count": 5,
+    "normal_sales": 4,
+    "normal_count": 4,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
     "type": "позорная-броня-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 4 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 4
+      }
     ],
     "nacenka": 200000,
     "num": 1
   },
   "штаны-позор-1.21": {
     "base_price": 400014,
-    "normal_sales": 5,
-    "normal_count": 5,
+    "normal_sales": 4,
+    "normal_count": 4,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
     "type": "позорная-броня-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 4 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 4
+      }
     ],
     "nacenka": 200000,
     "num": 1
   },
   "ботинки-позор-1.21": {
     "base_price": 400010,
-    "normal_sales": 5,
-    "normal_count": 5,
+    "normal_sales": 6,
+    "normal_count": 6,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
     "type": "позорная-броня-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 4 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 4
+      }
     ],
     "nacenka": 200000,
     "num": 1
