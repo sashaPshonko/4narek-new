@@ -754,12 +754,14 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	const actThreshold = 1.15 // hold bias: из БД hold med > любых moves
+	winner := "hold"
 
 	notes = append(notes, fmt.Sprintf("dump=%.2f fill=%.2f skim=%.2f try/s=%.2f load=%.2f", dumpScore, fillScore, skimScore, tryRatio, stockLoad))
 
 	// Откат неудачного skim: прошлый цикл поднял N (ExperimentCheck как флажок «проверить»).
 	if state.ExperimentCheck {
 		state.ExperimentCheck = false
+		winner = "rollback"
 		if nacenkaSumNow < nacenkaSumPrev {
 			if nacenka > minNacenka {
 				nacenka -= stepN
@@ -788,6 +790,7 @@ func adjustPrice(item string) AdjustReport {
 		if skimScore > bestScore {
 			best, bestScore = "skim", skimScore
 		}
+		winner = best
 
 		switch best {
 		case "dump":
@@ -884,6 +887,44 @@ func adjustPrice(item string) AdjustReport {
 		priceBefore, newPrice, nacenkaBefore, nacenka,
 		now,
 	)
+
+	onlineForCap, _ := fetchOnlineSnapshot()
+	logCapitalCycleLocked(CapitalCycleRow{
+		Policy:          "capital_v1",
+		Item:            item,
+		Category:        cfg.Type,
+		Action:          actionTaken,
+		Winner:          winner,
+		Dump:            dumpScore,
+		Fill:            fillScore,
+		Skim:            skimScore,
+		Threshold:       actThreshold,
+		Sales:           sales,
+		Buys:            buys,
+		TrySells:        trySells,
+		OnAH:            onAH,
+		Inv:             invCount,
+		Held:            totalHeld,
+		Share:           share,
+		Free:            free,
+		Need:            need,
+		NormalSales:     cfg.NormalSales,
+		NormalCount:     stockNorm,
+		TryRatio:        tryRatio,
+		StockLoad:       stockLoad,
+		Underbuy:        underbuyOK,
+		PriceBefore:     priceBefore,
+		PriceAfter:      newPrice,
+		NacenkaBefore:   nacenkaBefore,
+		NacenkaAfter:    nacenka,
+		NacenkaSumNow:   nacenkaSumNow,
+		NacenkaSumPrev:  nacenkaSumPrev,
+		PriceFloor:      sellPriceFloor(cfg, minPrice, nacenka),
+		Step:            step,
+		Cooldown:        state.StockVsSalesCooldown,
+		PlayersOnline:   onlineForCap,
+		Notes:           strings.Join(notes, " · "),
+	})
 
 	shadowSnap := mlAdjustSnapshot{}
 	if mlShadowEnabled() {
