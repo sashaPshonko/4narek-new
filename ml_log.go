@@ -157,52 +157,10 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 )`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_decisions_ts ON ml_decisions(logged_ts)`)
 
-	// Каждый adjust (включая hold) — плоский лог CAPITAL для разбора без JSON-археологии.
-	_, _ = db.Exec(`
-CREATE TABLE IF NOT EXISTS capital_cycles (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	ts TEXT NOT NULL,
-	policy TEXT NOT NULL,
-	item_id TEXT NOT NULL,
-	category_type TEXT NOT NULL,
-	action TEXT NOT NULL,
-	winner TEXT NOT NULL,
-	dump REAL NOT NULL,
-	fill REAL NOT NULL,
-	skim REAL NOT NULL,
-	threshold REAL NOT NULL,
-	sales INTEGER NOT NULL,
-	buys INTEGER NOT NULL,
-	try_sells INTEGER NOT NULL,
-	on_ah INTEGER NOT NULL,
-	inv INTEGER NOT NULL,
-	held INTEGER NOT NULL,
-	share INTEGER NOT NULL,
-	free_slots INTEGER NOT NULL,
-	need INTEGER NOT NULL,
-	normal_sales INTEGER NOT NULL,
-	normal_count INTEGER NOT NULL,
-	try_ratio REAL NOT NULL,
-	stock_load REAL NOT NULL,
-	underbuy INTEGER NOT NULL,
-	price_before INTEGER NOT NULL,
-	price_after INTEGER NOT NULL,
-	nacenka_before INTEGER NOT NULL,
-	nacenka_after INTEGER NOT NULL,
-	nacenka_sum_now INTEGER NOT NULL,
-	nacenka_sum_prev INTEGER NOT NULL,
-	price_floor INTEGER NOT NULL,
-	step INTEGER NOT NULL,
-	cooldown INTEGER NOT NULL,
-	players_online INTEGER NOT NULL,
-	notes TEXT
-)`)
-	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_capital_cycles_ts ON capital_cycles(ts)`)
-	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_capital_cycles_item ON capital_cycles(item_id)`)
-
 	mlDB = db
+	initCapitalTables()
 	initMLShadowTable()
-	log.Printf("[ML] SQLite %s (schema v%d + capital_cycles + trade.nacenka)", mlDBPath, mlSchemaVersion)
+	log.Printf("[ML] SQLite %s (schema v%d + capital_cycles/fwd + stock_snapshots + server_price_events)", mlDBPath, mlSchemaVersion)
 	if mlShadowEnabled() {
 		log.Printf("[ML-SHADOW] включён → %s (Go правила + лог сравнения с ML)", mlWSURL())
 	}
@@ -227,60 +185,6 @@ func ensureMLColumn(db *sql.DB, table, col, decl string) {
 		}
 	}
 	_, _ = db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + col + ` ` + decl)
-}
-
-// CapitalCycleRow — снимок одного цикла CAPITAL для SQLite.
-type CapitalCycleRow struct {
-	Policy                                string
-	Item, Category, Action, Winner, Notes string
-	Dump, Fill, Skim, Threshold           float64
-	Sales, Buys, TrySells                 int
-	OnAH, Inv, Held                       int
-	Share, Free, Need                     int
-	NormalSales, NormalCount              int
-	TryRatio, StockLoad                   float64
-	Underbuy                              bool
-	PriceBefore, PriceAfter               int
-	NacenkaBefore, NacenkaAfter           int
-	NacenkaSumNow, NacenkaSumPrev         int
-	PriceFloor, Step, Cooldown            int
-	PlayersOnline                         int
-}
-
-func logCapitalCycleLocked(row CapitalCycleRow) {
-	if mlDB == nil {
-		return
-	}
-	under := 0
-	if row.Underbuy {
-		under = 1
-	}
-	ts := time.Now().UTC().Format(time.RFC3339)
-	mlDBMu.Lock()
-	defer mlDBMu.Unlock()
-	_, err := mlDB.Exec(`
-INSERT INTO capital_cycles (
-	ts, policy, item_id, category_type, action, winner,
-	dump, fill, skim, threshold,
-	sales, buys, try_sells, on_ah, inv, held,
-	share, free_slots, need, normal_sales, normal_count,
-	try_ratio, stock_load, underbuy,
-	price_before, price_after, nacenka_before, nacenka_after,
-	nacenka_sum_now, nacenka_sum_prev, price_floor, step, cooldown,
-	players_online, notes
-) VALUES (?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?)`,
-		ts, row.Policy, row.Item, row.Category, row.Action, row.Winner,
-		row.Dump, row.Fill, row.Skim, row.Threshold,
-		row.Sales, row.Buys, row.TrySells, row.OnAH, row.Inv, row.Held,
-		row.Share, row.Free, row.Need, row.NormalSales, row.NormalCount,
-		row.TryRatio, row.StockLoad, under,
-		row.PriceBefore, row.PriceAfter, row.NacenkaBefore, row.NacenkaAfter,
-		row.NacenkaSumNow, row.NacenkaSumPrev, row.PriceFloor, row.Step, row.Cooldown,
-		row.PlayersOnline, row.Notes,
-	)
-	if err != nil {
-		log.Printf("[ML] capital_cycles insert: %v", err)
-	}
 }
 
 func categoryCycleSnapshotLocked(categoryType, triggerItem string, since, until time.Time) (mlItemCycleSnapshot, map[string]mlItemCycleSnapshot) {

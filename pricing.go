@@ -612,6 +612,7 @@ func adjustPrice(item string) AdjustReport {
 	state := data.AdjustState[item]
 
 	tryAdvanceCategoryMLOutcomesLocked(cfg.Type, now)
+	tryAdvanceCapitalForwardsLocked(now)
 
 	newPrice := data.Prices[item]
 	priceBefore := newPrice
@@ -742,12 +743,13 @@ func adjustPrice(item string) AdjustReport {
 
 	// SKIM: забрать маржу только на здоровом 1:1 потоке.
 	skimScore := 0.0
+	cheapFrac, cheapN := 0.0, 0
 	flowOK := sales >= normal && buys >= (normal+1)/2 && buys >= sales-2 && stockLoad <= 1.8 && stockLoad >= 0.4
 	if flowOK && !underbuyOK {
-		frac, nCheap := cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
-		if nCheap >= 3 && frac >= cheapBuyFractionThreshold {
-			skimScore = 1.0 + frac
-			notes = append(notes, fmt.Sprintf("cheap=%.0f%%/%d", frac*100, nCheap))
+		cheapFrac, cheapN = cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
+		if cheapN >= 3 && cheapFrac >= cheapBuyFractionThreshold {
+			skimScore = 1.0 + cheapFrac
+			notes = append(notes, fmt.Sprintf("cheap=%.0f%%/%d", cheapFrac*100, cheapN))
 		} else if nacenkaSumNow > nacenkaSumPrev && nacenkaSumPrev > 0 && state.GoodStreak >= 2 {
 			skimScore = 0.85
 		}
@@ -755,6 +757,7 @@ func adjustPrice(item string) AdjustReport {
 
 	const actThreshold = 1.15 // hold bias: из БД hold med > любых moves
 	winner := "hold"
+	dumpBlockedCD := false
 
 	notes = append(notes, fmt.Sprintf("dump=%.2f fill=%.2f skim=%.2f try/s=%.2f load=%.2f", dumpScore, fillScore, skimScore, tryRatio, stockLoad))
 
@@ -795,6 +798,7 @@ func adjustPrice(item string) AdjustReport {
 		switch best {
 		case "dump":
 			if !canMoveP {
+				dumpBlockedCD = true
 				notes = append(notes, fmt.Sprintf("dump на cd=%d", state.StockVsSalesCooldown))
 				action = "capital_hold"
 			} else {
@@ -890,7 +894,7 @@ func adjustPrice(item string) AdjustReport {
 
 	onlineForCap, _ := fetchOnlineSnapshot()
 	logCapitalCycleLocked(CapitalCycleRow{
-		Policy:          "capital_v1",
+		Policy:          capitalPolicy,
 		Item:            item,
 		Category:        cfg.Type,
 		Action:          actionTaken,
@@ -924,6 +928,16 @@ func adjustPrice(item string) AdjustReport {
 		Cooldown:        state.StockVsSalesCooldown,
 		PlayersOnline:   onlineForCap,
 		Notes:           strings.Join(notes, " · "),
+		ProfitNow:       profitNow,
+		CheapFrac:       cheapFrac,
+		CheapN:          cheapN,
+		MinBuyHistory:   minPrice,
+		BotsCategory:    aggregateBotsPerTypeLocked()[cfg.Type],
+		CycleMinutes:    cfg.AnalysisTime.Minutes(),
+		GoodStreak:      state.GoodStreak,
+		DumpBlockedCD:   dumpBlockedCD,
+		DecisionAt:      now,
+		CycleDuration:   cfg.AnalysisTime,
 	})
 
 	shadowSnap := mlAdjustSnapshot{}

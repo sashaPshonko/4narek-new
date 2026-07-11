@@ -1173,6 +1173,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		addPriceToHistory(msg.Type, msg.Price)
 		logTradeEventML(msg.Type, "buy", msg.Price)
 		surge := maybeBuySurgePriceDownLocked(msg.Type)
+		tryAdvanceCapitalForwardsLocked(time.Now())
 		mutex.Unlock()
 		saveDailyDataNoMessageUpdate()
 		if surge.Dropped {
@@ -1191,6 +1192,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		})
 		data.SellSum[msg.Type] += msg.Price
 		logTradeEventML(msg.Type, "sell", msg.Price)
+		tryAdvanceCapitalForwardsLocked(time.Now())
 		mutex.Unlock()
 		saveDailyDataNoMessageUpdate()
 
