@@ -439,15 +439,15 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 func actionReasonRU(action string) string {
 	switch action {
 	case "capital_hold":
-		return "капитал: hold — нет давления выше порога (не крутим винты зря)"
+		return "капитал: hold — нет давления"
 	case "capital_dump":
-		return "капитал: dump — витрина трется (try/onAH), sales слабые → −цена"
+		return "капитал: dump — мёртвые sales / hog → −цена"
 	case "capital_fill":
-		return "капитал: fill — слоты простаивают / недокупка → −наценка"
+		return "капитал: fill — сток ниже цели → −наценка"
 	case "capital_fill_price":
-		return "капитал: fill_price — N на полу, сильный underbuy → +цена (v2: порог/cd)"
+		return "капитал: +P — SOLO demand (спрос) или MULTI underbuy"
 	case "capital_skim":
-		return "капитал: skim — поток 1:1 и маржа толстая на столе → +наценка"
+		return "капитал: skim — поток ок → +наценка"
 	case "capital_rollback":
 		return "капитал: откат неудачного skim"
 	case "price_down_buy_surge":
@@ -665,37 +665,73 @@ func adjustPrice(item string) AdjustReport {
 	var notes []string
 	var experimentTG *experimentTelegramEvent
 
-	underbuyOK, freeDef, needDef := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
-	if underbuyOK {
-		free, need = freeDef, needDef
-	}
-
 	// ═══════════════════════════════════════════════════════════════════
-	// CAPITAL v2 — v1 + правки по ~2ч бою (2026-07-11 night).
+	// CAPITAL v3 — SOLO vs MULTI (БД 2026-07-12).
 	//
-	// Аксиомы:
-	//  1) HOLD часто бьёт любое действие → порог вмешательства высокий.
-	//  2) +P (fill_price) в v1 давал худший fwd_reward → сильнее порог + cooldown.
-	//  3) dump CD блокировал застрявший сток (pochti-megasword dump=4 / load=5) → bypass.
-	//  4) P = разгрузка витрины; N = слоты / маржа.
-	//  5) min/max от оркестратора священны (skip_manual выше).
+	// Ботинки: sell avg 1.5M→1.1M. Dump задавил, потом hold на 1.1M при
+	// sales=13..19 — цены ЗАНИЖЕНЫ, деньги на столе.
+	//
+	// SOLO (шлем/ботинки/штаны/нагрудник):
+	//   • underbuy по target=normal, не share=96
+	//   • dump только если продажи МЁРТВЫЕ (≤ normal/2)
+	//   • demand → +P когда sales ≥ нормы (поднять цену при спросе)
+	//   • +P от underbuy запрещён
+	// MULTI: hog → dump; fill_price только не-hog.
 	// ═══════════════════════════════════════════════════════════════════
 
 	normal := cfg.NormalSales
 	if normal < 1 {
 		normal = 1
 	}
-	target := normal // целевой сток ≈ норма продаж за цикл
+	target := normal
+	nCatItems := countItemsInCategoryLocked(cfg.Type)
+	solo := nCatItems <= 1
 	stepN := step
 	stepP := step
 	canMoveP := state.StockVsSalesCooldown <= 0
 
-	// Давления 0..~3
+	underbuyOK := false
+	if buys < sales {
+		need = sales - buys
+		if solo {
+			free = target - totalHeld
+			if free < 0 {
+				free = 0
+			}
+			underbuyOK = free > 0 && totalHeld < target
+		} else {
+			var freeDef, needDef int
+			underbuyOK, freeDef, needDef = hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
+			if underbuyOK {
+				free, need = freeDef, needDef
+			} else {
+				free = share - totalHeld
+				if free < 0 {
+					free = 0
+				}
+			}
+		}
+	}
+
+	catHeldSum := 0
+	siblingMaxHeld := 0
+	for name, conf := range itemsConfig {
+		if conf.Type != cfg.Type {
+			continue
+		}
+		h := ahCounts[name] + invCounts[name]
+		catHeldSum += h
+		if name != item && h > siblingMaxHeld {
+			siblingMaxHeld = h
+		}
+	}
+	hog := !solo && totalHeld >= target*2 && totalHeld > siblingMaxHeld+2
+
 	tryRatio := 0.0
 	if sales > 0 {
 		tryRatio = float64(trySells) / float64(sales)
 	} else if trySells > 0 {
-		tryRatio = float64(trySells) // голые попытки без продаж = ад
+		tryRatio = float64(trySells)
 	}
 	salesGap := float64(normal-sales) / float64(normal)
 	if salesGap < 0 {
@@ -711,9 +747,30 @@ func adjustPrice(item string) AdjustReport {
 		buyGap = float64(sales-buys) / float64(sales)
 	}
 
-	// DUMP: витрина трётся и sales не тянут. try/sell≥2 у мечей — системный сигнал.
+	const actThreshold = 1.15
+	const fillPriceMinScore = 2.0
+	const dumpCDBypassScore = 2.5
+	const dumpCDBypassLoad = 3.0
+
+	// DUMP
 	dumpScore := 0.0
-	if sales < normal {
+	if solo {
+		// Только мёртвые продажи — иначе давим цену при живом спросе.
+		deadSales := sales <= (normal / 2)
+		if deadSales && totalHeld > 1 {
+			if sales == 0 {
+				dumpScore += 1.6
+			} else {
+				dumpScore += 1.0
+			}
+			if stockLoad > 2.0 {
+				dumpScore += 0.6 * (stockLoad - 2.0)
+			}
+			if tryRatio >= 2.0 {
+				dumpScore += 0.5
+			}
+		}
+	} else if sales < normal {
 		if tryRatio >= 2.0 {
 			dumpScore += 1.2
 		} else if trySells > normal {
@@ -727,25 +784,59 @@ func adjustPrice(item string) AdjustReport {
 			dumpScore += 0.5 * (stockLoad - 1.5)
 		}
 	}
+	if hog {
+		dumpScore += 0.9
+		notes = append(notes, fmt.Sprintf("hog held=%d sibMax=%d cat=%d", totalHeld, siblingMaxHeld, catHeldSum))
+	}
+	if solo && totalHeld <= 1 {
+		dumpScore = 0
+	}
 
-	// FILL: слоты/недокупка. Режем N только когда есть смысл докупать.
+	// FILL (−N)
 	fillScore := 0.0
 	if underbuyOK {
 		fillScore += 1.4 + 0.8*buyGap
 	}
 	if emptyFrac > 0.4 && sales >= buys && sales > 0 {
-		// продаём, стока мало → надо наполнять (не +P!)
 		fillScore += 0.9 * emptyFrac
 	}
 	if sales == 0 && totalHeld < target && trySells == 0 && buys == 0 {
-		// мёртвый рынок — НЕ fill (нечего кормить)
 		fillScore = 0
 	}
+	if hog {
+		fillScore *= 0.4
+	}
 
-	// SKIM: забрать маржу только на здоровом 1:1 потоке.
+	// DEMAND (+P): SOLO — спрос есть → поднимаем цену (не сидим на 1.1M).
+	demandScore := 0.0
+	if solo && sales >= normal && canMoveP {
+		demandScore = 1.2
+		if sales >= normal+normal/2 {
+			demandScore += 0.5
+		}
+		if sales >= normal*2 {
+			demandScore += 0.5
+		}
+		if sales > buys {
+			demandScore += 0.4
+		}
+		if stockLoad >= 2.0 {
+			demandScore += 0.3
+		}
+		if state.FillPriceCooldown > 0 {
+			demandScore = 0
+			notes = append(notes, fmt.Sprintf("demand cd=%d", state.FillPriceCooldown))
+		}
+	}
+
+	// SKIM (+N)
 	skimScore := 0.0
 	cheapFrac, cheapN := 0.0, 0
-	flowOK := sales >= normal && buys >= (normal+1)/2 && buys >= sales-2 && stockLoad <= 1.8 && stockLoad >= 0.4
+	maxLoadForSkim := 1.8
+	if solo {
+		maxLoadForSkim = 3.0
+	}
+	flowOK := sales >= normal && buys >= (normal+1)/2 && buys >= sales-2 && stockLoad <= maxLoadForSkim && stockLoad >= 0.4
 	if flowOK && !underbuyOK {
 		cheapFrac, cheapN = cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
 		if cheapN >= 3 && cheapFrac >= cheapBuyFractionThreshold {
@@ -753,19 +844,22 @@ func adjustPrice(item string) AdjustReport {
 			notes = append(notes, fmt.Sprintf("cheap=%.0f%%/%d", cheapFrac*100, cheapN))
 		} else if nacenkaSumNow > nacenkaSumPrev && nacenkaSumPrev > 0 && state.GoodStreak >= 2 {
 			skimScore = 0.85
+			if solo {
+				skimScore = 1.05
+			}
 		}
 	}
 
-	const actThreshold = 1.15      // hold bias
-	const fillPriceMinScore = 2.0  // v2: +P только при сильном fill (в бою fill_price < hold)
-	const dumpCDBypassScore = 2.5  // v2: сильный dump ломает cooldown
-	const dumpCDBypassLoad = 3.0   // v2: застрявший сток ломает cooldown
 	winner := "hold"
 	dumpBlockedCD := false
 
-	notes = append(notes, fmt.Sprintf("dump=%.2f fill=%.2f skim=%.2f try/s=%.2f load=%.2f", dumpScore, fillScore, skimScore, tryRatio, stockLoad))
+	shapeTag := "multi"
+	if solo {
+		shapeTag = "solo"
+	}
+	notes = append(notes, fmt.Sprintf("%s dump=%.2f fill=%.2f demand=%.2f skim=%.2f try/s=%.2f load=%.2f",
+		shapeTag, dumpScore, fillScore, demandScore, skimScore, tryRatio, stockLoad))
 
-	// Откат неудачного skim: прошлый цикл поднял N (ExperimentCheck как флажок «проверить»).
 	if state.ExperimentCheck {
 		state.ExperimentCheck = false
 		winner = "rollback"
@@ -785,7 +879,6 @@ func adjustPrice(item string) AdjustReport {
 			action = "capital_hold"
 		}
 	} else {
-		// Один главный рычаг: max pressure.
 		best := "hold"
 		bestScore := actThreshold
 		if dumpScore >= bestScore {
@@ -794,6 +887,9 @@ func adjustPrice(item string) AdjustReport {
 		if fillScore > bestScore {
 			best, bestScore = "fill", fillScore
 		}
+		if demandScore > bestScore {
+			best, bestScore = "demand", demandScore
+		}
 		if skimScore > bestScore {
 			best, bestScore = "skim", skimScore
 		}
@@ -801,14 +897,14 @@ func adjustPrice(item string) AdjustReport {
 
 		switch best {
 		case "dump":
-			dumpBypass := dumpScore >= dumpCDBypassScore || stockLoad >= dumpCDBypassLoad
+			dumpBypass := dumpScore >= dumpCDBypassScore || stockLoad >= dumpCDBypassLoad || hog
 			if !canMoveP && !dumpBypass {
 				dumpBlockedCD = true
 				notes = append(notes, fmt.Sprintf("dump на cd=%d", state.StockVsSalesCooldown))
 				action = "capital_hold"
 			} else {
 				if !canMoveP && dumpBypass {
-					notes = append(notes, fmt.Sprintf("dump cd bypass (score=%.2f load=%.2f)", dumpScore, stockLoad))
+					notes = append(notes, fmt.Sprintf("dump cd bypass (score=%.2f load=%.2f hog=%v)", dumpScore, stockLoad, hog))
 				}
 				priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
 				if newPrice-stepP >= priceFloor {
@@ -816,7 +912,7 @@ func adjustPrice(item string) AdjustReport {
 					action = "capital_dump"
 					changed = true
 					state.GoodStreak = 0
-					state.StockVsSalesCooldown = 2 // v2: было 3 — чуть меньше липкости
+					state.StockVsSalesCooldown = 2
 				} else {
 					notes = append(notes, fmt.Sprintf("dump упёрся в пол %d", priceFloor))
 					action = "capital_hold"
@@ -831,10 +927,11 @@ func adjustPrice(item string) AdjustReport {
 				action = "capital_fill"
 				changed = true
 				state.GoodStreak = 0
-			} else if underbuyOK {
-				// Единственный легальный +P: N на полу и реально недокупаем.
-				// v2: порог выше + cooldown — в бою fill_price проигрывал hold.
+			} else if underbuyOK && !solo {
 				switch {
+				case hog:
+					notes = append(notes, "multi hog: fill_price запрещён → hold")
+					action = "capital_hold"
 				case fillScore < fillPriceMinScore:
 					notes = append(notes, fmt.Sprintf("fill_price слабо (%.2f<%.2f) → hold", fillScore, fillPriceMinScore))
 					action = "capital_hold"
@@ -849,15 +946,22 @@ func adjustPrice(item string) AdjustReport {
 					state.FillPriceCooldown = 3
 				}
 			} else {
-				notes = append(notes, "fill: N на мин и нет underbuy → hold")
+				notes = append(notes, "fill: N на мин → hold")
 				action = "capital_hold"
 			}
+		case "demand":
+			newPrice += stepP
+			action = "capital_fill_price"
+			changed = true
+			state.GoodStreak = 0
+			state.FillPriceCooldown = 1 // почти каждый цикл при живом спросе
+			notes = append(notes, "demand → +P")
 		case "skim":
 			nacenka += stepN
 			action = "capital_skim"
 			changed = true
 			state.GoodStreak = 0
-			state.ExperimentCheck = true // проверить Σнаценок в след. цикле
+			state.ExperimentCheck = true
 		default:
 			action = "capital_hold"
 			if nacenkaSumNow >= nacenkaSumPrev {
