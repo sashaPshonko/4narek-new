@@ -5,7 +5,8 @@ import (
 	"time"
 )
 
-const capitalPolicy = "capital_v1"
+// capital_v2 — 2026-07-11 night: жёстче fill_price, dump CD bypass при сильном давлении.
+const capitalPolicy = "capital_v2"
 const capitalForwardCycles = 3
 
 // capitalPendingForward — ждём 3 следующих окна analysis_time и дописываем profit в capital_cycles.

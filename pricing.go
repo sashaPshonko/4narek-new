@@ -90,6 +90,7 @@ type ItemAdjustState struct {
 	LastCycleProfit      int  `json:"last_cycle_profit"`
 	LastCycleNacenkaSum  int  `json:"last_cycle_nacenka_sum"`
 	StockVsSalesCooldown int  `json:"stock_vs_sales_cooldown"` // refractory после dump −P
+	FillPriceCooldown    int  `json:"fill_price_cooldown"`    // refractory после +P (v2: не дёргать цену каждый цикл)
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -444,7 +445,7 @@ func actionReasonRU(action string) string {
 	case "capital_fill":
 		return "капитал: fill — слоты простаивают / недокупка → −наценка"
 	case "capital_fill_price":
-		return "капитал: fill — N на полу, buys отстают → +цена (поднять buy-потолок)"
+		return "капитал: fill_price — N на полу, сильный underbuy → +цена (v2: порог/cd)"
 	case "capital_skim":
 		return "капитал: skim — поток 1:1 и маржа толстая на столе → +наценка"
 	case "capital_rollback":
@@ -670,14 +671,14 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	// ═══════════════════════════════════════════════════════════════════
-	// CAPITAL v1 — с нуля по pricing.db (2026-07-11).
+	// CAPITAL v2 — v1 + правки по ~2ч бою (2026-07-11 night).
 	//
-	// Аксиомы (из данных, не из идеологии старых if'ов):
-	//  1) HOLD часто бьёт любое действие по forward-profit → порог вмешательства высокий.
-	//  2) +P коррелирует с убытком (−18M на шлеме) → +P почти запрещён.
-	//  3) held>0 кормит кассу → цель держать сток около нормы, не «паниковать от 2×».
-	//  4) P двигает разгрузку витрины; N — загрузку слотов / толщину маржи.
-	//  5) min/max от оркестратора священны (skip_manual выше) — рынок сказал цену.
+	// Аксиомы:
+	//  1) HOLD часто бьёт любое действие → порог вмешательства высокий.
+	//  2) +P (fill_price) в v1 давал худший fwd_reward → сильнее порог + cooldown.
+	//  3) dump CD блокировал застрявший сток (pochti-megasword dump=4 / load=5) → bypass.
+	//  4) P = разгрузка витрины; N = слоты / маржа.
+	//  5) min/max от оркестратора священны (skip_manual выше).
 	// ═══════════════════════════════════════════════════════════════════
 
 	normal := cfg.NormalSales
@@ -755,7 +756,10 @@ func adjustPrice(item string) AdjustReport {
 		}
 	}
 
-	const actThreshold = 1.15 // hold bias: из БД hold med > любых moves
+	const actThreshold = 1.15      // hold bias
+	const fillPriceMinScore = 2.0  // v2: +P только при сильном fill (в бою fill_price < hold)
+	const dumpCDBypassScore = 2.5  // v2: сильный dump ломает cooldown
+	const dumpCDBypassLoad = 3.0   // v2: застрявший сток ломает cooldown
 	winner := "hold"
 	dumpBlockedCD := false
 
@@ -797,18 +801,22 @@ func adjustPrice(item string) AdjustReport {
 
 		switch best {
 		case "dump":
-			if !canMoveP {
+			dumpBypass := dumpScore >= dumpCDBypassScore || stockLoad >= dumpCDBypassLoad
+			if !canMoveP && !dumpBypass {
 				dumpBlockedCD = true
 				notes = append(notes, fmt.Sprintf("dump на cd=%d", state.StockVsSalesCooldown))
 				action = "capital_hold"
 			} else {
+				if !canMoveP && dumpBypass {
+					notes = append(notes, fmt.Sprintf("dump cd bypass (score=%.2f load=%.2f)", dumpScore, stockLoad))
+				}
 				priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
 				if newPrice-stepP >= priceFloor {
 					newPrice -= stepP
 					action = "capital_dump"
 					changed = true
 					state.GoodStreak = 0
-					state.StockVsSalesCooldown = 3
+					state.StockVsSalesCooldown = 2 // v2: было 3 — чуть меньше липкости
 				} else {
 					notes = append(notes, fmt.Sprintf("dump упёрся в пол %d", priceFloor))
 					action = "capital_hold"
@@ -825,11 +833,21 @@ func adjustPrice(item string) AdjustReport {
 				state.GoodStreak = 0
 			} else if underbuyOK {
 				// Единственный легальный +P: N на полу и реально недокупаем.
-				// Поднимает buy-потолок (sell−N), не «low stock ради low stock».
-				newPrice += stepP
-				action = "capital_fill_price"
-				changed = true
-				state.GoodStreak = 0
+				// v2: порог выше + cooldown — в бою fill_price проигрывал hold.
+				switch {
+				case fillScore < fillPriceMinScore:
+					notes = append(notes, fmt.Sprintf("fill_price слабо (%.2f<%.2f) → hold", fillScore, fillPriceMinScore))
+					action = "capital_hold"
+				case state.FillPriceCooldown > 0:
+					notes = append(notes, fmt.Sprintf("fill_price на cd=%d → hold", state.FillPriceCooldown))
+					action = "capital_hold"
+				default:
+					newPrice += stepP
+					action = "capital_fill_price"
+					changed = true
+					state.GoodStreak = 0
+					state.FillPriceCooldown = 3
+				}
 			} else {
 				notes = append(notes, "fill: N на мин и нет underbuy → hold")
 				action = "capital_hold"
@@ -852,6 +870,9 @@ func adjustPrice(item string) AdjustReport {
 
 	if action != "capital_dump" && state.StockVsSalesCooldown > 0 {
 		state.StockVsSalesCooldown--
+	}
+	if action != "capital_fill_price" && state.FillPriceCooldown > 0 {
+		state.FillPriceCooldown--
 	}
 
 	state.LastCycleProfit = profitNow
