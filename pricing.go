@@ -42,7 +42,6 @@ type AdjustReport struct {
 	NacenkaSumNow     int
 	NacenkaSumPrev    int
 	GoodStreak        int
-	NoOverstockDown   bool
 	BlockNacenkaUp    bool
 }
 
@@ -436,20 +435,6 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 	return ok
 }
 
-// skipOverstockPriceDown — покупок меньше продаж и есть место докупить:
-// не роняем sell из‑за «переизбытка», если сток ещё не явный перебор (< 2× нормы).
-// При held ≥ 2×normal защита не действует — это уже залежь, а не недокупка.
-func skipOverstockPriceDown(share, totalHeld, sales, buys, normalSales int) bool {
-	if normalSales <= 0 || totalHeld <= normalSales {
-		return false
-	}
-	if totalHeld >= normalSales*2 {
-		return false
-	}
-	ok, _, _ := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
-	return ok
-}
-
 func actionReasonRU(action string) string {
 	switch action {
 	case "price_up_low_stock":
@@ -461,9 +446,9 @@ func actionReasonRU(action string) string {
 	case "price_down_stock_vs_sales":
 		return "явный перебор стока (≥2× нормы) и продаж мало → снижаем цену"
 	case "price_down_overstock_held":
-		return "сток ≥2× нормы, продаж мало, сигнал витрины → снижаем цену"
-	case "price_down_overstock_held_with_nacenka":
-		return "сток ≥2× нормы, продаж мало, покупок < нормы и есть место в доле → снижаем цену и наценку"
+		return "сигнал витрины + продаж < нормы → снижаем цену"
+	case "price_down_overstock_and_nacenka_buy_deficit":
+		return "витрина+мало продаж → −цена; buys<sales и есть место → −наценка"
 	case "price_down_buy_surge":
 		return "резкий выкуп: surge ≥2× нормы и продаж < нормы → цена сразу вниз"
 	case "nacenka_up_stock_vs_sales":
@@ -471,7 +456,7 @@ func actionReasonRU(action string) string {
 	case "price_up_buy_deficit_with_space":
 		return "покупок меньше продаж, есть место, наценка уже на мин → поднимаем цену"
 	case "nacenka_down_buy_deficit_with_space":
-		return "покупок меньше продаж, есть место → сначала снижаем наценку"
+		return "покупок меньше продаж, есть место → снижаем наценку"
 	case "nacenka_down_deficit":
 		return "продаж меньше нормы и сток ещё ниже нормы → снижаем наценку"
 	case "nacenka_up_cheap_buys":
@@ -691,7 +676,6 @@ func adjustPrice(item string) AdjustReport {
 	var notes []string
 	var experimentTG *experimentTelegramEvent
 
-	noOverstockDown := skipOverstockPriceDown(share, totalHeld, sales, buys, cfg.NormalSales)
 	noNacenkaUp, freeDef, needDef := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
 	if noNacenkaUp {
 		free, need = freeDef, needDef
@@ -745,40 +729,31 @@ func adjustPrice(item string) AdjustReport {
 		changed = true
 		state.GoodStreak = 0
 	} else {
-		// Явный перебор: held ≥ 2×normal + сигнал витрины (onAH или try > нормы).
-		stockHeavy := totalHeld >= cfg.NormalSales*2
+		// Перебор: сигнал витрины (onAH или try > нормы) + продаж < нормы → −цена.
 		ahSignal := onAH > cfg.NormalSales || trySells > cfg.NormalSales
 		canStockAct := state.StockVsSalesCooldown <= 0
+		salesLow := sales < cfg.NormalSales
+		overstockDump := ahSignal && salesLow
+		priceChanged := false
 
-		if stockHeavy && sales < cfg.NormalSales {
-			if noOverstockDown {
-				notes = append(notes, "overstock по стоку не применили: buys<sales и есть место в доле (недокупка)")
-			} else if !ahSignal {
-				notes = append(notes, "сток ≥2×нормы и продаж мало, но нет сигнала витрины (нужно onAH>нормы или trySells>нормы)")
-			} else if !canStockAct {
-				notes = append(notes, fmt.Sprintf("overstock по стоку на кулдауне (%d цикл.)", state.StockVsSalesCooldown))
+		if overstockDump {
+			if !canStockAct {
+				notes = append(notes, fmt.Sprintf("перебор (витрина) на кулдауне (%d цикл.)", state.StockVsSalesCooldown))
 			} else {
 				priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
 				if newPrice-step >= priceFloor {
 					newPrice -= step
 					action = "price_down_overstock_held"
-					// наценку вниз только если покупки слабые и в доле ещё есть место
-					freeSlots := share - totalHeld
-					if buys < cfg.NormalSales && freeSlots > 0 && nacenka > minNacenka {
-						nacenka -= step
-						if nacenka < minNacenka {
-							nacenka = minNacenka
-						}
-						action = "price_down_overstock_held_with_nacenka"
-					}
 					changed = true
+					priceChanged = true
 					state.GoodStreak = 0
 					state.StockVsSalesCooldown = 3
 				} else {
-					notes = append(notes, fmt.Sprintf("overstock по стоку хотел −step, но упёрлись в пол %d", priceFloor))
+					notes = append(notes, fmt.Sprintf("перебор хотел −цену, но упёрлись в пол %d", priceFloor))
 				}
 			}
-		} else if stockHeavy && sales >= cfg.NormalSales && canStockAct {
+		} else if totalHeld >= cfg.NormalSales*2 && sales >= cfg.NormalSales && canStockAct {
+			// Отдельно: залежь при нормальных продажах → наценку вверх (покупаем агрессивнее).
 			if noNacenkaUp {
 				notes = append(notes, "nacenka↑ не применили: buys<sales и есть место — сначала докупать")
 			} else {
@@ -788,11 +763,10 @@ func adjustPrice(item string) AdjustReport {
 				state.GoodStreak = 0
 				state.StockVsSalesCooldown = 3
 			}
-		} else if totalHeld >= cfg.NormalSales && totalHeld < cfg.NormalSales*2 && sales < cfg.NormalSales {
-			notes = append(notes, fmt.Sprintf("сток %d ещё < 2×нормы (%d) — перебор неявный, цену не трогаем", totalHeld, cfg.NormalSales*2))
 		}
 
-		if !changed && buys < sales && totalHeld < cfg.NormalSales*2 {
+		// Отдельно: buys < sales и есть место → −наценка (или +цена, если наценка на мин).
+		if buys < sales {
 			okSpace, f, n := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
 			free, need = f, n
 			if okSpace {
@@ -801,15 +775,23 @@ func adjustPrice(item string) AdjustReport {
 					if nacenka < minNacenka {
 						nacenka = minNacenka
 					}
-					action = "nacenka_down_buy_deficit_with_space"
-				} else {
+					if priceChanged {
+						action = "price_down_overstock_and_nacenka_buy_deficit"
+					} else {
+						action = "nacenka_down_buy_deficit_with_space"
+					}
+					changed = true
+					state.GoodStreak = 0
+				} else if !changed {
 					newPrice += step
 					action = "price_up_buy_deficit_with_space"
+					changed = true
+					state.GoodStreak = 0
 				}
-				changed = true
-				state.GoodStreak = 0
-				log.Printf("[ADJUST] %s: buy_deficit %s | buys=%d sales=%d need=%d free=%d share=%d held=%d nacenka=%d→%d price=%d",
-					item, action, buys, sales, need, free, share, totalHeld, nacenkaBefore, nacenka, newPrice)
+				if changed {
+					log.Printf("[ADJUST] %s: buy_deficit %s | buys=%d sales=%d need=%d free=%d share=%d held=%d nacenka=%d→%d price=%d",
+						item, action, buys, sales, need, free, share, totalHeld, nacenkaBefore, nacenka, newPrice)
+				}
 			} else {
 				notes = append(notes, fmt.Sprintf("buy-deficit: buys<sales, но места мало (free=%d need=%d share=%d)", free, need, share))
 			}
@@ -876,7 +858,7 @@ func adjustPrice(item string) AdjustReport {
 		}
 	}
 
-	if action != "nacenka_up_stock_vs_sales" && action != "price_down_stock_vs_sales" && action != "price_down_overstock_held" && action != "price_down_overstock_held_with_nacenka" && state.StockVsSalesCooldown > 0 {
+	if action != "nacenka_up_stock_vs_sales" && action != "price_down_overstock_held" && action != "price_down_overstock_and_nacenka_buy_deficit" && state.StockVsSalesCooldown > 0 {
 		state.StockVsSalesCooldown--
 	}
 
@@ -969,9 +951,8 @@ func adjustPrice(item string) AdjustReport {
 		Cooldown:        state.StockVsSalesCooldown,
 		NacenkaSumNow:   nacenkaSumNow,
 		NacenkaSumPrev:  nacenkaSumPrev,
-		GoodStreak:      state.GoodStreak,
-		NoOverstockDown: noOverstockDown,
-		BlockNacenkaUp:  noNacenkaUp,
+		GoodStreak:     state.GoodStreak,
+		BlockNacenkaUp: noNacenkaUp,
 	}
 
 	needBroadcast := changed

@@ -503,14 +503,8 @@ func sendIntervalStatsToTelegram(
 		rep.Action,
 		rep.Reason,
 	)
-	if rep.NoOverstockDown || rep.BlockNacenkaUp {
-		msg += "\n🛡 Защита: buys<sales и есть место"
-		if rep.NoOverstockDown {
-			msg += " — не роняем sell из‑за стока"
-		}
-		if rep.BlockNacenkaUp {
-			msg += " — наценку не поднимаем"
-		}
+	if rep.BlockNacenkaUp {
+		msg += "\n🛡 Защита: buys<sales и есть место — наценку не поднимаем"
 	}
 
 	enqueueTelegramMessage(msg, "Markdown")
