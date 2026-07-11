@@ -458,7 +458,7 @@ func actionReasonRU(action string) string {
 	case "nacenka_down_buy_deficit_with_space":
 		return "покупок меньше продаж, есть место → сначала снижаем наценку"
 	case "nacenka_down_deficit":
-		return "продаж меньше нормы, цену не трогали → снижаем наценку"
+		return "продаж меньше нормы и сток ещё ниже нормы → снижаем наценку"
 	case "nacenka_up_cheap_buys":
 		return "≥50% покупок дешевле buy-потолка на step → поднимаем наценку"
 	case "experiment_start":
@@ -799,13 +799,15 @@ func adjustPrice(item string) AdjustReport {
 
 	// Динамика наценки + старт эксперимента (если цена ещё не менялась).
 	if !changed {
-		if sales < cfg.NormalSales && nacenka > minNacenka {
+		if sales < cfg.NormalSales && totalHeld < cfg.NormalSales && nacenka > minNacenka {
 			nacenka -= step
 			action = "nacenka_down_deficit"
 			changed = true
 			state.GoodStreak = 0
 		} else {
-			if sales < cfg.NormalSales && nacenka <= minNacenka {
+			if sales < cfg.NormalSales && totalHeld >= cfg.NormalSales {
+				notes = append(notes, "продаж < нормы, но сток уже ≥ нормы — наценку не снижаем (не усугубляем залежь)")
+			} else if sales < cfg.NormalSales && nacenka <= minNacenka {
 				notes = append(notes, fmt.Sprintf("продаж < нормы, но наценка уже на минимуме (%d)", minNacenka))
 			}
 			if nacenkaSumNow >= nacenkaSumPrev {
