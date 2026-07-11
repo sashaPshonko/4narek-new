@@ -43,6 +43,7 @@ type AdjustReport struct {
 	NacenkaSumPrev    int
 	GoodStreak        int
 	NoOverstockDown   bool
+	BlockNacenkaUp    bool
 }
 
 // typeRelistDisabled — go-типы в режиме «без перевыставления» (FLEET_ABSORB_TYPES, через запятую).
@@ -429,6 +430,12 @@ func hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys int) (ok bool, free
 	return free >= need, free, need
 }
 
+// blockNacenkaRaise — покупок меньше продаж и место есть → наценку не поднимаем никогда.
+func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
+	ok, _, _ := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
+	return ok
+}
+
 // skipOverstockPriceDown — сток выше нормы, покупок меньше продаж, есть место докупить:
 // не роняем sell (проблема в недокупке, не в переизбытке).
 func skipOverstockPriceDown(share, totalHeld, sales, buys, normalSales int) bool {
@@ -679,6 +686,10 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	noOverstockDown := skipOverstockPriceDown(share, totalHeld, sales, buys, cfg.NormalSales)
+	noNacenkaUp, freeDef, needDef := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
+	if noNacenkaUp {
+		free, need = freeDef, needDef
+	}
 
 	// 0. Сначала закрываем эксперимент прошлого цикла (метрика — сумма наценок продаж).
 	if state.ExperimentCheck {
@@ -753,11 +764,15 @@ func adjustPrice(item string) AdjustReport {
 				}
 			}
 		} else if stockHeavy && sales >= cfg.NormalSales && canStockAct {
-			nacenka += step
-			action = "nacenka_up_stock_vs_sales"
-			changed = true
-			state.GoodStreak = 0
-			state.StockVsSalesCooldown = 3
+			if noNacenkaUp {
+				notes = append(notes, "nacenka↑ не применили: buys<sales и есть место — сначала докупать")
+			} else {
+				nacenka += step
+				action = "nacenka_up_stock_vs_sales"
+				changed = true
+				state.GoodStreak = 0
+				state.StockVsSalesCooldown = 3
+			}
 		} else if totalHeld >= cfg.NormalSales && totalHeld < cfg.NormalSales*2 && sales < cfg.NormalSales {
 			notes = append(notes, fmt.Sprintf("сток %d ещё < 2×нормы (%d) — перебор неявный, цену не трогаем", totalHeld, cfg.NormalSales*2))
 		}
@@ -829,9 +844,13 @@ func adjustPrice(item string) AdjustReport {
 			if !changed {
 				frac, n := cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
 				if n > 0 && frac >= cheapBuyFractionThreshold {
-					nacenka += step
-					action = "nacenka_up_cheap_buys"
-					changed = true
+					if noNacenkaUp {
+						notes = append(notes, "cheap-buys nacenka↑ не применили: buys<sales и есть место")
+					} else {
+						nacenka += step
+						action = "nacenka_up_cheap_buys"
+						changed = true
+					}
 				} else if n > 0 {
 					notes = append(notes, fmt.Sprintf("дешёвых покупок %.0f%% из %d (порог %.0f%%)", frac*100, n, cheapBuyFractionThreshold*100))
 				}
@@ -937,6 +956,7 @@ func adjustPrice(item string) AdjustReport {
 		NacenkaSumPrev:  nacenkaSumPrev,
 		GoodStreak:      state.GoodStreak,
 		NoOverstockDown: noOverstockDown,
+		BlockNacenkaUp:  noNacenkaUp,
 	}
 
 	needBroadcast := changed
