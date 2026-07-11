@@ -436,10 +436,14 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 	return ok
 }
 
-// skipOverstockPriceDown — сток выше нормы, покупок меньше продаж, есть место докупить:
-// не роняем sell (проблема в недокупке, не в переизбытке).
+// skipOverstockPriceDown — покупок меньше продаж и есть место докупить:
+// не роняем sell из‑за «переизбытка», если сток ещё не явный перебор (< 2× нормы).
+// При held ≥ 2×normal защита не действует — это уже залежь, а не недокупка.
 func skipOverstockPriceDown(share, totalHeld, sales, buys, normalSales int) bool {
 	if normalSales <= 0 || totalHeld <= normalSales {
+		return false
+	}
+	if totalHeld >= normalSales*2 {
 		return false
 	}
 	ok, _, _ := hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
@@ -457,7 +461,9 @@ func actionReasonRU(action string) string {
 	case "price_down_stock_vs_sales":
 		return "явный перебор стока (≥2× нормы) и продаж мало → снижаем цену"
 	case "price_down_overstock_held":
-		return "сток ≥2× нормы, продаж мало, и (onAH или try > нормы) → снижаем цену"
+		return "сток ≥2× нормы, продаж мало, сигнал витрины → снижаем цену"
+	case "price_down_overstock_held_with_nacenka":
+		return "сток ≥2× нормы, продаж мало, есть свободная доля → снижаем цену и наценку"
 	case "price_down_buy_surge":
 		return "резкий выкуп: surge ≥2× нормы и продаж < нормы → цена сразу вниз"
 	case "nacenka_up_stock_vs_sales":
@@ -756,6 +762,15 @@ func adjustPrice(item string) AdjustReport {
 				if newPrice-step >= priceFloor {
 					newPrice -= step
 					action = "price_down_overstock_held"
+					// наценку вниз только если есть свободное место в доле (есть куда докупать после смягчения buy)
+					freeSlots := share - totalHeld
+					if freeSlots > 0 && nacenka > minNacenka {
+						nacenka -= step
+						if nacenka < minNacenka {
+							nacenka = minNacenka
+						}
+						action = "price_down_overstock_held_with_nacenka"
+					}
 					changed = true
 					state.GoodStreak = 0
 					state.StockVsSalesCooldown = 3
@@ -861,7 +876,7 @@ func adjustPrice(item string) AdjustReport {
 		}
 	}
 
-	if action != "nacenka_up_stock_vs_sales" && action != "price_down_stock_vs_sales" && action != "price_down_overstock_held" && state.StockVsSalesCooldown > 0 {
+	if action != "nacenka_up_stock_vs_sales" && action != "price_down_stock_vs_sales" && action != "price_down_overstock_held" && action != "price_down_overstock_held_with_nacenka" && state.StockVsSalesCooldown > 0 {
 		state.StockVsSalesCooldown--
 	}
 
