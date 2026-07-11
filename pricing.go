@@ -484,7 +484,19 @@ func adjustPrice(item string) AdjustReport {
 	mutex.Lock()
 	now := time.Now()
 	swordTimes[item] = now
+	if data.LastCycleAt == nil {
+		data.LastCycleAt = make(map[string]time.Time)
+	}
+	prevCycleAt := data.LastCycleAt[item]
+	data.LastCycleAt[item] = now
 	lastUpdate := now.Add(-cfg.AnalysisTime)
+	// продолжение прерванного цикла: окно от прошлого якоря (не если просрочили >1м)
+	if !prevCycleAt.IsZero() {
+		elapsed := now.Sub(prevCycleAt)
+		if elapsed > 0 && elapsed <= cfg.AnalysisTime+time.Minute {
+			lastUpdate = prevCycleAt
+		}
+	}
 
 	rep := AdjustReport{Item: item, NormalSales: cfg.NormalSales, Step: cfg.PriceStep}
 

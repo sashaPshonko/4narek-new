@@ -111,6 +111,18 @@ type DailyData struct {
 	SellSum      map[string]int             `json:"sell_sum"`
 }
 
+// runtime_state.json — якорь циклов / сделки окна / ручные правки (переживают рестарт).
+const runtimeStatePath = "runtime_state.json"
+
+type RuntimePersist struct {
+	SavedAt          time.Time                  `json:"saved_at"`
+	LastCycleAt      map[string]time.Time       `json:"last_cycle_at"`
+	LastManualUpdate map[string]time.Time       `json:"last_manual_update"`
+	TradeHistory     map[string][]TradeLog      `json:"trade_history"`
+	PriceHistory     map[string][]PriceRecord   `json:"price_history"`
+	AdjustState      map[string]ItemAdjustState `json:"adjust_state"`
+}
+
 var itemsConfig map[string]ItemConfig
 
 type TradeLog struct {
@@ -132,6 +144,7 @@ type Data struct {
 	BuySum           map[string]int
 	SellSum          map[string]int
 	LastManualUpdate map[string]time.Time
+	LastCycleAt      map[string]time.Time // конец последнего adjust (= старт текущего окна)
 }
 
 var (
@@ -204,8 +217,10 @@ func runServer() {
 	data.BuySum = make(map[string]int)
 	data.SellSum = make(map[string]int)
 	data.LastManualUpdate = make(map[string]time.Time)
+	data.LastCycleAt = make(map[string]time.Time)
 
 	loadDailyData(loc)
+	loadRuntimeState()
 	initMLLog()
 	initTelegramBot()
 
@@ -520,6 +535,16 @@ func pruneStaleDataKeys() {
 			stale[item] = struct{}{}
 		}
 	}
+	for item := range data.LastCycleAt {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
+	for item := range data.TradeHistory {
+		if _, ok := itemsConfig[item]; !ok {
+			stale[item] = struct{}{}
+		}
+	}
 	for item := range data.BuySum {
 		if _, ok := itemsConfig[item]; !ok {
 			stale[item] = struct{}{}
@@ -555,6 +580,11 @@ func pruneStaleDataKeys() {
 		delete(dailyData.BuySum, id)
 		delete(data.SellSum, id)
 		delete(dailyData.SellSum, id)
+		delete(data.LastCycleAt, id)
+		delete(data.TradeHistory, id)
+		delete(data.LastManualUpdate, id)
+		delete(swordTimes, id)
+		delete(priceHistory, id)
 	}
 	log.Printf("[DATA] убраны устаревшие id (%d): %s", len(ids), strings.Join(ids, ", "))
 }
@@ -651,8 +681,11 @@ func loadDailyData(loc *time.Location) {
 
 	ensureNacenkasInitialized()
 
+	// якоря циклов подтянет loadRuntimeState(); тут не сбрасываем «как будто цикл уже прошёл»
 	for item := range itemsConfig {
-		swordTimes[item] = time.Now().Add(-itemsConfig[item].AnalysisTime)
+		if t, ok := data.LastCycleAt[item]; ok && !t.IsZero() {
+			swordTimes[item] = t
+		}
 	}
 
 	snap := cloneDailySnapshotLocked()
@@ -660,16 +693,225 @@ func loadDailyData(loc *time.Location) {
 	persistDailySnapshot(&snap)
 }
 
+func maxAnalysisRetain() time.Duration {
+	max := 30 * time.Minute
+	for _, cfg := range itemsConfig {
+		w := cfg.AnalysisTime * 3
+		if w > max {
+			max = w
+		}
+	}
+	if max < time.Hour {
+		max = time.Hour
+	}
+	if max > 6*time.Hour {
+		max = 6 * time.Hour
+	}
+	return max
+}
+
+func pruneTradeHistoryLocked(cutoff time.Time) map[string][]TradeLog {
+	out := make(map[string][]TradeLog, len(data.TradeHistory))
+	for item, logs := range data.TradeHistory {
+		var keep []TradeLog
+		for _, t := range logs {
+			if t.Time.After(cutoff) {
+				keep = append(keep, t)
+			}
+		}
+		if len(keep) > 0 {
+			out[item] = keep
+			data.TradeHistory[item] = keep
+		} else {
+			delete(data.TradeHistory, item)
+		}
+	}
+	return out
+}
+
+func clonePriceHistoryLocked() map[string][]PriceRecord {
+	out := make(map[string][]PriceRecord, len(priceHistory))
+	for item, hist := range priceHistory {
+		if hist == nil || len(hist.Records) == 0 {
+			continue
+		}
+		out[item] = append([]PriceRecord(nil), hist.Records...)
+	}
+	return out
+}
+
+func buildRuntimePersistLocked() RuntimePersist {
+	cutoff := time.Now().Add(-maxAnalysisRetain())
+	trades := pruneTradeHistoryLocked(cutoff)
+	return RuntimePersist{
+		SavedAt:          time.Now(),
+		LastCycleAt:      maps.Clone(data.LastCycleAt),
+		LastManualUpdate: maps.Clone(data.LastManualUpdate),
+		TradeHistory:     trades,
+		PriceHistory:     clonePriceHistoryLocked(),
+		AdjustState:      maps.Clone(data.AdjustState),
+	}
+}
+
+func persistRuntimeState(snap *RuntimePersist) {
+	if snap == nil {
+		return
+	}
+	file, err := json.MarshalIndent(snap, "", "  ")
+	if err != nil {
+		log.Printf("[RUNTIME] marshal: %v", err)
+		return
+	}
+	tmp := runtimeStatePath + ".tmp"
+	if err := os.WriteFile(tmp, file, 0644); err != nil {
+		log.Printf("[RUNTIME] write tmp: %v", err)
+		return
+	}
+	if err := os.Rename(tmp, runtimeStatePath); err != nil {
+		_ = os.WriteFile(runtimeStatePath, file, 0644)
+	}
+}
+
+func saveRuntimeState() {
+	mutex.Lock()
+	snap := buildRuntimePersistLocked()
+	mutex.Unlock()
+	persistRuntimeState(&snap)
+}
+
+func loadRuntimeState() {
+	raw, err := os.ReadFile(runtimeStatePath)
+	if err != nil {
+		log.Printf("[RUNTIME] нет %s — циклы с холодного старта", runtimeStatePath)
+		return
+	}
+	var snap RuntimePersist
+	if err := json.Unmarshal(raw, &snap); err != nil {
+		log.Printf("[RUNTIME] parse %s: %v", runtimeStatePath, err)
+		return
+	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if data.LastCycleAt == nil {
+		data.LastCycleAt = make(map[string]time.Time)
+	}
+	if data.LastManualUpdate == nil {
+		data.LastManualUpdate = make(map[string]time.Time)
+	}
+	if data.TradeHistory == nil {
+		data.TradeHistory = make(map[string][]TradeLog)
+	}
+	if data.AdjustState == nil {
+		data.AdjustState = make(map[string]ItemAdjustState)
+	}
+
+	nCycle, nTrades, nAdj := 0, 0, 0
+	for item, t := range snap.LastCycleAt {
+		if _, ok := itemsConfig[item]; !ok || t.IsZero() {
+			continue
+		}
+		data.LastCycleAt[item] = t
+		swordTimes[item] = t
+		nCycle++
+	}
+	for item, t := range snap.LastManualUpdate {
+		if _, ok := itemsConfig[item]; !ok || t.IsZero() {
+			continue
+		}
+		data.LastManualUpdate[item] = t
+	}
+	cutoff := time.Now().Add(-maxAnalysisRetain())
+	for item, logs := range snap.TradeHistory {
+		if _, ok := itemsConfig[item]; !ok {
+			continue
+		}
+		var keep []TradeLog
+		for _, tr := range logs {
+			if tr.Time.After(cutoff) {
+				keep = append(keep, tr)
+			}
+		}
+		if len(keep) == 0 {
+			continue
+		}
+		data.TradeHistory[item] = keep
+		nTrades += len(keep)
+	}
+	for item, recs := range snap.PriceHistory {
+		if _, ok := itemsConfig[item]; !ok || len(recs) == 0 {
+			continue
+		}
+		priceHistory[item] = &PriceHistory{
+			Records: append([]PriceRecord(nil), recs...),
+			Limit:   priceHistoryLimit,
+		}
+	}
+	for item, st := range snap.AdjustState {
+		if _, ok := itemsConfig[item]; !ok {
+			continue
+		}
+		// runtime свежее дневного файла по streak/experiment/cooldown
+		data.AdjustState[item] = st
+		dailyData.AdjustState[item] = st
+		nAdj++
+	}
+
+	log.Printf("[RUNTIME] загружено: якорей циклов=%d, сделок=%d, adjust_state=%d (saved_at=%v)",
+		nCycle, nTrades, nAdj, snap.SavedAt.Format(time.RFC3339))
+}
+
+// firstCycleDelay — сколько ждать до первого adjust после рестарта.
+// Цикл ещё идёт → остаток. Просрочка ≤1 мин → почти сразу добить.
+// Просрочка >1 мин → новый цикл с нуля (без продолжения старого окна).
+func firstCycleDelay(item string, cfg ItemConfig) time.Duration {
+	mutex.Lock()
+	defer mutex.Unlock()
+	last := data.LastCycleAt[item]
+	if last.IsZero() {
+		return cfg.AnalysisTime
+	}
+	elapsed := time.Since(last)
+	left := cfg.AnalysisTime - elapsed
+	if left > 0 {
+		return left
+	}
+	overdue := elapsed - cfg.AnalysisTime
+	if overdue > time.Minute {
+		log.Printf("[TIMER] %s: цикл просрочен на %v (>1м) — новый цикл, старый якорь сброшен",
+			item, overdue.Round(time.Second))
+		delete(data.LastCycleAt, item)
+		delete(swordTimes, item)
+		delete(data.TradeHistory, item)
+		rt := buildRuntimePersistLocked()
+		mutex.Unlock()
+		persistRuntimeState(&rt)
+		mutex.Lock()
+		return cfg.AnalysisTime
+	}
+	return 500 * time.Millisecond
+}
+
 func startItemTimers() {
+	i := 0
 	for item, cfg := range itemsConfig {
-		item, cfg := item, cfg
+		item, cfg, idx := item, cfg, i
+		i++
 		name := "timer:" + item
 		goImmortal(name, func() {
-			log.Printf("[TIMER] Запущен таймер для %s (интервал: %v)", item, cfg.AnalysisTime)
-			time.Sleep(time.Duration(len(itemsConfig)-1) * time.Second)
+			wait := firstCycleDelay(item, cfg)
+			stagger := time.Duration(idx%20) * 100 * time.Millisecond
+			log.Printf("[TIMER] %s: первый adjust через %v (stagger +%v, интервал %v)",
+				item, wait.Round(time.Second), stagger, cfg.AnalysisTime)
+			time.Sleep(wait + stagger)
+
+			runSafe(name+":first", func() {
+				adjustAndReport(item, cfg)
+			})
+
 			ticker := time.NewTicker(cfg.AnalysisTime)
 			defer ticker.Stop()
-
 			for range ticker.C {
 				runSafe(name+":tick", func() {
 					adjustAndReport(item, cfg)
@@ -697,7 +939,16 @@ func adjustAndReport(item string, cfg ItemConfig) {
 	}
 
 	now := time.Now()
+	mutex.RLock()
+	prevCycle := data.LastCycleAt[item]
+	mutex.RUnlock()
 	start := now.Add(-cfg.AnalysisTime)
+	if !prevCycle.IsZero() {
+		elapsed := now.Sub(prevCycle)
+		if elapsed > 0 && elapsed <= cfg.AnalysisTime+time.Minute {
+			start = prevCycle
+		}
+	}
 
 	log.Printf("[ANALYSIS] %s: анализ с %s по %s",
 		item, start.Format("15:04:05"), now.Format("15:04:05"))
@@ -754,8 +1005,10 @@ func persistDailySnapshot(snap *DailyData) {
 func saveDailyDataNoMessageUpdate() {
 	mutex.Lock()
 	snap := cloneDailySnapshotLocked()
+	rt := buildRuntimePersistLocked()
 	mutex.Unlock()
 	persistDailySnapshot(&snap)
+	persistRuntimeState(&rt)
 }
 
 func checkDayChange(loc *time.Location) {
