@@ -520,7 +520,7 @@ func adjustPrice(item string) {
 		share := itemSlotShareLocked(cfg.Type)
 		noOverstockDown := skipOverstockPriceDown(share, totalHeld, sales, buys)
 
-		if !noOverstockDown && onAH > sales && onAH > cfg.NormalSales && sales < cfg.NormalSales {
+		if !noOverstockDown && onAH > sales && (onAH > cfg.NormalSales || trySells > cfg.NormalSales) && sales < cfg.NormalSales {
 			priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
 			if newPrice-step >= priceFloor {
 				newPrice -= step
