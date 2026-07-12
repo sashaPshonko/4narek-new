@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -139,7 +140,6 @@ func initMLLog() {
 	)`)
 	// nacenka на сделку — для маржи sell−buy без join к decisions
 	ensureMLColumn(db, "trade_events", "nacenka", "INTEGER")
-	recoverTradeEventsIfBroken(db)
 
 	_, _ = db.Exec(`
 CREATE TABLE IF NOT EXISTS ml_decisions (
@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	mlDB = db
 	initCapitalTables()
 	initMLShadowTable()
+	healMLDatabase(db)
 	reloadCapitalPendingFromDB()
 	log.Printf("[ML] SQLite %s (schema v%d + capital_cycles/fwd + stock_snapshots + server_price_events)", mlDBPath, mlSchemaVersion)
 	if mlShadowEnabled() {
@@ -708,30 +709,96 @@ func logTradeEventML(item, eventType string, price int) {
 	}
 }
 
-// recoverTradeEventsIfBroken — если SQLite ругается, спасаем читаемые строки trade_events.
-func recoverTradeEventsIfBroken(db *sql.DB) {
-	rows, err := db.Query(`PRAGMA quick_check`)
-	if err != nil {
-		log.Printf("[ML] quick_check: %v — пробуем спасти trade_events", err)
-	} else {
-		ok := true
-		for rows.Next() {
-			var s string
-			if err := rows.Scan(&s); err != nil || s != "ok" {
-				ok = false
-				if s != "" && s != "ok" {
-					log.Printf("[ML] quick_check: %s", s)
-				}
-			}
-		}
-		rows.Close()
-		if ok {
-			return
-		}
+// healMLDatabase — quick_check часто орёт на битые ИНДЕКСЫ (kill/scp поверх WAL),
+// а не на trade_events. Сначала REINDEX; таблицу сделок трогаем только если она не читается.
+func healMLDatabase(db *sql.DB) {
+	issues := mlQuickCheckIssues(db)
+	if len(issues) == 0 {
+		return
+	}
+	for _, s := range issues {
+		log.Printf("[ML] quick_check: %s", s)
 	}
 
+	log.Printf("[ML] heal: REINDEX / пересоздание индексов")
+	for _, idx := range []string{
+		"idx_capital_cycles_ts", "idx_capital_cycles_item",
+		"idx_stock_snapshots_ts", "idx_stock_snapshots_item",
+		"idx_server_price_events_ts", "idx_ml_decisions_ts",
+		"idx_ml_shadow_ts",
+	} {
+		if _, err := db.Exec(`DROP INDEX IF EXISTS "` + idx + `"`); err != nil {
+			log.Printf("[ML] DROP INDEX %s: %v", idx, err)
+		}
+	}
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_capital_cycles_ts ON capital_cycles(ts)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_capital_cycles_item ON capital_cycles(item_id)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_ts ON stock_snapshots(ts)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_item ON stock_snapshots(item_id)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_server_price_events_ts ON server_price_events(ts)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_decisions_ts ON ml_decisions(logged_ts)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_shadow_ts ON ml_shadow(ts)`)
+	if _, err := db.Exec(`REINDEX`); err != nil {
+		log.Printf("[ML] REINDEX all: %v", err)
+	}
+
+	issues = mlQuickCheckIssues(db)
+	if len(issues) == 0 {
+		log.Printf("[ML] heal: quick_check ok после REINDEX")
+		return
+	}
+	for _, s := range issues {
+		log.Printf("[ML] quick_check after REINDEX: %s", s)
+	}
+
+	needTrade := false
+	var tradeN int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trade_events`).Scan(&tradeN); err != nil {
+		needTrade = true
+		log.Printf("[ML] trade_events не читается: %v", err)
+	}
+	for _, s := range issues {
+		if strings.Contains(strings.ToLower(s), "trade_events") {
+			needTrade = true
+			break
+		}
+	}
+	if needTrade {
+		rebuildTradeEventsTable(db)
+	} else {
+		log.Printf("[ML] heal: trade_events не трогаем (порча индексов/btree страниц)")
+	}
+
+	issues = mlQuickCheckIssues(db)
+	if len(issues) == 0 {
+		log.Printf("[ML] heal: quick_check ok")
+		return
+	}
+	log.Printf("[ML] heal: остались %d замечаний — на остановленном Go: sqlite3 … 'VACUUM INTO \"pricing.clean.db\"'", len(issues))
+}
+
+func mlQuickCheckIssues(db *sql.DB) []string {
+	rows, err := db.Query(`PRAGMA quick_check`)
+	if err != nil {
+		return []string{err.Error()}
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return []string{err.Error()}
+		}
+		if s != "ok" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func rebuildTradeEventsTable(db *sql.DB) {
 	bak := "trade_events_corrupt_" + time.Now().UTC().Format("20060102_150405")
-	_, err = db.Exec(`ALTER TABLE trade_events RENAME TO "` + bak + `"`)
+	_, err := db.Exec(`ALTER TABLE trade_events RENAME TO "` + bak + `"`)
 	if err != nil {
 		log.Printf("[ML] rename trade_events: %v (создаём пустую)", err)
 		_, _ = db.Exec(`DROP TABLE IF EXISTS trade_events`)
