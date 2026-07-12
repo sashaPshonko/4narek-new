@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// capital_v3 — SOLO demand=+P при живых sales; dump только на мёртвых. MULTI hog.
-const capitalPolicy = "capital_v3"
+// capital_v4 — SOLO: запрет +P при sales=0 (ночь шлема 1.6→3.2M).
+const capitalPolicy = "capital_v4"
 const capitalForwardCycles = 3
 
 // capitalPendingForward — ждём 3 следующих окна analysis_time и дописываем profit в capital_cycles.

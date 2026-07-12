@@ -666,17 +666,14 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// CAPITAL v3 — SOLO vs MULTI (БД 2026-07-12).
+	// CAPITAL v4 — v3 + фикс SOLO restock (шлем 2026-07-12).
 	//
-	// Ботинки: sell avg 1.5M→1.1M. Dump задавил, потом hold на 1.1M при
-	// sales=13..19 — цены ЗАНИЖЕНЫ, деньги на столе.
+	// v3 ночью: empty shelf / thin + N на полу → +P при sales=0
+	// (шлем 1.65→3.25M за ~15 циклов) → закуп на пике, касса в минус.
 	//
-	// SOLO (шлем/ботинки/штаны/нагрудник):
-	//   • underbuy по target=normal, не share=96
-	//   • dump только если продажи МЁРТВЫЕ (≤ normal/2)
-	//   • demand → +P когда sales ≥ нормы (поднять цену при спросе)
-	//   • +P от underbuy запрещён
-	// MULTI: hog → dump; fill_price только не-hog.
+	// SOLO: +P только при живых sales (demand или restock).
+	// Пустая полка без продаж → −N / hold, никогда buy-ceiling +P.
+	// MULTI: как v3 (hog dump, thin scarcity).
 	// ═══════════════════════════════════════════════════════════════════
 
 	normal := cfg.NormalSales
@@ -809,10 +806,19 @@ func adjustPrice(item string) AdjustReport {
 		fillScore += 0.9 * emptyFrac
 	}
 	if solo && totalHeld < target {
-		fillScore += 1.3 + 1.0*emptyFrac
-		if totalHeld == 0 {
-			fillScore += 0.5
-			notes = append(notes, "solo empty shelf → restock")
+		// Живой рынок — restock score. Мёртвый (sales=0) — слабый fill только
+		// чтобы попробовать −N; +P в doFill при sales=0 запрещён (v4).
+		if sales > 0 {
+			fillScore += 1.3 + 1.0*emptyFrac
+			if totalHeld == 0 {
+				fillScore += 0.5
+				notes = append(notes, "solo empty shelf → restock")
+			}
+		} else if nacenka > minNacenka {
+			fillScore += 0.9
+			notes = append(notes, "solo empty/dead → −N only")
+		} else {
+			notes = append(notes, "solo empty/dead · N мин · no +P")
 		}
 	}
 	// мёртвый рынок только если сток уже есть, а сделок ноль
@@ -841,8 +847,9 @@ func adjustPrice(item string) AdjustReport {
 				demandScore += 0.3
 			}
 		}
-		// scarcity: мало на витрине, но рынок шевелится → +P (multi кирка held=2 load=0.5)
-		if stockLoad < 1.0 && totalHeld > 0 && (sales > 0 || buys > 0 || trySells > 0) {
+		// scarcity: мало на витрине + есть продажи → +P.
+		// buys/try без sales не считаем (ночь: buy в пустоту ≠ спрос).
+		if stockLoad < 1.0 && totalHeld > 0 && sales > 0 {
 			scarce := 1.25
 			if tryRatio >= 1.5 {
 				scarce += 0.3 // смотрят/пытаются — товар редкий, не дешевеем
@@ -994,12 +1001,18 @@ doFill:
 		changed = true
 		state.GoodStreak = 0
 	} else if solo && totalHeld < target {
-		newPrice += stepP
-		action = "capital_fill_price"
-		changed = true
-		state.GoodStreak = 0
-		state.FillPriceCooldown = 1
-		notes = append(notes, "solo restock: N мин → +P (buy ceiling)")
+		if sales == 0 {
+			// v4: ночной шлем — не поднимать buy ceiling без продаж
+			notes = append(notes, "solo restock: sales=0 → no +P")
+			action = "capital_hold"
+		} else {
+			newPrice += stepP
+			action = "capital_fill_price"
+			changed = true
+			state.GoodStreak = 0
+			state.FillPriceCooldown = 1
+			notes = append(notes, "solo restock: N мин → +P (buy ceiling)")
+		}
 	} else if underbuyOK && !solo {
 		switch {
 		case hog:
