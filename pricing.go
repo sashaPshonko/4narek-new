@@ -383,6 +383,7 @@ func applyMarketFloors(floors map[string]int, windowStartMs, windowEndMs, window
 }
 
 func sellPriceFloor(cfg ItemConfig, minBuy, nacenka int) int {
+	// minBuy — N-я дешёвая покупка из истории (см. getMinPriceFromHistory), не абсолютный минимум
 	floor := minBuy + nacenka
 	if cfg.BasePrice > floor {
 		floor = cfg.BasePrice

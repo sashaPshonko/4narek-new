@@ -56,6 +56,10 @@ type PriceHistory struct {
 var priceHistory = make(map[string]*PriceHistory)
 const priceHistoryLimit = 30
 
+// priceHistoryFloorRank — N-я самая дешёвая покупка из последних Limit для sell-floor
+// (1 = минимум; 5 = игнор до 4 самых дешёвых выбросов).
+const priceHistoryFloorRank = 5
+
 var (
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
@@ -1408,20 +1412,30 @@ func addPriceToHistory(item string, price int) {
 		item, price, len(hist.Records))
 }
 
-// Получение минимальной цены из истории покупок
+// getMinPriceFromHistory — цена закупа для sell-floor:
+// N-я самая дешёвая среди последних покупок (N = priceHistoryFloorRank).
+// Если записей меньше N — берём самую дорогую из имеющихся (мягкий floor при малой выборке).
 func getMinPriceFromHistory(item string) int {
 	hist := priceHistory[item]
 	if hist == nil || len(hist.Records) == 0 {
 		return 0
 	}
 
-	min := hist.Records[0].Price
-	for _, r := range hist.Records {
-		if r.Price < min {
-			min = r.Price
-		}
+	prices := make([]int, len(hist.Records))
+	for i, r := range hist.Records {
+		prices[i] = r.Price
 	}
-	return min
+	sort.Ints(prices)
+
+	rank := priceHistoryFloorRank
+	if rank < 1 {
+		rank = 1
+	}
+	idx := rank - 1
+	if idx >= len(prices) {
+		idx = len(prices) - 1
+	}
+	return prices[idx]
 }
 
 
