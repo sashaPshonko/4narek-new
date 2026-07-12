@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// capital_v4 — SOLO: запрет +P при sales=0 (ночь шлема 1.6→3.2M).
-const capitalPolicy = "capital_v4"
+// classic_2026_02_22 — правила adjustPrice от 22.02.2026 15:46 (b96739c5).
+const capitalPolicy = "classic_2026_02_22"
 const capitalForwardCycles = 3
 
 // capitalPendingForward — ждём 3 следующих окна analysis_time и дописываем profit в capital_cycles.

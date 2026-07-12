@@ -2,3 +2,9 @@
 
 # Суточные данные Go (цены, статы) — пишутся на VPS локально
 data_*.json
+
+# ML / capital SQLite — только на VPS, не в git
+ml_data/
+*.db
+*.db-shm
+*.db-wal

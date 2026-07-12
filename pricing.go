@@ -101,27 +101,27 @@ func resolveNacenkaMin(cfg ItemConfig) int {
 }
 
 func getNacenka(item string) int {
-	if n, ok := data.Nacenkas[item]; ok && n > 0 {
-		return n
-	}
 	if cfg, ok := itemsConfig[item]; ok {
 		return cfg.Nacenka
 	}
 	return 0
 }
 
+// ensureNacenkasInitialized — всегда выравнивает рантайм-наценки под items_config
+// (classic не крутит nacenka; старые capital-значения из daily/runtime сбрасываем).
 func ensureNacenkasInitialized() {
 	if data.Nacenkas == nil {
 		data.Nacenkas = make(map[string]int)
+	}
+	if dailyData.Nacenkas == nil {
+		dailyData.Nacenkas = make(map[string]int)
 	}
 	if data.AdjustState == nil {
 		data.AdjustState = make(map[string]ItemAdjustState)
 	}
 	for item, cfg := range itemsConfig {
-		if _, ok := data.Nacenkas[item]; !ok {
-			data.Nacenkas[item] = cfg.Nacenka
-			dailyData.Nacenkas[item] = cfg.Nacenka
-		}
+		data.Nacenkas[item] = cfg.Nacenka
+		dailyData.Nacenkas[item] = cfg.Nacenka
 		if _, ok := data.AdjustState[item]; !ok {
 			data.AdjustState[item] = ItemAdjustState{}
 		}
@@ -438,6 +438,17 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 
 func actionReasonRU(action string) string {
 	switch action {
+	case "classic_price_up":
+		return "classic: мало sales и запас < 3×нормы → +цена"
+	case "classic_price_down_weak_sales":
+		return "classic: АХ > sales и АХ > нормы при слабых sales → −цена"
+	case "classic_price_down_buy_excess":
+		return "classic: buys > 2×sales и запас > нормы → −цена"
+	case "classic_price_down_leader":
+		return "classic: лидер категории, запас > 3.5×sales → −цена"
+	case "price_down_buy_surge":
+		return "surge: выкуп ≥2×нормы при слабых sales → −цена"
+	// legacy capital (старые логи/БД)
 	case "capital_hold":
 		return "капитал: hold — нет давления"
 	case "capital_dump":
@@ -450,9 +461,6 @@ func actionReasonRU(action string) string {
 		return "капитал: skim — поток ок → +наценка"
 	case "capital_rollback":
 		return "капитал: откат неудачного skim"
-	case "price_down_buy_surge":
-		return "surge: выкуп ≥2×нормы при слабых sales → −цена"
-	// legacy aliases (старые логи/БД)
 	case "hold":
 		return "hold"
 	case "skip_inactive":
@@ -619,7 +627,6 @@ func adjustPrice(item string) AdjustReport {
 	priceBefore := newPrice
 	nacenka := getNacenka(item)
 	nacenkaBefore := nacenka
-	minNacenka := resolveNacenkaMin(cfg)
 	step := cfg.PriceStep
 	minPrice := getMinPriceFromHistory(item)
 	nacenkaSumNow := nacenkaSumInWindow(item, lastUpdate)
@@ -666,63 +673,39 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// CAPITAL v4 — v3 + фикс SOLO restock (шлем 2026-07-12).
-	//
-	// v3 ночью: empty shelf / thin + N на полу → +P при sales=0
-	// (шлем 1.65→3.25M за ~15 циклов) → закуп на пике, касса в минус.
-	//
-	// SOLO: +P только при живых sales (demand или restock).
-	// Пустая полка без продаж → −N / hold, никогда buy-ceiling +P.
-	// MULTI: как v3 (hog dump, thin scarcity).
+	// CLASSIC 2026-02-22 15:46 (commit b96739c5) — лучшее ценообразование.
+	// Только цена; наценка не трогаем. Floor = min buy + nacenka (и base).
+	// Min/max оркестратора — skip_manual выше. Логи / capital_cycles / ML — ниже.
 	// ═══════════════════════════════════════════════════════════════════
 
 	normal := cfg.NormalSales
 	if normal < 1 {
 		normal = 1
 	}
-	target := normal
-	nCatItems := countItemsInCategoryLocked(cfg.Type)
-	solo := nCatItems <= 1
-	stepN := step
-	stepP := step
-	canMoveP := state.StockVsSalesCooldown <= 0
+	totalStock := totalHeld
 
-	underbuyOK := false
-	if buys < sales {
-		need = sales - buys
-		if solo {
-			free = target - totalHeld
-			if free < 0 {
-				free = 0
-			}
-			underbuyOK = free > 0 && totalHeld < target
-		} else {
-			var freeDef, needDef int
-			underbuyOK, freeDef, needDef = hasSpaceToCoverBuyDeficit(share, totalHeld, sales, buys)
-			if underbuyOK {
-				free, need = freeDef, needDef
-			} else {
-				free = share - totalHeld
-				if free < 0 {
-					free = 0
-				}
-			}
-		}
-	}
-
-	catHeldSum := 0
-	siblingMaxHeld := 0
+	leaderID := ""
+	maxTotal := -1
 	for name, conf := range itemsConfig {
 		if conf.Type != cfg.Type {
 			continue
 		}
-		h := ahCounts[name] + invCounts[name]
-		catHeldSum += h
-		if name != item && h > siblingMaxHeld {
-			siblingMaxHeld = h
+		total := ahCounts[name] + invCounts[name]
+		if total > maxTotal || (total == maxTotal && (leaderID == "" || name < leaderID)) {
+			maxTotal = total
+			leaderID = name
 		}
 	}
-	hog := !solo && totalHeld >= target*2 && totalHeld > siblingMaxHeld+2
+
+	underbuyOK := false
+	if buys < sales {
+		need = sales - buys
+		free = share - totalHeld
+		if free < 0 {
+			free = 0
+		}
+		underbuyOK = share > 0 && free >= need
+	}
 
 	tryRatio := 0.0
 	if sales > 0 {
@@ -730,344 +713,54 @@ func adjustPrice(item string) AdjustReport {
 	} else if trySells > 0 {
 		tryRatio = float64(trySells)
 	}
-	salesGap := float64(normal-sales) / float64(normal)
-	if salesGap < 0 {
-		salesGap = 0
-	}
-	stockLoad := float64(totalHeld) / float64(target)
-	emptyFrac := 0.0
-	if totalHeld < target {
-		emptyFrac = float64(target-totalHeld) / float64(target)
-	}
-	buyGap := 0.0
-	if sales > buys {
-		buyGap = float64(sales-buys) / float64(sales)
-	}
+	stockLoad := float64(totalHeld) / float64(normal)
 
-	const actThreshold = 1.15
-	const fillPriceMinScore = 2.0
-	const dumpCDBypassScore = 2.5
-	const dumpCDBypassLoad = 3.0
-
-	// DUMP
-	dumpScore := 0.0
-	if solo {
-		// Только мёртвые продажи — иначе давим цену при живом спросе.
-		deadSales := sales <= (normal / 2)
-		if deadSales && totalHeld > 1 {
-			if sales == 0 {
-				dumpScore += 1.6
-			} else {
-				dumpScore += 1.0
-			}
-			if stockLoad > 2.0 {
-				dumpScore += 0.6 * (stockLoad - 2.0)
-			}
-			if tryRatio >= 2.0 {
-				dumpScore += 0.5
-			}
+	applyDown := func(label, note string) {
+		cand := priceBefore - step
+		if cand < priceFloor {
+			cand = priceFloor
 		}
-	} else if sales < normal {
-		if tryRatio >= 2.0 {
-			dumpScore += 1.2
-		} else if trySells > normal {
-			dumpScore += 0.8
-		}
-		if onAH > normal {
-			dumpScore += 0.7
-		}
-		dumpScore += 0.6 * salesGap
-		if stockLoad > 1.5 {
-			dumpScore += 0.5 * (stockLoad - 1.5)
-		}
-	}
-	if hog {
-		dumpScore += 0.9
-		notes = append(notes, fmt.Sprintf("hog held=%d sibMax=%d cat=%d", totalHeld, siblingMaxHeld, catHeldSum))
-	}
-	if solo && totalHeld <= 1 {
-		dumpScore = 0
-	}
-	// Тонкий сток (load<1): dump = кринж. try/s высокий при 2 шт на АХ ≠ «затоварились».
-	if !hog && stockLoad < 1.0 {
-		if dumpScore > 0 {
-			notes = append(notes, "thin stock → dump↓")
-		}
-		dumpScore = 0
-	}
-
-	// FILL (−N / restock). Пустая полка SOLO (held=0, sales=0) — не hold:
-	// нечего продавать → сначала наполняем, иначе вечный простой.
-	fillScore := 0.0
-	if underbuyOK {
-		fillScore += 1.4 + 0.8*buyGap
-	}
-	if emptyFrac > 0.4 && sales >= buys && sales > 0 {
-		fillScore += 0.9 * emptyFrac
-	}
-	if solo && totalHeld < target {
-		// Живой рынок — restock score. Мёртвый (sales=0) — слабый fill только
-		// чтобы попробовать −N; +P в doFill при sales=0 запрещён (v4).
-		if sales > 0 {
-			fillScore += 1.3 + 1.0*emptyFrac
-			if totalHeld == 0 {
-				fillScore += 0.5
-				notes = append(notes, "solo empty shelf → restock")
-			}
-		} else if nacenka > minNacenka {
-			fillScore += 0.9
-			notes = append(notes, "solo empty/dead → −N only")
-		} else {
-			notes = append(notes, "solo empty/dead · N мин · no +P")
-		}
-	}
-	// мёртвый рынок только если сток уже есть, а сделок ноль
-	if sales == 0 && trySells == 0 && buys == 0 && totalHeld >= target {
-		fillScore = 0
-	}
-	if hog {
-		fillScore *= 0.4
-	}
-
-	// DEMAND (+P): живой спрос / дефицит → поднимаем цену, не dump/hold.
-	demandScore := 0.0
-	if canMoveP && state.FillPriceCooldown <= 0 {
-		if solo && sales >= normal {
-			demandScore = 1.2
-			if sales >= normal+normal/2 {
-				demandScore += 0.5
-			}
-			if sales >= normal*2 {
-				demandScore += 0.5
-			}
-			if sales > buys {
-				demandScore += 0.4
-			}
-			if stockLoad >= 2.0 {
-				demandScore += 0.3
-			}
-		}
-		// scarcity: мало на витрине + есть продажи → +P.
-		// buys/try без sales не считаем (ночь: buy в пустоту ≠ спрос).
-		if stockLoad < 1.0 && totalHeld > 0 && sales > 0 {
-			scarce := 1.25
-			if tryRatio >= 1.5 {
-				scarce += 0.3 // смотрят/пытаются — товар редкий, не дешевеем
-			}
-			if scarce > demandScore {
-				demandScore = scarce
-				notes = append(notes, "scarcity → +P")
-			}
-		}
-	} else if state.FillPriceCooldown > 0 && solo {
-		notes = append(notes, fmt.Sprintf("demand cd=%d", state.FillPriceCooldown))
-	}
-
-	// SKIM (+N)
-	skimScore := 0.0
-	cheapFrac, cheapN := 0.0, 0
-	maxLoadForSkim := 1.8
-	if solo {
-		maxLoadForSkim = 3.0
-	}
-	flowOK := sales >= normal && buys >= (normal+1)/2 && buys >= sales-2 && stockLoad <= maxLoadForSkim && stockLoad >= 0.4
-	if flowOK && !underbuyOK {
-		cheapFrac, cheapN = cheapBuyFraction(item, newPrice, nacenka, step, lastUpdate)
-		if cheapN >= 3 && cheapFrac >= cheapBuyFractionThreshold {
-			skimScore = 1.0 + cheapFrac
-			notes = append(notes, fmt.Sprintf("cheap=%.0f%%/%d", cheapFrac*100, cheapN))
-		} else if nacenkaSumNow > nacenkaSumPrev && nacenkaSumPrev > 0 && state.GoodStreak >= 2 {
-			skimScore = 0.85
-			if solo {
-				skimScore = 1.05
-			}
-		}
-	}
-
-	winner := "hold"
-	dumpBlockedCD := false
-
-	shapeTag := "multi"
-	if solo {
-		shapeTag = "solo"
-	}
-	notes = append(notes, fmt.Sprintf("%s dump=%.2f fill=%.2f demand=%.2f skim=%.2f try/s=%.2f load=%.2f",
-		shapeTag, dumpScore, fillScore, demandScore, skimScore, tryRatio, stockLoad))
-
-	if state.ExperimentCheck {
-		state.ExperimentCheck = false
-		winner = "rollback"
-		if nacenkaSumNow < nacenkaSumPrev {
-			if nacenka > minNacenka {
-				nacenka -= stepN
-				if nacenka < minNacenka {
-					nacenka = minNacenka
-				}
-			}
-			action = "capital_rollback"
+		if cand < priceBefore {
+			newPrice = cand
+			action = label
 			changed = true
-			state.GoodStreak = 0
-			notes = append(notes, "skim не окупился → −N")
+			notes = append(notes, note)
 		} else {
-			notes = append(notes, "skim ок, оставляем")
-			action = "capital_hold"
-		}
-	} else {
-		best := "hold"
-		bestScore := actThreshold
-		if dumpScore >= bestScore {
-			best, bestScore = "dump", dumpScore
-		}
-		if fillScore > bestScore {
-			best, bestScore = "fill", fillScore
-		}
-		if demandScore > bestScore {
-			best, bestScore = "demand", demandScore
-		}
-		if skimScore > bestScore {
-			best, bestScore = "skim", skimScore
-		}
-		winner = best
-
-		switch best {
-		case "dump":
-			dumpBypass := dumpScore >= dumpCDBypassScore || stockLoad >= dumpCDBypassLoad || hog
-			if !canMoveP && !dumpBypass {
-				dumpBlockedCD = true
-				notes = append(notes, fmt.Sprintf("dump на cd=%d → next lever", state.StockVsSalesCooldown))
-				// не hold: выбираем следующий рычаг без dump
-				best = "hold"
-				bestScore = actThreshold
-				if fillScore > bestScore {
-					best, bestScore = "fill", fillScore
-				}
-				if demandScore > bestScore {
-					best, bestScore = "demand", demandScore
-				}
-				if skimScore > bestScore {
-					best, bestScore = "skim", skimScore
-				}
-				winner = best
-				switch best {
-				case "fill":
-					goto doFill
-				case "demand":
-					goto doDemand
-				case "skim":
-					goto doSkim
-				default:
-					action = "capital_hold"
-				}
-			} else {
-				if !canMoveP && dumpBypass {
-					notes = append(notes, fmt.Sprintf("dump cd bypass (score=%.2f load=%.2f hog=%v)", dumpScore, stockLoad, hog))
-				}
-				priceFloor = sellPriceFloor(cfg, minPrice, nacenka)
-				if newPrice-stepP >= priceFloor {
-					newPrice -= stepP
-					action = "capital_dump"
-					changed = true
-					state.GoodStreak = 0
-					state.StockVsSalesCooldown = 2
-				} else {
-					notes = append(notes, fmt.Sprintf("dump упёрся в пол %d", priceFloor))
-					action = "capital_hold"
-				}
-			}
-		case "fill":
-			goto doFill
-		case "demand":
-			goto doDemand
-		case "skim":
-			goto doSkim
-		default:
-			action = "capital_hold"
-			if nacenkaSumNow >= nacenkaSumPrev {
-				state.GoodStreak++
-			} else {
-				state.GoodStreak = 0
-			}
+			notes = append(notes, note+" · floor")
 		}
 	}
-	goto afterAction
 
-doFill:
-	if nacenka > minNacenka {
-		nacenka -= stepN
-		if nacenka < minNacenka {
-			nacenka = minNacenka
-		}
-		action = "capital_fill"
+	// 1. Повышение — мало продаж и запас < 3×нормы
+	if sales < normal && totalStock < normal*3 {
+		newPrice = priceBefore + step
+		action = "classic_price_up"
 		changed = true
-		state.GoodStreak = 0
-	} else if solo && totalHeld < target {
-		if sales == 0 {
-			// v4: ночной шлем — не поднимать buy ceiling без продаж
-			notes = append(notes, "solo restock: sales=0 → no +P")
-			action = "capital_hold"
-		} else {
-			newPrice += stepP
-			action = "capital_fill_price"
-			changed = true
-			state.GoodStreak = 0
-			state.FillPriceCooldown = 1
-			notes = append(notes, "solo restock: N мин → +P (buy ceiling)")
+		notes = append(notes, "sales < normal && stock < 3*normal")
+	} else if (onAH > sales && onAH > normal) && sales < normal {
+		// 2. Снижение при плохих продажах (смотрим АХ)
+		applyDown("classic_price_down_weak_sales", "onAH > sales && onAH > normal && sales < normal")
+	} else if float64(buys) > float64(sales)*2 && totalStock > normal {
+		// 3. Снижение при избытке покупок
+		applyDown("classic_price_down_buy_excess", "buys > 2*sales && stock > normal")
+	} else if item == leaderID {
+		// 4. Перенасыщение 3.5× — только лидер категории (AH+INV)
+		salesLeader := normal
+		if sales > normal {
+			salesLeader = sales
 		}
-	} else if underbuyOK && !solo {
-		switch {
-		case hog:
-			notes = append(notes, "multi hog: fill_price запрещён → hold")
-			action = "capital_hold"
-		case fillScore < fillPriceMinScore:
-			notes = append(notes, fmt.Sprintf("fill_price слабо (%.2f<%.2f) → hold", fillScore, fillPriceMinScore))
-			action = "capital_hold"
-		case state.FillPriceCooldown > 0:
-			notes = append(notes, fmt.Sprintf("fill_price на cd=%d → hold", state.FillPriceCooldown))
-			action = "capital_hold"
-		default:
-			newPrice += stepP
-			action = "capital_fill_price"
-			changed = true
-			state.GoodStreak = 0
-			state.FillPriceCooldown = 3
+		if float64(totalStock) > float64(salesLeader)*3.5 {
+			applyDown("classic_price_down_leader", fmt.Sprintf("leader stock>%.1f×%d", 3.5, salesLeader))
 		}
-	} else if !solo && totalHeld < target && stockLoad < 1.0 {
-		// multi thin: N на полу → всё равно +P (scarcity/restock)
-		newPrice += stepP
-		action = "capital_fill_price"
-		changed = true
-		state.GoodStreak = 0
-		state.FillPriceCooldown = 1
-		notes = append(notes, "multi thin: N мин → +P")
-	} else {
-		notes = append(notes, "fill: N на мин → hold")
-		action = "capital_hold"
 	}
-	goto afterAction
 
-doDemand:
-	newPrice += stepP
-	action = "capital_fill_price"
-	changed = true
-	state.GoodStreak = 0
-	state.FillPriceCooldown = 1
-	notes = append(notes, "demand → +P")
-	goto afterAction
+	if action == "" {
+		action = "hold"
+	}
 
-doSkim:
-	nacenka += stepN
-	action = "capital_skim"
-	changed = true
-	state.GoodStreak = 0
-	state.ExperimentCheck = true
-	goto afterAction
-
-afterAction:
-
-	if action != "capital_dump" && state.StockVsSalesCooldown > 0 {
+	if state.StockVsSalesCooldown > 0 {
 		state.StockVsSalesCooldown--
 	}
-	if action != "capital_fill_price" && state.FillPriceCooldown > 0 {
+	if state.FillPriceCooldown > 0 {
 		state.FillPriceCooldown--
 	}
 
@@ -1076,31 +769,27 @@ afterAction:
 	data.AdjustState[item] = state
 	dailyData.AdjustState[item] = state
 
-	if nacenka != nacenkaBefore {
-		data.Nacenkas[item] = nacenka
-		dailyData.Nacenkas[item] = nacenka
-	}
+	// classic не меняет наценку
+	nacenka = nacenkaBefore
 	if newPrice != priceBefore {
 		data.Prices[item] = newPrice
 		dailyData.Prices[item] = newPrice
 		lastPriceUpdate[item] = now
+		changed = true
 	}
 
 	actionTaken := action
-	if actionTaken == "" {
-		actionTaken = "hold"
-	}
 	reason := actionReasonRU(actionTaken)
 	if len(notes) > 0 {
 		reason = reason + " | " + strings.Join(notes, " · ")
 	}
 
 	if changed {
-		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d→%d | Σнаценок %d (было %d) | продажи %d | на АХ %d | в инв %d | всего %d | %s",
-			item, action, priceBefore, newPrice, nacenkaBefore, nacenka, nacenkaSumNow, nacenkaSumPrev, sales, onAH, invCount, totalHeld, reason)
+		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d→%d | Σнаценок %d (было %d) | продажи %d | на АХ %d | в инв %d | всего %d | лидер %s | %s",
+			item, action, priceBefore, newPrice, nacenkaBefore, nacenka, nacenkaSumNow, nacenkaSumPrev, sales, onAH, invCount, totalHeld, leaderID, reason)
 	} else {
-		log.Printf("[HOLD] %s: %s | цена %d | наценка %d | продажи %d buys=%d try=%d | АХ %d инв %d | %s",
-			item, actionTaken, newPrice, nacenka, sales, buys, trySells, onAH, invCount, reason)
+		log.Printf("[HOLD] %s: %s | цена %d | наценка %d | продажи %d buys=%d try=%d | АХ %d инв %d | лидер %s | %s",
+			item, actionTaken, newPrice, nacenka, sales, buys, trySells, onAH, invCount, leaderID, reason)
 	}
 
 	queueMLDecisionLocked(
@@ -1115,11 +804,11 @@ afterAction:
 		Item:            item,
 		Category:        cfg.Type,
 		Action:          actionTaken,
-		Winner:          winner,
-		Dump:            dumpScore,
-		Fill:            fillScore,
-		Skim:            skimScore,
-		Threshold:       actThreshold,
+		Winner:          actionTaken,
+		Dump:            0,
+		Fill:            0,
+		Skim:            0,
+		Threshold:       0,
 		Sales:           sales,
 		Buys:            buys,
 		TrySells:        trySells,
@@ -1140,19 +829,19 @@ afterAction:
 		NacenkaAfter:    nacenka,
 		NacenkaSumNow:   nacenkaSumNow,
 		NacenkaSumPrev:  nacenkaSumPrev,
-		PriceFloor:      sellPriceFloor(cfg, minPrice, nacenka),
+		PriceFloor:      priceFloor,
 		Step:            step,
 		Cooldown:        state.StockVsSalesCooldown,
 		PlayersOnline:   onlineForCap,
 		Notes:           strings.Join(notes, " · "),
 		ProfitNow:       profitNow,
-		CheapFrac:       cheapFrac,
-		CheapN:          cheapN,
+		CheapFrac:       0,
+		CheapN:          0,
 		MinBuyHistory:   minPrice,
 		BotsCategory:    aggregateBotsPerTypeLocked()[cfg.Type],
 		CycleMinutes:    cfg.AnalysisTime.Minutes(),
 		GoodStreak:      state.GoodStreak,
-		DumpBlockedCD:   dumpBlockedCD,
+		DumpBlockedCD:   false,
 		DecisionAt:      now,
 		CycleDuration:   cfg.AnalysisTime,
 	})
