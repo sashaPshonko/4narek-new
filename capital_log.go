@@ -128,9 +128,81 @@ CREATE TABLE IF NOT EXISTS server_price_events (
 	nacenka INTEGER NOT NULL
 )`)
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_server_price_events_ts ON server_price_events(ts)`)
+
+	// Старый смысл fwd_done: 0=не готово, 1=готово. Новый: 0..3 = сколько окон закрыто.
+	res, err := mlDB.Exec(`UPDATE capital_cycles SET fwd_done=3 WHERE fwd_done=1 AND fwd_profit_3 IS NOT NULL`)
+	if err == nil {
+		if n, _ := res.RowsAffected(); n > 0 {
+			log.Printf("[ML] capital_cycles: мигрировали fwd_done 1→3 у %d строк", n)
+		}
+	}
 }
 
-// CapitalCycleRow — снимок одного цикла CAPITAL для SQLite.
+// reloadCapitalPendingFromDB — после рестарта поднимаем незакрытые forward из SQLite
+// (раньше capitalPending жил только в RAM → fwd_* обрывались).
+func reloadCapitalPendingFromDB() {
+	if mlDB == nil {
+		return
+	}
+	mlDBMu.Lock()
+	defer mlDBMu.Unlock()
+
+	rows, err := mlDB.Query(`
+SELECT id, item_id, category_type, ts, COALESCE(cycle_minutes,0),
+	CASE WHEN fwd_profit_1 IS NOT NULL THEN 1 ELSE 0 END +
+	CASE WHEN fwd_profit_2 IS NOT NULL THEN 1 ELSE 0 END +
+	CASE WHEN fwd_profit_3 IS NOT NULL THEN 1 ELSE 0 END AS done
+FROM capital_cycles
+WHERE COALESCE(fwd_done,0) < ? AND fwd_profit_3 IS NULL
+ORDER BY id ASC
+`, capitalForwardCycles)
+	if err != nil {
+		log.Printf("[ML] reload capital pending: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var pending []capitalPendingForward
+	for rows.Next() {
+		var id int64
+		var item, cat, tsStr string
+		var cycleMin float64
+		var done int
+		if err := rows.Scan(&id, &item, &cat, &tsStr, &cycleMin, &done); err != nil {
+			log.Printf("[ML] reload capital pending scan: %v", err)
+			continue
+		}
+		ts, err := time.Parse(time.RFC3339, tsStr)
+		if err != nil {
+			ts, err = time.Parse(time.RFC3339Nano, tsStr)
+			if err != nil {
+				log.Printf("[ML] reload capital pending bad ts id=%d: %v", id, err)
+				continue
+			}
+		}
+		cycle := time.Duration(cycleMin * float64(time.Minute))
+		if cycle <= 0 {
+			if cfg, ok := itemsConfig[item]; ok && cfg.AnalysisTime > 0 {
+				cycle = cfg.AnalysisTime
+			} else {
+				cycle = 10 * time.Minute
+			}
+		}
+		pending = append(pending, capitalPendingForward{
+			ID:            id,
+			Item:          item,
+			CategoryType:  cat,
+			DecisionAt:    ts,
+			CycleDuration: cycle,
+			WindowStart:   ts.Add(time.Duration(done) * cycle),
+			OutcomeCycles: done,
+		})
+	}
+	capitalPending = pending
+	log.Printf("[ML] capital pending reloaded: %d незакрытых forward", len(pending))
+}
+
+// CapitalCycleRow — снимок одного цикла pricing для SQLite.
 type CapitalCycleRow struct {
 	Policy                                string
 	Item, Category, Action, Winner, Notes string
@@ -290,6 +362,7 @@ VALUES (?,?,?,?,?,?,?,?)`,
 }
 
 // tryAdvanceCapitalForwardsLocked — дописывает fwd_* в capital_cycles после 1..3 окон.
+// fwd_done = сколько окон уже закрыто (0..3). Готово к обучению: fwd_done=3.
 // Вызывать под mutex.Lock в начале adjustPrice (и можно с тикера).
 func tryAdvanceCapitalForwardsLocked(now time.Time) {
 	if mlDB == nil || len(capitalPending) == 0 {
@@ -308,17 +381,17 @@ func tryAdvanceCapitalForwardsLocked(now time.Time) {
 			var query string
 			switch n {
 			case 1:
-				query = `UPDATE capital_cycles SET fwd_profit_1=?, fwd_sells_1=?, fwd_buys_1=?, fwd_try_1=?, fwd_held_1=? WHERE id=?`
+				query = `UPDATE capital_cycles SET fwd_profit_1=?, fwd_sells_1=?, fwd_buys_1=?, fwd_try_1=?, fwd_held_1=?, fwd_done=1 WHERE id=?`
 			case 2:
-				query = `UPDATE capital_cycles SET fwd_profit_2=?, fwd_sells_2=?, fwd_buys_2=?, fwd_try_2=?, fwd_held_2=? WHERE id=?`
+				query = `UPDATE capital_cycles SET fwd_profit_2=?, fwd_sells_2=?, fwd_buys_2=?, fwd_try_2=?, fwd_held_2=?, fwd_done=2 WHERE id=?`
 			default:
-				query = `UPDATE capital_cycles SET fwd_profit_3=?, fwd_sells_3=?, fwd_buys_3=?, fwd_try_3=?, fwd_held_3=? WHERE id=?`
+				query = `UPDATE capital_cycles SET fwd_profit_3=?, fwd_sells_3=?, fwd_buys_3=?, fwd_try_3=?, fwd_held_3=?, fwd_done=3 WHERE id=?`
 			}
 			mlDBMu.Lock()
 			_, err := mlDB.Exec(query, st.Profit, st.Sells, st.Buys, st.TrySells, held, p.ID)
 			mlDBMu.Unlock()
 			if err != nil {
-				log.Printf("[ML] capital fwd update id=%d: %v", p.ID, err)
+				log.Printf("[ML] capital fwd update id=%d n=%d: %v", p.ID, n, err)
 			}
 			p.OutcomeCycles = n
 			p.WindowStart = windowEnd
@@ -339,8 +412,11 @@ func finalizeCapitalForwardLocked(id int64) {
 	err := mlDB.QueryRow(`SELECT COALESCE(fwd_profit_1,0), COALESCE(fwd_profit_2,0), COALESCE(fwd_profit_3,0) FROM capital_cycles WHERE id=?`, id).
 		Scan(&p1, &p2, &p3)
 	if err != nil {
+		log.Printf("[ML] capital finalize read id=%d: %v", id, err)
 		return
 	}
 	reward := int(float64(p1) + 0.8*float64(p2) + 0.6*float64(p3))
-	_, _ = mlDB.Exec(`UPDATE capital_cycles SET fwd_done=1, fwd_reward=? WHERE id=?`, reward, id)
+	if _, err := mlDB.Exec(`UPDATE capital_cycles SET fwd_done=3, fwd_reward=? WHERE id=?`, reward, id); err != nil {
+		log.Printf("[ML] capital finalize id=%d: %v", id, err)
+	}
 }

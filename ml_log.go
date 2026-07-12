@@ -119,7 +119,7 @@ func initMLLog() {
 	}
 	_ = os.MkdirAll(filepath.Dir(mlDBPath), 0755)
 
-	db, err := sql.Open("sqlite", mlDBPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", mlDBPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)")
 	if err != nil {
 		log.Printf("[ML] open: %v", err)
 		return
@@ -129,6 +129,8 @@ func initMLLog() {
 		_ = db.Close()
 		return
 	}
+	db.SetMaxOpenConns(1) // один writer — меньше шанс порчи при гонках
+	_, _ = db.Exec(`PRAGMA wal_autocheckpoint=1000`)
 
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS trade_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,6 +139,7 @@ func initMLLog() {
 	)`)
 	// nacenka на сделку — для маржи sell−buy без join к decisions
 	ensureMLColumn(db, "trade_events", "nacenka", "INTEGER")
+	recoverTradeEventsIfBroken(db)
 
 	_, _ = db.Exec(`
 CREATE TABLE IF NOT EXISTS ml_decisions (
@@ -160,6 +163,7 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	mlDB = db
 	initCapitalTables()
 	initMLShadowTable()
+	reloadCapitalPendingFromDB()
 	log.Printf("[ML] SQLite %s (schema v%d + capital_cycles/fwd + stock_snapshots + server_price_events)", mlDBPath, mlSchemaVersion)
 	if mlShadowEnabled() {
 		log.Printf("[ML-SHADOW] включён → %s (Go правила + лог сравнения с ML)", mlWSURL())
@@ -695,8 +699,76 @@ func logTradeEventML(item, eventType string, price int) {
 	ts := time.Now().UTC().Format(time.RFC3339)
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
-	_, _ = mlDB.Exec(
+	_, err := mlDB.Exec(
 		`INSERT INTO trade_events (ts, item_id, category_type, event_type, price, nacenka) VALUES (?, ?, ?, ?, ?, ?)`,
 		ts, item, category, eventType, price, nac,
 	)
+	if err != nil {
+		log.Printf("[ML] trade_events insert %s %s: %v", item, eventType, err)
+	}
+}
+
+// recoverTradeEventsIfBroken — если SQLite ругается, спасаем читаемые строки trade_events.
+func recoverTradeEventsIfBroken(db *sql.DB) {
+	rows, err := db.Query(`PRAGMA quick_check`)
+	if err != nil {
+		log.Printf("[ML] quick_check: %v — пробуем спасти trade_events", err)
+	} else {
+		ok := true
+		for rows.Next() {
+			var s string
+			if err := rows.Scan(&s); err != nil || s != "ok" {
+				ok = false
+				if s != "" && s != "ok" {
+					log.Printf("[ML] quick_check: %s", s)
+				}
+			}
+		}
+		rows.Close()
+		if ok {
+			return
+		}
+	}
+
+	bak := "trade_events_corrupt_" + time.Now().UTC().Format("20060102_150405")
+	_, err = db.Exec(`ALTER TABLE trade_events RENAME TO "` + bak + `"`)
+	if err != nil {
+		log.Printf("[ML] rename trade_events: %v (создаём пустую)", err)
+		_, _ = db.Exec(`DROP TABLE IF EXISTS trade_events`)
+	}
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS trade_events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		ts TEXT NOT NULL, item_id TEXT NOT NULL, category_type TEXT NOT NULL,
+		event_type TEXT NOT NULL, price INTEGER, nacenka INTEGER
+	)`)
+	if err != nil {
+		log.Printf("[ML] recreate trade_events: %v", err)
+		return
+	}
+	ensureMLColumn(db, "trade_events", "nacenka", "INTEGER")
+
+	srcRows, err := db.Query(`SELECT ts, item_id, category_type, event_type, price, COALESCE(nacenka,0) FROM "` + bak + `"`)
+	if err != nil {
+		log.Printf("[ML] read %s: %v — trade_events пустой", bak, err)
+		return
+	}
+	defer srcRows.Close()
+	copied := 0
+	for srcRows.Next() {
+		var ts, item, cat, et string
+		var price, nac int
+		if err := srcRows.Scan(&ts, &item, &cat, &et, &price, &nac); err != nil {
+			log.Printf("[ML] trade_events recover stop after %d rows: %v", copied, err)
+			break
+		}
+		if _, err := db.Exec(
+			`INSERT INTO trade_events (ts, item_id, category_type, event_type, price, nacenka) VALUES (?,?,?,?,?,?)`,
+			ts, item, cat, et, price, nac,
+		); err != nil {
+			log.Printf("[ML] trade_events recover insert stop after %d: %v", copied, err)
+			break
+		}
+		copied++
+	}
+	log.Printf("[ML] trade_events: спасено %d строк из %s", copied, bak)
 }
