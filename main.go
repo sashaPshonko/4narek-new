@@ -57,8 +57,8 @@ var priceHistory = make(map[string]*PriceHistory)
 const priceHistoryLimit = 30
 
 // priceHistoryFloorRank — N-я самая дешёвая покупка из последних Limit для sell-floor
-// (1 = минимум; 5 = игнор до 4 самых дешёвых выбросов).
-const priceHistoryFloorRank = 5
+// (1 = абсолютный минимум среди последних покупок).
+const priceHistoryFloorRank = 1
 
 var (
 	upgrader = websocket.Upgrader{
