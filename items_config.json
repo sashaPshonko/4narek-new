@@ -1,6 +1,6 @@
 {
   "pochti-megasword-1.21": {
-    "base_price": 1500002,
+    "base_price": 2300002,
     "normal_sales": 5,
     "normal_count": 4,
     "price_step": 100000,
@@ -33,7 +33,7 @@
     "num": 5
   },
   "sword7-1.21": {
-    "base_price": 700003,
+    "base_price": 1000003,
     "normal_sales": 7,
     "normal_count": 4,
     "price_step": 100000,
@@ -58,7 +58,7 @@
     "num": 1
   },
   "megasword-1.21": {
-    "base_price": 2000004,
+    "base_price": 3000004,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 100000,
@@ -91,7 +91,7 @@
     "num": 6
   },
   "штаны-1.21": {
-    "base_price": 600005,
+    "base_price": 1000005,
     "normal_sales": 7,
     "normal_count": 7,
     "price_step": 100000,
@@ -112,7 +112,7 @@
     "num": 2
   },
   "нагрудник-1.21": {
-    "base_price": 600007,
+    "base_price": 1000007,
     "normal_sales": 7,
     "normal_count": 5,
     "price_step": 100000,
@@ -133,7 +133,7 @@
     "num": 2
   },
   "ботинки-1.21": {
-    "base_price": 600009,
+    "base_price": 1000009,
     "normal_sales": 7,
     "normal_count": 6,
     "price_step": 100000,
@@ -154,7 +154,7 @@
     "num": 2
   },
   "шлем-1.21": {
-    "base_price": 600011,
+    "base_price": 1000011,
     "normal_sales": 7,
     "normal_count": 7,
     "price_step": 100000,
@@ -175,7 +175,7 @@
     "num": 2
   },
   "фарм-1.21": {
-    "base_price": 600013,
+    "base_price": 1000013,
     "normal_sales": 5,
     "normal_count": 4,
     "price_step": 100000,
@@ -204,7 +204,7 @@
     "num": 2
   },
   "бульдозер-1-1.21": {
-    "base_price": 300017,
+    "base_price": 1000017,
     "normal_sales": 5,
     "normal_count": 4,
     "price_step": 100000,
@@ -229,7 +229,7 @@
     "num": 1
   },
   "бульдозер-2-1.21": {
-    "base_price": 600018,
+    "base_price": 1000018,
     "normal_sales": 5,
     "normal_count": 4,
     "price_step": 100000,
@@ -262,7 +262,7 @@
     "num": 2
   },
   "кирка_крутая-1.21": {
-    "base_price": 600019,
+    "base_price": 2000019,
     "normal_sales": 4,
     "normal_count": 3,
     "price_step": 100000,
@@ -291,7 +291,7 @@
     "num": 3
   },
   "шлем-позор-1.21": {
-    "base_price": 400012,
+    "base_price": 800012,
     "normal_sales": 6,
     "normal_count": 4,
     "price_step": 50000,
@@ -312,7 +312,7 @@
     "num": 1
   },
   "штаны-позор-1.21": {
-    "base_price": 400014,
+    "base_price": 800014,
     "normal_sales": 6,
     "normal_count": 4,
     "price_step": 50000,
@@ -333,7 +333,7 @@
     "num": 1
   },
   "ботинки-позор-1.21": {
-    "base_price": 400010,
+    "base_price": 800010,
     "normal_sales": 6,
     "normal_count": 6,
     "price_step": 50000,

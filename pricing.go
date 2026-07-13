@@ -439,6 +439,10 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 
 func actionReasonRU(action string) string {
 	switch action {
+	case "oldoldold_price_up":
+		return "oldoldold: АХ+инв < normal_sales → +цена"
+	case "oldoldold_price_down":
+		return "oldoldold: АХ > sales и АХ > нормы при слабых sales → −цена"
 	case "classic_price_up":
 		return "classic: мало sales и запас < 3×нормы → +цена"
 	case "classic_price_down_weak_sales":
@@ -674,16 +678,17 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// CLASSIC 2026-02-22 15:46 (commit b96739c5) — лучшее ценообразование.
-	// Только цена; наценка не трогаем. Floor = min buy + nacenka (и base).
-	// Min/max оркестратора — skip_manual выше. Логи / capital_cycles / ML — ниже.
+	// oldoldold.go — правила UP/DOWN.
+	// UP:  АХ+инв < normal_sales
+	// DOWN: АХ > sales && АХ > normal && sales < normal
+	// Пол: не ниже самой дешёвой покупки + наценка (и base) — как до oldoldold.
+	// Min/max оркестратора — skip_manual выше. Наценку не трогаем.
 	// ═══════════════════════════════════════════════════════════════════
 
 	normal := cfg.NormalSales
 	if normal < 1 {
 		normal = 1
 	}
-	totalStock := totalHeld
 
 	leaderID := ""
 	maxTotal := -1
@@ -716,41 +721,25 @@ func adjustPrice(item string) AdjustReport {
 	}
 	stockLoad := float64(totalHeld) / float64(normal)
 
-	applyDown := func(label, note string) {
+	// oldoldold: currentItemCount+inventoryCount < NormalSales → +P
+	if totalHeld < normal {
+		newPrice = priceBefore + step
+		action = "oldoldold_price_up"
+		changed = true
+		notes = append(notes, "AH+inv < normal_sales")
+	} else if (onAH > sales && onAH > normal) && sales < normal {
+		// oldoldold: (AH > sales && AH > normal) && sales < normal → −P, не ниже floor
 		cand := priceBefore - step
 		if cand < priceFloor {
 			cand = priceFloor
 		}
 		if cand < priceBefore {
 			newPrice = cand
-			action = label
+			action = "oldoldold_price_down"
 			changed = true
-			notes = append(notes, note)
+			notes = append(notes, "AH > sales && AH > normal && sales < normal")
 		} else {
-			notes = append(notes, note+" · floor")
-		}
-	}
-
-	// 1. Повышение — мало продаж и запас < 3×нормы
-	if sales < normal && totalStock < normal*3 {
-		newPrice = priceBefore + step
-		action = "classic_price_up"
-		changed = true
-		notes = append(notes, "sales < normal && stock < 3*normal")
-	} else if (onAH > sales && onAH > normal) && sales < normal {
-		// 2. Снижение при плохих продажах (смотрим АХ)
-		applyDown("classic_price_down_weak_sales", "onAH > sales && onAH > normal && sales < normal")
-	} else if float64(buys) > float64(sales)*2 && totalStock > normal {
-		// 3. Снижение при избытке покупок
-		applyDown("classic_price_down_buy_excess", "buys > 2*sales && stock > normal")
-	} else if item == leaderID {
-		// 4. Перенасыщение 3.5× — только лидер категории (AH+INV)
-		salesLeader := normal
-		if sales > normal {
-			salesLeader = sales
-		}
-		if float64(totalStock) > float64(salesLeader)*3.5 {
-			applyDown("classic_price_down_leader", fmt.Sprintf("leader stock>%.1f×%d", 3.5, salesLeader))
+			notes = append(notes, "AH overstock · floor=minBuy+nacenka")
 		}
 	}
 
