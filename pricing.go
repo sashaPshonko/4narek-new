@@ -439,18 +439,18 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 
 func actionReasonRU(action string) string {
 	switch action {
-	case "oldoldold_price_up":
-		return "oldoldold: АХ+инв < normal_sales → +цена"
-	case "oldoldold_price_down":
-		return "oldoldold: АХ > sales и АХ > нормы при слабых sales → −цена"
 	case "classic_price_up":
-		return "classic: мало sales и запас < 3×нормы → +цена"
+		return "classic: sales < normal && stock < 2×normal && onAH < normal → +цена"
 	case "classic_price_down_weak_sales":
 		return "classic: АХ > sales и АХ > нормы при слабых sales → −цена"
 	case "classic_price_down_buy_excess":
 		return "classic: buys > 2×sales и запас > нормы → −цена"
 	case "classic_price_down_leader":
 		return "classic: лидер категории, запас > 3.5×sales → −цена"
+	case "oldoldold_price_up":
+		return "oldoldold: АХ+инв < normal_sales → +цена"
+	case "oldoldold_price_down":
+		return "oldoldold: АХ > sales и АХ > нормы при слабых sales → −цена"
 	case "price_down_buy_surge":
 		return "surge: выкуп ≥2×нормы при слабых sales → −цена"
 	// legacy capital (старые логи/БД)
@@ -678,17 +678,17 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// oldoldold.go — правила UP/DOWN.
-	// UP:  АХ+инв < normal_sales
-	// DOWN: АХ > sales && АХ > normal && sales < normal
-	// Пол: не ниже самой дешёвой покупки + наценка (и base) — как до oldoldold.
-	// Min/max оркестратора — skip_manual выше. Наценку не трогаем.
+	// CLASSIC (Feb22) + тугой UP (Mar):
+	// UP:   sales < normal && stock < 2×normal && onAH < normal
+	// DOWN: weak AH / buy excess / leader 3.5×
+	// Пол: minBuy + наценка (и base). Min/max — skip_manual выше.
 	// ═══════════════════════════════════════════════════════════════════
 
 	normal := cfg.NormalSales
 	if normal < 1 {
 		normal = 1
 	}
+	totalStock := totalHeld
 
 	leaderID := ""
 	maxTotal := -1
@@ -721,25 +721,37 @@ func adjustPrice(item string) AdjustReport {
 	}
 	stockLoad := float64(totalHeld) / float64(normal)
 
-	// oldoldold: currentItemCount+inventoryCount < NormalSales → +P
-	if totalHeld < normal {
-		newPrice = priceBefore + step
-		action = "oldoldold_price_up"
-		changed = true
-		notes = append(notes, "AH+inv < normal_sales")
-	} else if (onAH > sales && onAH > normal) && sales < normal {
-		// oldoldold: (AH > sales && AH > normal) && sales < normal → −P, не ниже floor
+	applyDown := func(label, note string) {
 		cand := priceBefore - step
 		if cand < priceFloor {
 			cand = priceFloor
 		}
 		if cand < priceBefore {
 			newPrice = cand
-			action = "oldoldold_price_down"
+			action = label
 			changed = true
-			notes = append(notes, "AH > sales && AH > normal && sales < normal")
+			notes = append(notes, note)
 		} else {
-			notes = append(notes, "AH overstock · floor=minBuy+nacenka")
+			notes = append(notes, note+" · floor")
+		}
+	}
+
+	if sales < normal && totalStock < normal*2 && onAH < normal {
+		newPrice = priceBefore + step
+		action = "classic_price_up"
+		changed = true
+		notes = append(notes, "sales < normal && stock < 2*normal && onAH < normal")
+	} else if (onAH > sales && onAH > normal) && sales < normal {
+		applyDown("classic_price_down_weak_sales", "onAH > sales && onAH > normal && sales < normal")
+	} else if float64(buys) > float64(sales)*2 && totalStock > normal {
+		applyDown("classic_price_down_buy_excess", "buys > 2*sales && stock > normal")
+	} else if item == leaderID {
+		salesLeader := normal
+		if sales > normal {
+			salesLeader = sales
+		}
+		if float64(totalStock) > float64(salesLeader)*3.5 {
+			applyDown("classic_price_down_leader", fmt.Sprintf("leader stock>%.1f×%d", 3.5, salesLeader))
 		}
 	}
 
@@ -857,7 +869,7 @@ func adjustPrice(item string) AdjustReport {
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice:  totalHeld < cfg.NormalSales,
+			CanRaisePrice:  sales < cfg.NormalSales && totalHeld < cfg.NormalSales*2 && onAH < cfg.NormalSales,
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  online,
 		}
