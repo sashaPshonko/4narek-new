@@ -122,10 +122,11 @@ type RuntimePersist struct {
 	SavedAt          time.Time                  `json:"saved_at"`
 	LastCycleAt      map[string]time.Time       `json:"last_cycle_at"`
 	LastManualUpdate map[string]time.Time       `json:"last_manual_update"`
+	LastManualKind   map[string]string          `json:"last_manual_kind"` // "min" | "max"
 	TradeHistory     map[string][]TradeLog      `json:"trade_history"`
 	PriceHistory     map[string][]PriceRecord   `json:"price_history"`
 	AdjustState      map[string]ItemAdjustState `json:"adjust_state"`
-	BuySurgeCount map[string]int `json:"buy_surge_count"` // отдельный счётчик всплеска; не трогает цикл
+	BuySurgeCount    map[string]int             `json:"buy_surge_count"` // отдельный счётчик всплеска; не трогает цикл
 }
 
 var itemsConfig map[string]ItemConfig
@@ -149,8 +150,9 @@ type Data struct {
 	BuySum           map[string]int
 	SellSum          map[string]int
 	LastManualUpdate map[string]time.Time
+	LastManualKind   map[string]string    // "min" | "max" — направление ручного clamp на AnalysisTime
 	LastCycleAt      map[string]time.Time // конец последнего adjust (= старт текущего окна)
-	BuySurgeCount map[string]int // отдельный счётчик buy-surge (не влияет на цикл)
+	BuySurgeCount    map[string]int       // отдельный счётчик buy-surge (не влияет на цикл)
 }
 
 var (
@@ -223,6 +225,7 @@ func runServer() {
 	data.BuySum = make(map[string]int)
 	data.SellSum = make(map[string]int)
 	data.LastManualUpdate = make(map[string]time.Time)
+	data.LastManualKind = make(map[string]string)
 	data.LastCycleAt = make(map[string]time.Time)
 	data.BuySurgeCount = make(map[string]int)
 
@@ -590,6 +593,7 @@ func pruneStaleDataKeys() {
 		delete(data.LastCycleAt, id)
 		delete(data.TradeHistory, id)
 		delete(data.LastManualUpdate, id)
+		delete(data.LastManualKind, id)
 		delete(data.BuySurgeCount, id)
 		delete(swordTimes, id)
 		delete(priceHistory, id)
@@ -755,10 +759,11 @@ func buildRuntimePersistLocked() RuntimePersist {
 		SavedAt:          time.Now(),
 		LastCycleAt:      maps.Clone(data.LastCycleAt),
 		LastManualUpdate: maps.Clone(data.LastManualUpdate),
+		LastManualKind:   maps.Clone(data.LastManualKind),
 		TradeHistory:     trades,
 		PriceHistory:     clonePriceHistoryLocked(),
 		AdjustState:      maps.Clone(data.AdjustState),
-		BuySurgeCount: maps.Clone(data.BuySurgeCount),
+		BuySurgeCount:    maps.Clone(data.BuySurgeCount),
 	}
 }
 
@@ -812,6 +817,9 @@ func loadRuntimeState() {
 	if data.LastManualUpdate == nil {
 		data.LastManualUpdate = make(map[string]time.Time)
 	}
+	if data.LastManualKind == nil {
+		data.LastManualKind = make(map[string]string)
+	}
 	if data.TradeHistory == nil {
 		data.TradeHistory = make(map[string][]TradeLog)
 	}
@@ -833,6 +841,15 @@ func loadRuntimeState() {
 			continue
 		}
 		data.LastManualUpdate[item] = t
+	}
+	for item, kind := range snap.LastManualKind {
+		if _, ok := itemsConfig[item]; !ok {
+			continue
+		}
+		if kind != "min" && kind != "max" {
+			continue
+		}
+		data.LastManualKind[item] = kind
 	}
 	cutoff := time.Now().Add(-maxAnalysisRetain())
 	for item, logs := range snap.TradeHistory {
@@ -1275,8 +1292,9 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		oldPrice := data.Prices[msg.Type]
 		data.Prices[msg.Type] = msg.Price
 		data.LastManualUpdate[msg.Type] = time.Now()
+		data.LastManualKind[msg.Type] = "min"
 		recordExternalPriceChangeLocked(msg.Type, "server_min", oldPrice, msg.Price)
-		log.Printf("[CONFIG] %s: min -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
+		log.Printf("[CONFIG] %s: min -> цена %d -> %d (clamp: только ↑ на цикл)", msg.Type, oldPrice, msg.Price)
 		mutex.Unlock()
 		publishPrices()
 		saveDailyDataNoMessageUpdate()
@@ -1297,8 +1315,9 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		}
 		data.Prices[msg.Type] = msg.Price
 		data.LastManualUpdate[msg.Type] = time.Now()
+		data.LastManualKind[msg.Type] = "max"
 		recordExternalPriceChangeLocked(msg.Type, "server_max", oldPrice, msg.Price)
-		log.Printf("[CONFIG] %s: max -> цена %d -> %d", msg.Type, oldPrice, msg.Price)
+		log.Printf("[CONFIG] %s: max -> цена %d -> %d (clamp: только ↓ на цикл)", msg.Type, oldPrice, msg.Price)
 		mutex.Unlock()
 		publishPrices()
 		saveDailyDataNoMessageUpdate()

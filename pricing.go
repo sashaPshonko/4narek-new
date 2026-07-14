@@ -472,6 +472,10 @@ func actionReasonRU(action string) string {
 		return "пропуск: нет активных ботов этого типа"
 	case "skip_manual":
 		return "пропуск: min/max от оркестратора — цикл на паузе"
+	case "hold_manual_min":
+		return "hold: после min можно только ↑ — ↓ заблокирован"
+	case "hold_manual_max":
+		return "hold: после max можно только ↓ — ↑ заблокирован"
 	case "experiment_ok", "experiment_rollback", "experiment_start":
 		return action
 	default:
@@ -479,6 +483,24 @@ func actionReasonRU(action string) string {
 			return "нет решения"
 		}
 		return action
+	}
+}
+
+// manualDirectionClampLocked — в окне AnalysisTime после set_min/set_max:
+// min → блок ↓; max → блок ↑. Неизвестный kind → блок обоих (старое поведение).
+// Только под mutex.Lock.
+func manualDirectionClampLocked(item string, window time.Duration) (blockUp, blockDown bool) {
+	t, ok := data.LastManualUpdate[item]
+	if !ok || t.IsZero() || time.Since(t) >= window {
+		return false, false
+	}
+	switch data.LastManualKind[item] {
+	case "min":
+		return false, true
+	case "max":
+		return true, false
+	default:
+		return true, true
 	}
 }
 
@@ -507,7 +529,8 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	if !isMinecraftTypeActiveLocked(cfg.Type) {
 		return ev
 	}
-	if time.Since(data.LastManualUpdate[item]) < cfg.AnalysisTime {
+	// после min (или неизвестного manual) ↓ запрещён; после max — surge ↓ ок
+	if _, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime); blockDown {
 		return ev
 	}
 
@@ -603,20 +626,6 @@ func adjustPrice(item string) AdjustReport {
 		return rep
 	}
 
-	if time.Since(data.LastManualUpdate[item]) < cfg.AnalysisTime {
-		ago := time.Since(data.LastManualUpdate[item])
-		log.Printf("[SKIP] %s: ручное изменение %v назад, пропускаем анализ", item, ago)
-		price := data.Prices[item]
-		nac := getNacenka(item)
-		mutex.Unlock()
-		rep.Action = "skip_manual"
-		rep.Reason = actionReasonRU(rep.Action) + fmt.Sprintf(" (%v назад)", ago.Round(time.Second))
-		rep.Skipped = true
-		rep.PriceBefore, rep.PriceAfter = price, price
-		rep.NacenkaBefore, rep.NacenkaAfter = nac, nac
-		return rep
-	}
-
 	ensureNacenkasInitialized()
 
 	sales := countRecentSales(item, lastUpdate)
@@ -681,7 +690,7 @@ func adjustPrice(item string) AdjustReport {
 	// CLASSIC (Feb22) + тугой UP (Mar):
 	// UP:   sales < normal && stock < 2×normal && onAH < normal
 	// DOWN: weak AH / buy excess / leader 3.5×
-	// Пол: minBuy + наценка (и base). Min/max — skip_manual выше.
+	// Пол: minBuy + наценка (и base). Manual min/max — directional clamp ниже.
 	// ═══════════════════════════════════════════════════════════════════
 
 	normal := cfg.NormalSales
@@ -753,6 +762,20 @@ func adjustPrice(item string) AdjustReport {
 		if float64(totalStock) > float64(salesLeader)*3.5 {
 			applyDown("classic_price_down_leader", fmt.Sprintf("leader stock>%.1f×%d", 3.5, salesLeader))
 		}
+	}
+
+	// После set_min: только ↑. После set_max: только ↓. Окно = AnalysisTime.
+	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
+	if blockDown && newPrice < priceBefore {
+		notes = append(notes, "manual min → ↓ запрещён")
+		newPrice = priceBefore
+		changed = false
+		action = "hold_manual_min"
+	} else if blockUp && newPrice > priceBefore {
+		notes = append(notes, "manual max → ↑ запрещён")
+		newPrice = priceBefore
+		changed = false
+		action = "hold_manual_max"
 	}
 
 	if action == "" {
