@@ -440,7 +440,7 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 func actionReasonRU(action string) string {
 	switch action {
 	case "classic_price_up":
-		return "classic: sales < normal && stock < 2×normal && onAH < normal → +цена"
+		return "classic: sales < normal && stock ≤ normal && onAH < normal → +цена"
 	case "classic_price_down_weak_sales":
 		return "classic: АХ > sales и АХ > нормы при слабых sales → −цена"
 	case "classic_price_down_buy_excess":
@@ -687,8 +687,8 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// CLASSIC (Feb22) + тугой UP (Mar):
-	// UP:   sales < normal && stock < 2×normal && onAH < normal
+	// CLASSIC (Feb22) + тугой UP (Mar) + case1: stock > normal → не ↑
+	// UP:   sales < normal && stock ≤ normal && onAH < normal
 	// DOWN: weak AH / buy excess / leader 3.5×
 	// Пол: minBuy + наценка (и base). Manual min/max — directional clamp ниже.
 	// ═══════════════════════════════════════════════════════════════════
@@ -745,11 +745,11 @@ func adjustPrice(item string) AdjustReport {
 		}
 	}
 
-	if sales < normal && totalStock < normal*2 && onAH < normal {
+	if sales < normal && totalStock <= normal && onAH < normal {
 		newPrice = priceBefore + step
 		action = "classic_price_up"
 		changed = true
-		notes = append(notes, "sales < normal && stock < 2*normal && onAH < normal")
+		notes = append(notes, "sales < normal && stock <= normal && onAH < normal")
 	} else if (onAH > sales && onAH > normal) && sales < normal {
 		applyDown("classic_price_down_weak_sales", "onAH > sales && onAH > normal && sales < normal")
 	} else if float64(buys) > float64(sales)*2 && totalStock > normal {
