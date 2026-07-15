@@ -17,9 +17,10 @@ const ahStorageSlotsPerBot = 5
 const botTotalSlots = 32
 
 // stock_corridor_v1 — целевая заполненность held/share (по анализу pricing.db 14.07).
-// Продажи и профит следующего цикла пикуют при ~15–25% share; <8% и ≥35% хуже.
+// Продажи выходят на полку примерно с ~10–15%; профит лучше в ~18–25%.
+// Ниже ~8% и перезапас ≥35% — хуже по обоим.
 const (
-	stockTargetLoFrac   = 0.15
+	stockTargetLoFrac   = 0.18
 	stockTargetHiFrac   = 0.25
 	stockOverFrac       = 0.35
 	corridorMaxUpStreak = 3
@@ -210,7 +211,7 @@ func stockNormFromConfig(cfg ItemConfig) int {
 }
 
 // stockTargets — коридор заполненности held относительно share слотов.
-// lo/hi ≈ 15–25% share (sweet spot продаж); over ≈ 35% (жёсткий перезапас).
+// lo/hi ≈ 18–25% share (профит); over ≈ 35% (жёсткий перезапас).
 func stockTargets(share int) (lo, hi, over int) {
 	if share <= 0 {
 		return 1, 2, 3
@@ -485,9 +486,9 @@ func actionReasonRU(action string) string {
 	case "corridor_price_down_soft":
 		return "corridor: в коридоре, но верхняя половина и АХ≫sales → −цена"
 	case "corridor_price_up_demand":
-		return "corridor: held < 15% share и есть sales → +цена (витрину разбирают)"
+		return "corridor: held < 18% share и есть sales → +цена (витрину разбирают)"
 	case "corridor_hold_band":
-		return "corridor: held в 15–25% share → hold"
+		return "corridor: held в 18–25% share → hold"
 	case "corridor_hold_filling":
 		return "corridor: held < цели, идут buys, sales=0 → hold (набираем сток)"
 	case "corridor_hold_dead":
@@ -744,7 +745,7 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// stock_corridor_v1 — держать held в 15–25% share (sweet spot продаж).
+	// stock_corridor_v1 — держать held в 18–25% share (профитный sweet spot).
 	// Цена sell; наценка фиксирована из конфига (не крутим).
 	// Пол: minBuy + наценка (и base). Manual min/max — directional clamp ниже.
 	// ═══════════════════════════════════════════════════════════════════
