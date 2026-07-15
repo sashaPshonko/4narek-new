@@ -16,6 +16,15 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v1 — целевая заполненность held/share (по анализу pricing.db 14.07).
+// Продажи и профит следующего цикла пикуют при ~15–25% share; <8% и ≥35% хуже.
+const (
+	stockTargetLoFrac   = 0.15
+	stockTargetHiFrac   = 0.25
+	stockOverFrac       = 0.35
+	corridorMaxUpStreak = 3
+)
+
 // AdjustReport — итог цикла adjustPrice для TG/логов.
 type AdjustReport struct {
 	Item              string
@@ -83,14 +92,16 @@ const (
 	marketFloorMaxStale  = 2 * time.Minute
 )
 
-// ItemAdjustState — состояние CAPITAL-контроллера между циклами.
+// ItemAdjustState — состояние контроллера цены между циклами.
 type ItemAdjustState struct {
-	GoodStreak           int  `json:"good_streak"`            // тихие циклы с непадающей Σнаценок (для skim)
-	ExperimentCheck      bool `json:"experiment_check"`       // проверить прошлый skim в этом цикле
+	GoodStreak           int  `json:"good_streak"`
+	ExperimentCheck      bool `json:"experiment_check"`
 	LastCycleProfit      int  `json:"last_cycle_profit"`
 	LastCycleNacenkaSum  int  `json:"last_cycle_nacenka_sum"`
-	StockVsSalesCooldown int  `json:"stock_vs_sales_cooldown"` // refractory после dump −P
-	FillPriceCooldown    int  `json:"fill_price_cooldown"`    // refractory после +P (v2: не дёргать цену каждый цикл)
+	StockVsSalesCooldown int  `json:"stock_vs_sales_cooldown"`
+	FillPriceCooldown    int  `json:"fill_price_cooldown"`
+	CorridorUpStreak     int  `json:"corridor_up_streak"`   // подряд ↑ в stock_corridor
+	CorridorDeadStreak   int  `json:"corridor_dead_streak"` // подряд sales=0 && buys=0
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -108,7 +119,7 @@ func getNacenka(item string) int {
 }
 
 // ensureNacenkasInitialized — всегда выравнивает рантайм-наценки под items_config
-// (classic не крутит nacenka; старые capital-значения из daily/runtime сбрасываем).
+// (stock_corridor не крутит nacenka; старые capital-значения из daily/runtime сбрасываем).
 func ensureNacenkasInitialized() {
 	if data.Nacenkas == nil {
 		data.Nacenkas = make(map[string]int)
@@ -196,6 +207,34 @@ func stockNormFromConfig(cfg ItemConfig) int {
 		return cfg.NormalCount
 	}
 	return cfg.NormalSales
+}
+
+// stockTargets — коридор заполненности held относительно share слотов.
+// lo/hi ≈ 15–25% share (sweet spot продаж); over ≈ 35% (жёсткий перезапас).
+func stockTargets(share int) (lo, hi, over int) {
+	if share <= 0 {
+		return 1, 2, 3
+	}
+	lo = int(float64(share)*stockTargetLoFrac + 0.5)
+	hi = int(float64(share)*stockTargetHiFrac + 0.5)
+	over = int(float64(share)*stockOverFrac + 0.5)
+	if lo < 1 {
+		lo = 1
+	}
+	if hi <= lo {
+		hi = lo + 1
+	}
+	if over <= hi {
+		over = hi + 1
+	}
+	return lo, hi, over
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // categoryAhCapacityLocked — ёмкость хранилища АХ по типу (боты × 5 слотов). Только под mutex.Lock.
@@ -439,21 +478,37 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 
 func actionReasonRU(action string) string {
 	switch action {
+	case "corridor_price_down_over":
+		return "corridor: held ≥ 35% share → −цена (разобрать перезапас)"
+	case "corridor_price_down_hi":
+		return "corridor: held > 25% share → −цена (выше целевого коридора)"
+	case "corridor_price_down_soft":
+		return "corridor: в коридоре, но верхняя половина и АХ≫sales → −цена"
+	case "corridor_price_up_demand":
+		return "corridor: held < 15% share и есть sales → +цена (витрину разбирают)"
+	case "corridor_hold_band":
+		return "corridor: held в 15–25% share → hold"
+	case "corridor_hold_filling":
+		return "corridor: held < цели, идут buys, sales=0 → hold (набираем сток)"
+	case "corridor_hold_dead":
+		return "corridor: held < цели, sales=0 buys=0 → hold (не разгонять пустоту)"
+	case "corridor_hold_up_cap":
+		return "corridor: недобор, но лимит ↑ подряд → hold"
+	case "price_down_buy_surge":
+		return "surge: всплеск buys при стоке ≥ цели → −цена"
+	// legacy (старые логи/БД)
 	case "classic_price_up":
-		return "classic: sales < normal && stock ≤ normal && onAH < normal → +цена"
+		return "classic(legacy): sales < normal && stock ≤ normal && onAH < normal → +цена"
 	case "classic_price_down_weak_sales":
-		return "classic: АХ > sales и АХ > нормы при слабых sales → −цена"
+		return "classic(legacy): АХ > sales и АХ > нормы при слабых sales → −цена"
 	case "classic_price_down_buy_excess":
-		return "classic: buys > 2×sales и запас > нормы → −цена"
+		return "classic(legacy): buys > 2×sales и запас > нормы → −цена"
 	case "classic_price_down_leader":
-		return "classic: лидер категории, запас > 3.5×sales → −цена"
+		return "classic(legacy): лидер категории, запас > 3×sales → −цена"
 	case "oldoldold_price_up":
 		return "oldoldold: АХ+инв < normal_sales → +цена"
 	case "oldoldold_price_down":
 		return "oldoldold: АХ > sales и АХ > нормы при слабых sales → −цена"
-	case "price_down_buy_surge":
-		return "surge: выкуп ≥2×нормы при слабых sales → −цена"
-	// legacy capital (старые логи/БД)
 	case "capital_hold":
 		return "капитал: hold — нет давления"
 	case "capital_dump":
@@ -517,19 +572,18 @@ type BuySurgeEvent struct {
 	Step        int
 }
 
-// maybeBuySurgePriceDownLocked — на каждый buy: отдельный счётчик +=1;
-// если счётчик ≥ 2×normal и sales < normal → −step, счётчик = 0.
-// Сделки/статы основного цикла не трогаем. Только под mutex.Lock.
+// maybeBuySurgePriceDownLocked — на каждый buy: счётчик +=1;
+// если сток уже ≥ верхней цели коридора и счётчик ≥ hi → −step, счётчик = 0.
+// Не зависит от NormalSales. Только под mutex.Lock.
 func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	ev := BuySurgeEvent{Item: item}
 	cfg, ok := itemsConfig[item]
-	if !ok || cfg.NormalSales <= 0 || cfg.PriceStep <= 0 {
+	if !ok || cfg.PriceStep <= 0 {
 		return ev
 	}
 	if !isMinecraftTypeActiveLocked(cfg.Type) {
 		return ev
 	}
-	// после min (или неизвестного manual) ↓ запрещён; после max — surge ↓ ок
 	if _, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime); blockDown {
 		return ev
 	}
@@ -539,7 +593,11 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	}
 	data.BuySurgeCount[item]++
 	surgeCount := data.BuySurgeCount[item]
-	threshold := cfg.NormalSales * 2
+
+	share := itemSlotShareLocked(cfg.Type)
+	_, hi, _ := stockTargets(share)
+	threshold := maxInt(4, hi)
+	held := getItemCount(item) + getInventoryCount(item)
 
 	now := time.Now()
 	since := now.Add(-cfg.AnalysisTime)
@@ -554,7 +612,7 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	ev.SurgeCount, ev.Sales, ev.Threshold = surgeCount, sales, threshold
 	ev.NormalSales, ev.Step = cfg.NormalSales, cfg.PriceStep
 
-	if surgeCount < threshold || sales >= cfg.NormalSales {
+	if surgeCount < threshold || held < hi {
 		return ev
 	}
 
@@ -576,14 +634,13 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	data.Prices[item] = newPrice
 	dailyData.Prices[item] = newPrice
 	lastPriceUpdate[item] = now
-	// сброс только surge-счётчика — цикл/TradeHistory не трогаем
 	data.BuySurgeCount[item] = 0
 
 	ev.Dropped = true
 	ev.PriceBefore = priceBefore
 	ev.PriceAfter = newPrice
-	log.Printf("[SURGE] %s: surge=%d thr=%d sales=%d/%d | цена %d→%d | surge→0",
-		item, surgeCount, threshold, sales, cfg.NormalSales, priceBefore, newPrice)
+	log.Printf("[SURGE] %s: surge=%d thr=%d held=%d hi=%d sales=%d | цена %d→%d | surge→0",
+		item, surgeCount, threshold, held, hi, sales, priceBefore, newPrice)
 	return ev
 }
 
@@ -687,29 +744,15 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// CLASSIC (Feb22) + тугой UP (Mar) + case1: stock > normal → не ↑
-	// UP:   sales < normal && stock ≤ normal && onAH < normal
-	// DOWN: weak AH / buy excess / leader 3.5×
+	// stock_corridor_v1 — держать held в 15–25% share (sweet spot продаж).
+	// Цена sell; наценка фиксирована из конфига (не крутим).
 	// Пол: minBuy + наценка (и base). Manual min/max — directional clamp ниже.
 	// ═══════════════════════════════════════════════════════════════════
 
-	normal := cfg.NormalSales
-	if normal < 1 {
-		normal = 1
-	}
-	totalStock := totalHeld
-
-	leaderID := ""
-	maxTotal := -1
-	for name, conf := range itemsConfig {
-		if conf.Type != cfg.Type {
-			continue
-		}
-		total := ahCounts[name] + invCounts[name]
-		if total > maxTotal || (total == maxTotal && (leaderID == "" || name < leaderID)) {
-			maxTotal = total
-			leaderID = name
-		}
+	targetLo, targetHi, targetOver := stockTargets(share)
+	stockLoad := 0.0
+	if share > 0 {
+		stockLoad = float64(totalHeld) / float64(share)
 	}
 
 	underbuyOK := false
@@ -728,7 +771,6 @@ func adjustPrice(item string) AdjustReport {
 	} else if trySells > 0 {
 		tryRatio = float64(trySells)
 	}
-	stockLoad := float64(totalHeld) / float64(normal)
 
 	applyDown := func(label, note string) {
 		cand := priceBefore - step
@@ -742,25 +784,58 @@ func adjustPrice(item string) AdjustReport {
 			notes = append(notes, note)
 		} else {
 			notes = append(notes, note+" · floor")
+			if action == "" {
+				action = "hold"
+			}
 		}
 	}
-
-	if sales < normal && totalStock <= normal && onAH < normal {
+	applyUp := func(label, note string) {
 		newPrice = priceBefore + step
-		action = "classic_price_up"
+		action = label
 		changed = true
-		notes = append(notes, "sales < normal && stock <= normal && onAH < normal")
-	} else if (onAH > sales && onAH > normal) && sales < normal {
-		applyDown("classic_price_down_weak_sales", "onAH > sales && onAH > normal && sales < normal")
-	} else if float64(buys) > float64(sales)*2 && totalStock > normal {
-		applyDown("classic_price_down_buy_excess", "buys > 2*sales && stock > normal")
-	} else if item == leaderID {
-		salesLeader := normal
-		if sales > normal {
-			salesLeader = sales
+		notes = append(notes, note)
+	}
+
+	switch {
+	case share <= 0:
+		action = "hold"
+		notes = append(notes, "share=0 — нет базы для коридора")
+
+	case totalHeld >= targetOver:
+		applyDown("corridor_price_down_over",
+			fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d)", totalHeld, targetOver, stockLoad*100, share))
+
+	case totalHeld > targetHi:
+		applyDown("corridor_price_down_hi",
+			fmt.Sprintf("held=%d > hi=%d (цель [%d,%d] share=%d)", totalHeld, targetHi, targetLo, targetHi, share))
+
+	case totalHeld < targetLo:
+		switch {
+		case sales > 0 && state.CorridorUpStreak < corridorMaxUpStreak:
+			applyUp("corridor_price_up_demand",
+				fmt.Sprintf("held=%d < lo=%d sales=%d (разбирают витрину)", totalHeld, targetLo, sales))
+		case sales > 0 && state.CorridorUpStreak >= corridorMaxUpStreak:
+			action = "corridor_hold_up_cap"
+			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d но up_streak=%d≥%d",
+				totalHeld, targetLo, sales, state.CorridorUpStreak, corridorMaxUpStreak))
+		case buys > 0:
+			action = "corridor_hold_filling"
+			notes = append(notes, fmt.Sprintf("held=%d < lo=%d buys=%d sales=0 — набираем сток", totalHeld, targetLo, buys))
+		default:
+			action = "corridor_hold_dead"
+			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=0 buys=0 — не разгонять пустоту", totalHeld, targetLo))
 		}
-		if float64(totalStock) > float64(salesLeader)*3.5 {
-			applyDown("classic_price_down_leader", fmt.Sprintf("leader stock>%.1f×%d", 3.5, salesLeader))
+
+	default:
+		// В коридоре [lo, hi]: обычно hold; мягкий ↓ если верхняя половина и АХ не идёт.
+		mid := (targetLo + targetHi) / 2
+		if totalHeld > mid && onAH > maxInt(sales, 1)*2 {
+			applyDown("corridor_price_down_soft",
+				fmt.Sprintf("held=%d>mid=%d onAH=%d >> sales=%d (в [%d,%d])",
+					totalHeld, mid, onAH, sales, targetLo, targetHi))
+		} else {
+			action = "corridor_hold_band"
+			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] share=%d", totalHeld, targetLo, targetHi, share))
 		}
 	}
 
@@ -782,6 +857,19 @@ func adjustPrice(item string) AdjustReport {
 		action = "hold"
 	}
 
+	// Стрелки коридора
+	if strings.Contains(action, "price_up") {
+		state.CorridorUpStreak++
+		state.CorridorDeadStreak = 0
+	} else {
+		state.CorridorUpStreak = 0
+		if sales == 0 && buys == 0 {
+			state.CorridorDeadStreak++
+		} else {
+			state.CorridorDeadStreak = 0
+		}
+	}
+
 	if state.StockVsSalesCooldown > 0 {
 		state.StockVsSalesCooldown--
 	}
@@ -794,7 +882,7 @@ func adjustPrice(item string) AdjustReport {
 	data.AdjustState[item] = state
 	dailyData.AdjustState[item] = state
 
-	// classic не меняет наценку
+	// Наценку не меняем — фиксирована из items_config.
 	nacenka = nacenkaBefore
 	if newPrice != priceBefore {
 		data.Prices[item] = newPrice
@@ -810,11 +898,11 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	if changed {
-		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d→%d | Σнаценок %d (было %d) | продажи %d | на АХ %d | в инв %d | всего %d | лидер %s | %s",
-			item, action, priceBefore, newPrice, nacenkaBefore, nacenka, nacenkaSumNow, nacenkaSumPrev, sales, onAH, invCount, totalHeld, leaderID, reason)
+		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d | held %d/share %d цель[%d,%d] | продажи %d buys=%d | АХ %d инв %d | %s",
+			item, action, priceBefore, newPrice, nacenka, totalHeld, share, targetLo, targetHi, sales, buys, onAH, invCount, reason)
 	} else {
-		log.Printf("[HOLD] %s: %s | цена %d | наценка %d | продажи %d buys=%d try=%d | АХ %d инв %d | лидер %s | %s",
-			item, actionTaken, newPrice, nacenka, sales, buys, trySells, onAH, invCount, leaderID, reason)
+		log.Printf("[HOLD] %s: %s | цена %d | наценка %d | held %d/share %d цель[%d,%d] | продажи %d buys=%d try=%d | АХ %d инв %d | %s",
+			item, actionTaken, newPrice, nacenka, totalHeld, share, targetLo, targetHi, sales, buys, trySells, onAH, invCount, reason)
 	}
 
 	queueMLDecisionLocked(
@@ -833,7 +921,7 @@ func adjustPrice(item string) AdjustReport {
 		Dump:            0,
 		Fill:            0,
 		Skim:            0,
-		Threshold:       0,
+		Threshold:       float64(targetHi),
 		Sales:           sales,
 		Buys:            buys,
 		TrySells:        trySells,
@@ -865,7 +953,7 @@ func adjustPrice(item string) AdjustReport {
 		MinBuyHistory:   minPrice,
 		BotsCategory:    aggregateBotsPerTypeLocked()[cfg.Type],
 		CycleMinutes:    cfg.AnalysisTime.Minutes(),
-		GoodStreak:      state.GoodStreak,
+		GoodStreak:      state.CorridorUpStreak,
 		DumpBlockedCD:   false,
 		DecisionAt:      now,
 		CycleDuration:   cfg.AnalysisTime,
@@ -892,7 +980,7 @@ func adjustPrice(item string) AdjustReport {
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice:  sales < cfg.NormalSales && totalHeld < cfg.NormalSales*2 && onAH < cfg.NormalSales,
+			CanRaisePrice:  totalHeld < targetLo && sales > 0 && state.CorridorUpStreak < corridorMaxUpStreak,
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  online,
 		}
@@ -922,8 +1010,8 @@ func adjustPrice(item string) AdjustReport {
 		Cooldown:        state.StockVsSalesCooldown,
 		NacenkaSumNow:   nacenkaSumNow,
 		NacenkaSumPrev:  nacenkaSumPrev,
-		GoodStreak:     state.GoodStreak,
-		BlockNacenkaUp: underbuyOK,
+		GoodStreak:      state.CorridorUpStreak,
+		BlockNacenkaUp:  underbuyOK,
 	}
 
 	needBroadcast := changed
