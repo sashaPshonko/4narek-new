@@ -120,7 +120,7 @@ func initMLLog() {
 	}
 	_ = os.MkdirAll(filepath.Dir(mlDBPath), 0755)
 
-	db, err := sql.Open("sqlite", mlDBPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)")
+	db, err := sql.Open("sqlite", mlOpenDSN(mlDBPath))
 	if err != nil {
 		log.Printf("[ML] open: %v", err)
 		return
@@ -132,6 +132,13 @@ func initMLLog() {
 	}
 	db.SetMaxOpenConns(1) // один writer — меньше шанс порчи при гонках
 	_, _ = db.Exec(`PRAGMA wal_autocheckpoint=1000`)
+
+	if issues := mlQuickCheckIssues(db); len(issues) > 0 {
+		for _, s := range issues {
+			log.Printf("[ML] quick_check on open: %s", s)
+		}
+		log.Printf("[ML] БД подозрительна — пишем всё равно (heal ниже), восстановите из ml_data/backups/ при необходимости")
+	}
 
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS trade_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -165,6 +172,7 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	initMLShadowTable()
 	healMLDatabase(db)
 	reloadCapitalPendingFromDB()
+	startMLBackupLoop()
 	log.Printf("[ML] SQLite %s (schema v%d + capital_cycles/fwd + stock_snapshots + server_price_events)", mlDBPath, mlSchemaVersion)
 	if mlShadowEnabled() {
 		log.Printf("[ML-SHADOW] включён → %s (Go правила + лог сравнения с ML)", mlWSURL())

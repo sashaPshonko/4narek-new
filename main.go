@@ -232,6 +232,7 @@ func runServer() {
 	loadDailyData(loc)
 	loadRuntimeState()
 	initMLLog()
+	setupMLShutdown()
 	initTelegramBot()
 
 	// Запускаем брокер рассылки
