@@ -16,21 +16,19 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
-// stock_corridor_v2 — стратегический контроллер fill=held/share.
+// stock_corridor_v3 — стратегический контроллер fill=held/share.
 //
-// По pricing.db (15–16.07): profit_now = кэшфлоу (sell−buy), не FIFO-маржа.
-// FIFO-маржа/шт лучше ~15–22%; кэшфлоу на объёме — около 18–25%.
-// Цель mid≈20%. Мёртвая зона [15%, 25%] — только hold (без soft↓).
-// Гистерезис: обычный ↓ только с soft≈28% (не с края 25%), иначе overshoot <15%.
-// try_sells veto на ↑; ≥50% — dump каждый цикл.
+// v2→v3 (19.07): lo 15%→18%; ↑ veto buys≥sales; soft↓ с hi каждый цикл; Fill в БД.
+// Макс. эффективность по fwd: ↑ почти всегда −profit след. цикла; HOLD в under лучше.
+// Поэтому ↑ редкий: sales>buys, streak≤1, try-veto, только ниже lo.
 const (
-	stockBandLoFrac       = 0.15
+	stockBandLoFrac       = 0.18
 	stockBandHiFrac       = 0.25
 	stockSoftDownFrac     = 0.28
 	stockOverFrac         = 0.35
 	stockDumpFrac         = 0.50
-	corridorMaxUpStreak   = 3
-	corridorSoftDownEvery = 2 // soft↓ не чаще чем раз в N циклов
+	corridorMaxUpStreak   = 1 // v3: максимум один ↑ подряд (было 3)
+	corridorSoftDownEvery = 1
 	tryUpVetoMinTries     = 5
 	tryUpVetoPerSale      = 2
 )
@@ -221,7 +219,8 @@ func stockNormFromConfig(cfg ItemConfig) int {
 }
 
 // stockTargets — пороги fill=held/share.
-// lo/hi — мёртвая зона; soft — старт обычного ↓ (гистерезис); over — жёсткий ↓; dump — залипший перезапас.
+// lo/hi — мёртвая зона (18–25%); soft — ориентир в логах; over — жёсткий ↓; dump — залипший перезапас.
+// v3: soft↓ стартует сразу с hi (не HOLD до soft).
 func stockTargets(share int) (lo, hi, soft, over, dump int) {
 	if share <= 0 {
 		return 1, 2, 3, 4, 5
@@ -512,31 +511,33 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 func actionReasonRU(action string) string {
 	switch action {
 	case "corridor_price_down_dump":
-		return "corridor_v2: held ≥ 50% share → −цена (dump залипшего перезапаса)"
+		return "corridor_v3: held ≥ 50% share → −цена (dump залипшего перезапаса)"
 	case "corridor_price_down_over":
-		return "corridor_v2: held ≥ 35% share → −цена (жёсткий перезапас)"
+		return "corridor_v3: held ≥ 35% share → −цена (жёсткий перезапас)"
 	case "corridor_price_down_soft":
-		return "corridor_v2: held > 28% share → −цена (гистерезис выше полосы)"
+		return "corridor_v3: held > hi → −цена (слив хвоста выше полосы)"
 	case "corridor_price_down_hi":
-		return "corridor_v2(legacy): held > hi → −цена"
+		return "corridor_v3(legacy): held > hi → −цена"
 	case "corridor_price_up_demand":
-		return "corridor_v2: held < 15% share и есть sales → +цена (витрину разбирают)"
+		return "corridor_v3: held < 18% share, sales>buys → +цена (редкий разбор витрины)"
 	case "corridor_hold_band":
-		return "corridor_v2: held в 15–25% share → hold (мёртвая зона)"
+		return "corridor_v3: held в 18–25% share → hold (мёртвая зона)"
 	case "corridor_hold_hysteresis":
-		return "corridor_v2: held 25–28% → hold (гистерезис, не режем с края)"
+		return "corridor_v3(legacy): held 25–28% → hold"
 	case "corridor_hold_filling":
-		return "corridor_v2: held < lo, идут buys, sales=0 → hold (набираем сток)"
+		return "corridor_v3: held < lo, идут buys, sales=0 → hold (набираем сток)"
 	case "corridor_hold_dead":
-		return "corridor_v2: held < lo, sales=0 buys=0 → hold (не разгонять пустоту)"
+		return "corridor_v3: held < lo, sales=0 buys=0 → hold (не разгонять пустоту)"
 	case "corridor_hold_up_cap":
-		return "corridor_v2: недобор, но лимит ↑ подряд → hold"
+		return "corridor_v3: недобор, но лимит ↑ подряд → hold"
 	case "corridor_hold_try_veto":
-		return "corridor_v2: недобор, но try_sells≫sales → ↑ запрещён"
+		return "corridor_v3: недобор, но try_sells≫sales → ↑ запрещён"
+	case "corridor_hold_buy_veto":
+		return "corridor_v3: недобор, но buys≥sales → ↑ запрещён"
 	case "corridor_hold_overshoot":
-		return "corridor_v2: ↓ пропустил бы ниже lo → hold"
+		return "corridor_v3: ↓ пропустил бы ниже lo → hold"
 	case "corridor_hold_down_cd":
-		return "corridor_v2: soft↓ на cooldown → hold"
+		return "corridor_v3: soft↓ на cooldown → hold"
 	case "price_down_buy_surge":
 		return "surge: всплеск buys при стоке ≥ цели → −цена"
 	// legacy (старые логи/БД)
@@ -788,10 +789,10 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// stock_corridor_v2 — стратегический fill-контроллер.
-	// Мёртвая зона [lo,hi]≈15–25%: только hold.
-	// Гистерезис: soft↓ с soft≈28%; hard с over≈35%; dump с ≥50%.
-	// ↑ ниже lo только при sales и без try-veto; без soft↓ внутри полосы.
+	// stock_corridor_v3 — стратегический fill-контроллер.
+	// Мёртвая зона [lo,hi]≈18–25%: только hold.
+	// Сверху hi: soft↓ каждый цикл (не HOLD 25–28%); hard ≥35%; dump ≥50%.
+	// ↑ ниже lo: sales>0, sales≥buys, без try-veto, streak<3.
 	// ═══════════════════════════════════════════════════════════════════
 
 	targetLo, targetHi, targetSoft, targetOver, targetDump := stockTargets(share)
@@ -854,7 +855,11 @@ func adjustPrice(item string) AdjustReport {
 		}
 		applyDown(label, note)
 		if changed && strings.Contains(action, "price_down") {
+			// corridorSoftDownEvery=1 → cooldown 0 (↓ снова на след. цикле).
 			state.CorridorDownCooldown = corridorSoftDownEvery - 1
+			if state.CorridorDownCooldown < 0 {
+				state.CorridorDownCooldown = 0
+			}
 		}
 	}
 
@@ -878,14 +883,11 @@ func adjustPrice(item string) AdjustReport {
 				fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d)", totalHeld, targetOver, stockLoad*100, share))
 		}
 
-	case totalHeld > targetSoft:
-		trySoftDown("corridor_price_down_soft",
-			fmt.Sprintf("held=%d > soft=%d (полоса [%d,%d] soft=%d share=%d)",
-				totalHeld, targetSoft, targetLo, targetHi, targetSoft, share))
-
 	case totalHeld > targetHi:
-		action = "corridor_hold_hysteresis"
-		notes = append(notes, fmt.Sprintf("held=%d в (hi=%d, soft=%d] — гистерезис, hold", totalHeld, targetHi, targetSoft))
+		// v3: сразу soft↓ выше hi (раньше 25–28% был чистый HOLD — хвост не сливался).
+		trySoftDown("corridor_price_down_soft",
+			fmt.Sprintf("held=%d > hi=%d (полоса [%d,%d] soft=%d share=%d)",
+				totalHeld, targetHi, targetLo, targetHi, targetSoft, share))
 
 	case totalHeld < targetLo:
 		switch {
@@ -893,9 +895,13 @@ func adjustPrice(item string) AdjustReport {
 			action = "corridor_hold_try_veto"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d try=%d — рынок не берёт, ↑ запрещён",
 				totalHeld, targetLo, sales, trySells))
+		case buys >= sales:
+			action = "corridor_hold_buy_veto"
+			notes = append(notes, fmt.Sprintf("held=%d < lo=%d buys=%d ≥ sales=%d — нет чистого разбора витрины, ↑ запрещён",
+				totalHeld, targetLo, buys, sales))
 		case sales > 0 && state.CorridorUpStreak < corridorMaxUpStreak:
 			applyUp("corridor_price_up_demand",
-				fmt.Sprintf("held=%d < lo=%d sales=%d (разбирают витрину)", totalHeld, targetLo, sales))
+				fmt.Sprintf("held=%d < lo=%d sales=%d > buys=%d (разбирают витрину)", totalHeld, targetLo, sales, buys))
 		case sales > 0 && state.CorridorUpStreak >= corridorMaxUpStreak:
 			action = "corridor_hold_up_cap"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d но up_streak=%d≥%d",
@@ -1004,7 +1010,7 @@ func adjustPrice(item string) AdjustReport {
 		Action:          actionTaken,
 		Winner:          actionTaken,
 		Dump:            0,
-		Fill:            0,
+		Fill:            stockLoad,
 		Skim:            0,
 		Threshold:       float64(targetHi),
 		Sales:           sales,
@@ -1065,7 +1071,7 @@ func adjustPrice(item string) AdjustReport {
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice:  totalHeld < targetLo && sales > 0 && state.CorridorUpStreak < corridorMaxUpStreak && !trySellsBlockUp(sales, trySells),
+			CanRaisePrice:  totalHeld < targetLo && sales > buys && state.CorridorUpStreak < corridorMaxUpStreak && !trySellsBlockUp(sales, trySells),
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  online,
 		}
