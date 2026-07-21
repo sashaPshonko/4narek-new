@@ -16,21 +16,27 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
-// stock_corridor_v3 — стратегический контроллер fill=held/share.
+// stock_corridor_v4 — стратегический контроллер fill=held/share.
 //
-// v2→v3 (19.07): lo 15%→18%; ↑ veto buys≥sales; soft↓ с hi каждый цикл; Fill в БД.
-// Макс. эффективность по fwd: ↑ почти всегда −profit след. цикла; HOLD в under лучше.
-// Поэтому ↑ редкий: sales>buys, streak≤1, try-veto, только ниже lo.
+// v3→v4 (21.07): ложный дефицит (sales=1–2, held≈0 ночью) → слабый ↑ и утренний дамп.
+//   • ↑ только при сильном спросе (sales≥3 или sales≥2 два цикла подряд)
+//   • после ↑ cooldown 2 цикла (не ползти ↑–hold–↑ на крошках)
+//   • hard over/dump: ↓ без overshoot-guard (не залипать на перестоке)
+// Онлайн в решение не входит: corr(online,UP%)≈0; режет спрос/активность, не players_online.
+//
+// История: v1 коридор 15–25%; v2 try-veto/dead; v3 lo=18%, buy-veto, soft↓ с hi, streak≤1.
 const (
-	stockBandLoFrac       = 0.18
-	stockBandHiFrac       = 0.25
-	stockSoftDownFrac     = 0.28
-	stockOverFrac         = 0.35
-	stockDumpFrac         = 0.50
-	corridorMaxUpStreak   = 1 // v3: максимум один ↑ подряд (было 3)
-	corridorSoftDownEvery = 1
-	tryUpVetoMinTries     = 5
-	tryUpVetoPerSale      = 2
+	stockBandLoFrac         = 0.18
+	stockBandHiFrac         = 0.25
+	stockSoftDownFrac       = 0.28
+	stockOverFrac           = 0.35
+	stockDumpFrac           = 0.50
+	corridorMaxUpStreak     = 1 // не два ↑ подряд
+	corridorUpCooldownCycles = 2 // после ↑ ещё N циклов без ↑
+	corridorMinSalesForUp   = 3 // абсолютный пол спроса на ↑
+	corridorSoftDownEvery   = 1
+	tryUpVetoMinTries       = 5
+	tryUpVetoPerSale        = 2
 )
 
 // AdjustReport — итог цикла adjustPrice для TG/логов.
@@ -108,9 +114,11 @@ type ItemAdjustState struct {
 	LastCycleNacenkaSum  int  `json:"last_cycle_nacenka_sum"`
 	StockVsSalesCooldown int  `json:"stock_vs_sales_cooldown"`
 	FillPriceCooldown    int  `json:"fill_price_cooldown"`
-	CorridorUpStreak     int  `json:"corridor_up_streak"`     // подряд ↑ в stock_corridor
-	CorridorDeadStreak   int  `json:"corridor_dead_streak"`   // подряд sales=0 && buys=0
-	CorridorDownCooldown int  `json:"corridor_down_cooldown"` // циклы до следующего soft↓
+	CorridorUpStreak     int `json:"corridor_up_streak"`     // подряд ↑ в stock_corridor
+	CorridorDeadStreak   int `json:"corridor_dead_streak"`   // подряд sales=0 && buys=0
+	CorridorDownCooldown int `json:"corridor_down_cooldown"` // циклы до следующего soft↓
+	CorridorUpCooldown   int `json:"corridor_up_cooldown"`   // v4: циклы до следующего ↑
+	LastCycleSales       int `json:"last_cycle_sales"`       // v4: sales прошлого цикла (sustained demand)
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -256,7 +264,17 @@ func trySellsBlockUp(sales, trySells int) bool {
 	return trySells >= tryUpVetoPerSale*maxInt(sales, 1)
 }
 
+// demandStrongEnoughForUp — v4: не поднимать на крошках (sales=1 при пустой витрине).
+// sales≥3 — ок; sales=2 только если прошлый цикл тоже ≥2 (устойчивый поток).
+func demandStrongEnoughForUp(sales, lastCycleSales int) bool {
+	if sales >= corridorMinSalesForUp {
+		return true
+	}
+	return sales >= 2 && lastCycleSales >= 2
+}
+
 // downWouldUndershoot — ↓ ускорит продажи; если уже один цикл sales утащит ниже lo — не режем.
+// Только для soft↓; hard over/dump в v4 игнорируют этот guard.
 func downWouldUndershoot(totalHeld, sales, targetLo int) bool {
 	drain := maxInt(sales, 1)
 	return totalHeld-drain < targetLo
@@ -511,33 +529,37 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 func actionReasonRU(action string) string {
 	switch action {
 	case "corridor_price_down_dump":
-		return "corridor_v3: held ≥ 50% share → −цена (dump залипшего перезапаса)"
+		return "corridor_v4: held ≥ 50% share → −цена (dump залипшего перезапаса)"
 	case "corridor_price_down_over":
-		return "corridor_v3: held ≥ 35% share → −цена (жёсткий перезапас)"
+		return "corridor_v4: held ≥ 35% share → −цена (жёсткий перезапас, без overshoot-guard)"
 	case "corridor_price_down_soft":
-		return "corridor_v3: held > hi → −цена (слив хвоста выше полосы)"
+		return "corridor_v4: held > hi → −цена (слив хвоста выше полосы)"
 	case "corridor_price_down_hi":
 		return "corridor_v3(legacy): held > hi → −цена"
 	case "corridor_price_up_demand":
-		return "corridor_v3: held < 18% share, sales>buys → +цена (редкий разбор витрины)"
+		return "corridor_v4: held < lo, сильный спрос (sales≥3 или sustained) → +цена"
 	case "corridor_hold_band":
-		return "corridor_v3: held в 18–25% share → hold (мёртвая зона)"
+		return "corridor_v4: held в 18–25% share → hold (мёртвая зона)"
 	case "corridor_hold_hysteresis":
 		return "corridor_v3(legacy): held 25–28% → hold"
 	case "corridor_hold_filling":
-		return "corridor_v3: held < lo, идут buys, sales=0 → hold (набираем сток)"
+		return "corridor_v4: held < lo, идут buys, sales=0 → hold (набираем сток)"
 	case "corridor_hold_dead":
-		return "corridor_v3: held < lo, sales=0 buys=0 → hold (не разгонять пустоту)"
+		return "corridor_v4: held < lo, sales=0 buys=0 → hold (не разгонять пустоту)"
+	case "corridor_hold_weak_demand":
+		return "corridor_v4: held < lo, но спрос слабый (крошки sales) → ↑ запрещён"
 	case "corridor_hold_up_cap":
-		return "corridor_v3: недобор, но лимит ↑ подряд → hold"
+		return "corridor_v4: недобор, но лимит ↑ подряд → hold"
+	case "corridor_hold_up_cd":
+		return "corridor_v4: недобор, но ↑ на cooldown после прошлого ↑ → hold"
 	case "corridor_hold_try_veto":
-		return "corridor_v3: недобор, но try_sells≫sales → ↑ запрещён"
+		return "corridor_v4: недобор, но try_sells≫sales → ↑ запрещён"
 	case "corridor_hold_buy_veto":
-		return "corridor_v3: недобор, но buys≥sales → ↑ запрещён"
+		return "corridor_v4: недобор, но buys≥sales → ↑ запрещён"
 	case "corridor_hold_overshoot":
-		return "corridor_v3: ↓ пропустил бы ниже lo → hold"
+		return "corridor_v4: soft↓ пропустил бы ниже lo → hold"
 	case "corridor_hold_down_cd":
-		return "corridor_v3: soft↓ на cooldown → hold"
+		return "corridor_v4: soft↓ на cooldown → hold"
 	case "price_down_buy_surge":
 		return "surge: всплеск buys при стоке ≥ цели → −цена"
 	// legacy (старые логи/БД)
@@ -789,10 +811,10 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// stock_corridor_v3 — стратегический fill-контроллер.
+	// stock_corridor_v4 — стратегический fill-контроллер.
 	// Мёртвая зона [lo,hi]≈18–25%: только hold.
-	// Сверху hi: soft↓ каждый цикл (не HOLD 25–28%); hard ≥35%; dump ≥50%.
-	// ↑ ниже lo: sales>0, sales≥buys, без try-veto, streak<3.
+	// Сверху hi: soft↓ (с overshoot-guard); ≥35% hard↓ без guard; ≥50% dump.
+	// ↑ ниже lo: сильный спрос, sales>buys, try-veto, streak≤1, up-cooldown.
 	// ═══════════════════════════════════════════════════════════════════
 
 	targetLo, targetHi, targetSoft, targetOver, targetDump := stockTargets(share)
@@ -800,6 +822,7 @@ func adjustPrice(item string) AdjustReport {
 	if share > 0 {
 		stockLoad = float64(totalHeld) / float64(share)
 	}
+	prevCycleSales := state.LastCycleSales // до обновления в конце цикла
 
 	underbuyOK := false
 	if buys < sales {
@@ -875,16 +898,11 @@ func adjustPrice(item string) AdjustReport {
 		state.CorridorDownCooldown = 0
 
 	case totalHeld >= targetOver:
-		if downWouldUndershoot(totalHeld, sales, targetLo) {
-			action = "corridor_hold_overshoot"
-			notes = append(notes, fmt.Sprintf("held=%d ≥ over=%d но ↓ утащит < lo=%d", totalHeld, targetOver, targetLo))
-		} else {
-			applyDown("corridor_price_down_over",
-				fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d)", totalHeld, targetOver, stockLoad*100, share))
-		}
+		// v4: hard over — всегда ↓, без overshoot-guard (иначе утренний пересток залипает).
+		applyDown("corridor_price_down_over",
+			fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d)", totalHeld, targetOver, stockLoad*100, share))
 
 	case totalHeld > targetHi:
-		// v3: сразу soft↓ выше hi (раньше 25–28% был чистый HOLD — хвост не сливался).
 		trySoftDown("corridor_price_down_soft",
 			fmt.Sprintf("held=%d > hi=%d (полоса [%d,%d] soft=%d share=%d)",
 				totalHeld, targetHi, targetLo, targetHi, targetSoft, share))
@@ -899,10 +917,19 @@ func adjustPrice(item string) AdjustReport {
 			action = "corridor_hold_buy_veto"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d buys=%d ≥ sales=%d — нет чистого разбора витрины, ↑ запрещён",
 				totalHeld, targetLo, buys, sales))
-		case sales > 0 && state.CorridorUpStreak < corridorMaxUpStreak:
+		case !demandStrongEnoughForUp(sales, prevCycleSales):
+			action = "corridor_hold_weak_demand"
+			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d last=%d — слабый спрос, ↑ запрещён",
+				totalHeld, targetLo, sales, prevCycleSales))
+		case state.CorridorUpCooldown > 0:
+			action = "corridor_hold_up_cd"
+			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d но up_cd=%d — пауза после ↑",
+				totalHeld, targetLo, sales, state.CorridorUpCooldown))
+		case sales > buys && state.CorridorUpStreak < corridorMaxUpStreak:
 			applyUp("corridor_price_up_demand",
-				fmt.Sprintf("held=%d < lo=%d sales=%d > buys=%d (разбирают витрину)", totalHeld, targetLo, sales, buys))
-		case sales > 0 && state.CorridorUpStreak >= corridorMaxUpStreak:
+				fmt.Sprintf("held=%d < lo=%d sales=%d > buys=%d last=%d (сильный разбор витрины)",
+					totalHeld, targetLo, sales, buys, prevCycleSales))
+		case sales > buys && state.CorridorUpStreak >= corridorMaxUpStreak:
 			action = "corridor_hold_up_cap"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d но up_streak=%d≥%d",
 				totalHeld, targetLo, sales, state.CorridorUpStreak, corridorMaxUpStreak))
@@ -938,17 +965,21 @@ func adjustPrice(item string) AdjustReport {
 		action = "hold"
 	}
 
-	// Стрелки коридора + soft↓ cooldown
+	// Стрелки коридора + soft↓ cooldown + v4 up-cooldown / last sales
 	if strings.Contains(action, "price_up") {
 		state.CorridorUpStreak++
 		state.CorridorDeadStreak = 0
 		state.CorridorDownCooldown = 0
+		state.CorridorUpCooldown = corridorUpCooldownCycles
 	} else {
 		state.CorridorUpStreak = 0
 		if sales == 0 && buys == 0 {
 			state.CorridorDeadStreak++
 		} else {
 			state.CorridorDeadStreak = 0
+		}
+		if state.CorridorUpCooldown > 0 {
+			state.CorridorUpCooldown--
 		}
 		// Soft-cooldown тикает каждый цикл, кроме только что выставленного после soft↓.
 		if strings.Contains(action, "price_down_soft") {
@@ -968,6 +999,7 @@ func adjustPrice(item string) AdjustReport {
 		state.FillPriceCooldown--
 	}
 
+	state.LastCycleSales = sales
 	state.LastCycleProfit = profitNow
 	state.LastCycleNacenkaSum = nacenkaSumNow
 	data.AdjustState[item] = state
@@ -1071,7 +1103,7 @@ func adjustPrice(item string) AdjustReport {
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice:  totalHeld < targetLo && sales > buys && state.CorridorUpStreak < corridorMaxUpStreak && !trySellsBlockUp(sales, trySells),
+			CanRaisePrice:  totalHeld < targetLo && sales > buys && demandStrongEnoughForUp(sales, prevCycleSales) && state.CorridorUpCooldown == 0 && state.CorridorUpStreak < corridorMaxUpStreak && !trySellsBlockUp(sales, trySells),
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  online,
 		}
