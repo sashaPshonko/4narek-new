@@ -147,6 +147,8 @@ func initMLLog() {
 	)`)
 	// nacenka на сделку — для маржи sell−buy без join к decisions
 	ensureMLColumn(db, "trade_events", "nacenka", "INTEGER")
+	ensureMLColumn(db, "trade_events", "enchants_json", "TEXT")
+	ensureMLColumn(db, "trade_events", "durability", "REAL")
 
 	_, _ = db.Exec(`
 CREATE TABLE IF NOT EXISTS ml_decisions (
@@ -692,7 +694,7 @@ func queueMLDecisionLocked(
 	mlPendingByCategory[cfg.Type] = p
 }
 
-func logTradeEventML(item, eventType string, price int) {
+func logTradeEventML(item, eventType string, price int, enchantsJSON string, durability *float64) {
 	if mlDB == nil {
 		return
 	}
@@ -706,11 +708,19 @@ func logTradeEventML(item, eventType string, price int) {
 		nac = getNacenka(item)
 	}
 	ts := time.Now().UTC().Format(time.RFC3339)
+	var dur any
+	if durability != nil {
+		dur = *durability
+	}
+	ench := enchantsJSON
+	if ench == "" {
+		ench = "[]"
+	}
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
 	_, err := mlDB.Exec(
-		`INSERT INTO trade_events (ts, item_id, category_type, event_type, price, nacenka) VALUES (?, ?, ?, ?, ?, ?)`,
-		ts, item, category, eventType, price, nac,
+		`INSERT INTO trade_events (ts, item_id, category_type, event_type, price, nacenka, enchants_json, durability) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		ts, item, category, eventType, price, nac, ench, dur,
 	)
 	if err != nil {
 		log.Printf("[ML] trade_events insert %s %s: %v", item, eventType, err)
@@ -814,13 +824,16 @@ func rebuildTradeEventsTable(db *sql.DB) {
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS trade_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		ts TEXT NOT NULL, item_id TEXT NOT NULL, category_type TEXT NOT NULL,
-		event_type TEXT NOT NULL, price INTEGER, nacenka INTEGER
+		event_type TEXT NOT NULL, price INTEGER, nacenka INTEGER,
+		enchants_json TEXT, durability REAL
 	)`)
 	if err != nil {
 		log.Printf("[ML] recreate trade_events: %v", err)
 		return
 	}
 	ensureMLColumn(db, "trade_events", "nacenka", "INTEGER")
+	ensureMLColumn(db, "trade_events", "enchants_json", "TEXT")
+	ensureMLColumn(db, "trade_events", "durability", "REAL")
 
 	srcRows, err := db.Query(`SELECT ts, item_id, category_type, event_type, price, COALESCE(nacenka,0) FROM "` + bak + `"`)
 	if err != nil {

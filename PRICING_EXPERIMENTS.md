@@ -1,4 +1,4 @@
-# Ценообразование 4narek: эксперименты classic → stock_corridor_v4
+# Ценообразование 4narek: эксперименты classic → stock_corridor_v5
 
 Документ для быстрого погружения. Код: `4narek-new/pricing.go`, политика в логе: `capital_log.go` → `capitalPolicy`. Метрики: `ml_data/pricing.db` → таблица `capital_cycles`.
 
@@ -75,9 +75,9 @@ Policy: `stock_corridor_v3`.
 
 ---
 
-## stock_corridor_v4 (21.07.2026) ← текущий
+## stock_corridor_v4 (21–23.07.2026)
 
-**Проблемы, которые закрываем:**
+**Проблемы, которые закрывали:**
 1. Ложный дефицит / ночной разгон на крошках sales
 2. Ползучий ↑ через ↑–hold–↑
 3. Залипание hard-over из‑за overshoot-guard утром при перестоке
@@ -94,11 +94,63 @@ Policy: `stock_corridor_v3`.
 - soft (> hi): как v3, с overshoot-guard
 - **over (≥ 35%) и dump (≥ 50%): всегда ↓**, overshoot-guard **снят** (v4)
 
-**Онлайн:** по-прежнему только в лог / ML snapshot. В ветку решения **не входит** — на текущих данных не улучшает отбор ↑ лучше, чем порог sales + cooldown.
-
 Новые action labels: `corridor_hold_weak_demand`, `corridor_hold_up_cd`.
 
 Policy: `stock_corridor_v4`.
+
+### Live-разбор v4 (снимок 23.07.2026)
+
+Источник: `VACUUM INTO` с Go VPS → `4narek-ml/data/pricing.db`.  
+Окно v4: **21.07 19:40 – 23.07 15:01 MSK**, **4174** цикла. Сравнение с v3 (19–21.07, 5235).
+
+| метрика | v3 | **v4** | вердикт |
+|--------|---:|-------:|---------|
+| UP % | 12.7 | **10.7** | чуть реже ↑ |
+| HOLD % | 77.1 | **81.8** | ок |
+| DOWN % | 10.1 | 7.5 | меньше ↓ (сток тоньше) |
+| avg sales / цикл | 4.09 | 4.07 | объём не просел |
+| avg profit_now / цикл | 1.98M | **2.04M** | не хуже |
+| fwd после UP (M) | 1.39 | **1.76** | ↑ качественнее |
+| fwd после HOLD / DOWN | 1.76 / 4.73 | 1.76 / **4.96** | паритет / лучше |
+| zero-activity ночь 03–09 | 31.2% | **22.9%** | лучше |
+| UP% ночь 03–09 | 12.4 | **8.0** | цель чеклиста ✓ |
+| sales≤2 среди ночных ↑ | 63.6% (91/143) | **16.3% (15/92)** | weak_demand работает |
+| sales≥3 среди всех ↑ | 76% | **93%** | ✓ |
+| слабые ночные climb (sales_sum&lt;40) | **7** (до +0.9M) | **2** (до +0.2M) | цель ✓ |
+| fill в полосе 18–25% | 23% | **17%** | чаще недобор |
+| fill &lt; 18% | 42% | **57%** | сток тоньше |
+
+Новые action (v4 only): `weak_demand` 208 (5%), `up_cd` 230 (5.5%) — в основном режут ночной мусор (weak: avg sales 1.3, 57% ночью). Днём weak_demand почти только sales=1–2 (не режет живой спрос ≥3).
+
+Дневной спрос (sales≥5): UP% 19.4 → 18.9 — **не убит**. fwd после дневного UP даже выше (2.34M vs 1.68M у v3 day).
+
+**Чеклист v4:** закрыт по ночи/объёму. Осталось: ночной ↑ fwd&lt;0, тонкий fill, позор на floor.
+
+Canvas: `pricing-corridor-v4`.
+
+---
+
+## stock_corridor_v5 (23.07.2026) ← текущий
+
+**Проблемы из live v4:**
+1. Ночной ↑ (даже при sales≥3) давал fwd ≈ −0.42M
+2. ↑ при held=0 — пустая витрина ≠ «надо поднять цену»
+3. Fill часто ниже lo (up_cd=2 + жёсткие veto)
+
+**Правила ↑ vs v4:**
+1. try-veto / buy-veto — без изменений
+2. **empty:** `held ≤ 0` → `corridor_hold_empty` (↑ запрещён)
+3. **weak_demand:** день как v4 (sales≥3 или sustained≥2); **ночь 03–09 MSK: только sales≥4**, sustained×2 ночью выключен
+4. **up_cooldown = 1** (было 2) — быстрее отвечать на реальный разбор
+5. streak ≤ 1
+
+↓ без изменений (soft / over / dump).
+
+Новый label: `corridor_hold_empty`.
+
+Policy: `stock_corridor_v5`.
+
+**Сознательно не в v5:** стоп-закуп позора на floor (это buy-path ботов, не sell-коридор). Онлайн в решение — нет.
 
 ---
 
@@ -129,7 +181,7 @@ sqlite3 ~/4narek-new/ml_data/pricing.db \
 - доля UP/HOLD/DOWN по дням и policy
 - avg `fwd_profit_3` после UP vs HOLD vs DOWN
 - ночные окна UTC 00–06 (= 03–09 MSK): zero-activity %, climb по item
-- новые hold: `weak_demand`, `up_cd`
+- новые hold: `weak_demand`, `up_cd`, `empty` (v5)
 
 ---
 
@@ -138,8 +190,9 @@ sqlite3 ~/4narek-new/ml_data/pricing.db \
 | Идея | Статус |
 |------|--------|
 | Крутить nacenka в коридоре | Отвергнуто: маржа/закуп отделены от sell-контроля |
-| Жёсткий бан ↑ ночью по часам | Хрупко к смене онлайна; заменено порогом sales |
-| ↑ от `players_online` | corr с UP≈0; отложено, пока sales-гейт не доказан в проде |
+| Жёсткий бан ↑ ночью (0 ↑) | Отвергнуто; в v5 — **мягкий** порог sales≥4 ночью 03–09 MSK |
+| ↑ от `players_online` | corr с UP≈0; отложено |
+| Стоп-закуп позора на floor | Отложено: buy-path ботов, не sell-коридор |
 | ML как основной контроллер | Shadow/лог есть; live-решение — corridor rules |
 | Вернуть classic NormalSales | Хуже по fwd на истории |
 
@@ -150,14 +203,14 @@ sqlite3 ~/4narek-new/ml_data/pricing.db \
 - `4narek-new/pricing.go` — алгоритм
 - `4narek-new/capital_log.go` — `capitalPolicy`, запись циклов
 - `4narek-new/online.go` — снимок онлайна (лог)
-- Canvases (разборы): `pricing-corridor-v3`, `false-scarcity-up`, `online-pricing-dependency`, `pricing-algo-retrospective`
+- Canvases (разборы): `pricing-corridor-v4`, `pricing-corridor-v3`, `false-scarcity-up`, `online-pricing-dependency`, `pricing-algo-retrospective`
 
 ---
 
-## Чеклист следующего эксперимента (v5?)
+## Чеклист следующего эксперимента (после v5)
 
-Только после ≥1–2 ночей на v4:
-1. Стало ли меньше climb 03–09 MSK при живых ботах?
-2. Не упал ли дневной объём продаж на предметах с реальным разбором (sales≥5)?
-3. Если weak_demand режет слишком много дневных ↑ — снизить пол до 2 **или** привязать порог к `share` (`max(2, share/20)`).
-4. Онлайн снова рассматривать только если после v4 ночной мусор останется при sales≥3.
+После ≥1 ночи на v5:
+1. fwd после ночного ↑: стал ≥0 / ближе к hold?
+2. доля `corridor_hold_empty` и не режет ли дневной живой ↑?
+3. fill&lt;8%: стало лучше после up_cd=1?
+4. Позор / floor-lock — отдельный эксперимент (buy-cap), не в коридоре.

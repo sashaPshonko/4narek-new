@@ -2,7 +2,7 @@
   "pochti-megasword-1.21": {
     "base_price": 2300002,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -29,8 +29,53 @@
         "lvl": 1
       }
     ],
+    "max_effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      }
+    ],
     "nacenka": 300000,
     "num": 5
+  },
+  "pochti-megasword-6-1.21": {
+    "base_price": 2000021,
+    "normal_sales": 4,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 6
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "poison",
+        "lvl": 1
+      },
+      {
+        "name": "detection",
+        "lvl": 1
+      }
+    ],
+    "max_effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 6
+      }
+    ],
+    "nacenka": 300000,
+    "num": 4
   },
   "sword7-1.21": {
     "base_price": 1000003,
@@ -231,7 +276,7 @@
   "фарм-1.21": {
     "base_price": 1000013,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -252,6 +297,47 @@
       {
         "name": "minecraft:looting",
         "lvl": 5
+      }
+    ],
+    "max_effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      }
+    ],
+    "nacenka": 300000,
+    "num": 3
+  },
+  "фарм-6-1.21": {
+    "base_price": 700020,
+    "normal_sales": 4,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 6
+      },
+      {
+        "name": "minecraft:looting",
+        "lvl": 5
+      }
+    ],
+    "max_effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 6
       }
     ],
     "nacenka": 300000,

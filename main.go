@@ -43,6 +43,17 @@ type ItemEffect struct {
 	Lvl  int    `json:"lvl"`
 }
 
+func tradeEnchantsJSON(enchants []ItemEffect) string {
+	if len(enchants) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(enchants)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
 type PriceRecord struct {
 	Price int       `json:"price"`
 	Time  time.Time `json:"time"`
@@ -1144,14 +1155,16 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var msg struct {
-			Action      string         `json:"action"`
-			Type        string         `json:"type"`
-			Items       map[string]int `json:"items"`
-			Inventory   map[string]int `json:"inventory"`
-			Types       []string       `json:"types"`
-			ActiveTypes  []string       `json:"active_types"`
-			BotsPerType  map[string]int `json:"bots_per_type"`
-			Price        int            `json:"price"`
+			Action         string         `json:"action"`
+			Type           string         `json:"type"`
+			Items          map[string]int `json:"items"`
+			Inventory      map[string]int `json:"inventory"`
+			Types          []string       `json:"types"`
+			ActiveTypes    []string       `json:"active_types"`
+			BotsPerType    map[string]int `json:"bots_per_type"`
+			Price          int            `json:"price"`
+			Enchants       []ItemEffect   `json:"enchants"`
+			Durability     *float64       `json:"durability"`
 			Floors         map[string]int `json:"floors"`
 			WindowStartMs  int64          `json:"window_start_ms"`
 			WindowEndMs    int64          `json:"window_end_ms"`
@@ -1180,12 +1193,15 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	ActiveTypes   []string       `json:"active_types"`
 	BotsPerType   map[string]int `json:"bots_per_type"`
 	Price         int            `json:"price"`
+	Enchants      []ItemEffect   `json:"enchants"`
+	Durability    *float64       `json:"durability"`
 	Floors        map[string]int `json:"floors"`
 	WindowStartMs int64          `json:"window_start_ms"`
 	WindowEndMs   int64          `json:"window_end_ms"`
 	WindowMs      int64          `json:"window_ms"`
 }) {
 	mutex.Lock()
+	enchJSON := tradeEnchantsJSON(msg.Enchants)
 	switch msg.Action {
 	case "buy":
 		data.BuyStats[msg.Type]++
@@ -1193,7 +1209,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy", Price: msg.Price})
 		data.BuySum[msg.Type] += msg.Price
 		addPriceToHistory(msg.Type, msg.Price)
-		logTradeEventML(msg.Type, "buy", msg.Price)
+		logTradeEventML(msg.Type, "buy", msg.Price, enchJSON, msg.Durability)
 		surge := maybeBuySurgePriceDownLocked(msg.Type)
 		tryAdvanceCapitalForwardsLocked(time.Now())
 		mutex.Unlock()
@@ -1213,7 +1229,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			Nacenka: getNacenka(msg.Type),
 		})
 		data.SellSum[msg.Type] += msg.Price
-		logTradeEventML(msg.Type, "sell", msg.Price)
+		logTradeEventML(msg.Type, "sell", msg.Price, enchJSON, msg.Durability)
 		tryAdvanceCapitalForwardsLocked(time.Now())
 		mutex.Unlock()
 		saveDailyDataNoMessageUpdate()
@@ -1224,7 +1240,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{
 			Time: time.Now(), Type: "try-sell", Price: msg.Price,
 		})
-		logTradeEventML(msg.Type, "try-sell", msg.Price)
+		logTradeEventML(msg.Type, "try-sell", msg.Price, "", nil)
 		mutex.Unlock()
 		saveDailyDataNoMessageUpdate()
 
