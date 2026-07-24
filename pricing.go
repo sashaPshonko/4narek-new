@@ -16,27 +16,34 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
-// stock_corridor_v5 — стратегический контроллер fill=held/share.
+// stock_corridor_v6 — стратегический контроллер fill=held/share.
 //
-// v4→v5 (23.07, после 2 ночей live): ночной ↑ всё ещё fwd<0; fill тоньше цели.
-//   • ↑ запрещён при held=0 (пустая витрина ≠ дефицит цены)
-//   • ночь 03–09 MSK: sales≥4 на ↑ (днём по-прежнему ≥3 / sustained ≥2)
-//   • up_cd 2→1 — чуть быстрее реагировать на реальный разбор (качество ↑ уже жёстче)
-// v3→v4: sales≥3/sustained, up_cd=2, hard↓ без overshoot-guard.
+// v5→v6 (24.07): live v5 — ночной ↑ ок, но fill часто <18%; позор залипает сверху.
+//   • per-type полоса: позор ниже/агрессивнее ↓ (lo–hi ~10–18%, over 25%, dump 40%)
+//   • deep-↑ днём: held≤lo/2 + сильный спрос → ↑ даже на up_cd (быстрее чинить тонкий сток)
+//   • hard↓ (over/dump): шаг ×2 (асимметрия vs мягкий ↑/soft↓)
+// v4→v5: empty-veto, ночь sales≥4, up_cd=1.
 // Онлайн в решение не входит.
 //
-// История: v1 15–25%; v2 try-veto; v3 lo=18% buy-veto; v4 weak_demand+up_cd.
+// История: v1 15–25%; v2 try-veto; v3 lo=18% buy-veto; v4 weak_demand; v5 empty/night.
 const (
 	stockBandLoFrac              = 0.18
 	stockBandHiFrac              = 0.25
 	stockSoftDownFrac            = 0.28
 	stockOverFrac                = 0.35
 	stockDumpFrac                = 0.50
+	// позор: цель тоньше, hard↓ раньше — sell-коридор иначе не сливает 60–99% fill.
+	pozorBandLoFrac              = 0.10
+	pozorBandHiFrac              = 0.18
+	pozorSoftDownFrac            = 0.22
+	pozorOverFrac                = 0.25
+	pozorDumpFrac                = 0.40
 	corridorMaxUpStreak          = 1 // не два ↑ подряд
-	corridorUpCooldownCycles     = 1 // v5: после ↑ ещё N циклов без ↑ (было 2)
+	corridorUpCooldownCycles     = 1 // после ↑ ещё N циклов без ↑ (deep-↑ может обойти)
 	corridorMinSalesForUp        = 3 // дневной пол спроса на ↑
 	corridorNightMinSalesForUp   = 4 // ночь 03–09 MSK
 	corridorSoftDownEvery        = 1
+	corridorHardDownStepMult     = 2 // over/dump: −step×2
 	tryUpVetoMinTries            = 5
 	tryUpVetoPerSale             = 2
 )
@@ -138,7 +145,7 @@ func getNacenka(item string) int {
 }
 
 // ensureNacenkasInitialized — всегда выравнивает рантайм-наценки под items_config
-// (stock_corridor_v2 не крутит nacenka; старые capital-значения из daily/runtime сбрасываем).
+// (stock_corridor не крутит nacenka; старые capital-значения из daily/runtime сбрасываем).
 func ensureNacenkasInitialized() {
 	if data.Nacenkas == nil {
 		data.Nacenkas = make(map[string]int)
@@ -228,18 +235,41 @@ func stockNormFromConfig(cfg ItemConfig) int {
 	return cfg.NormalSales
 }
 
-// stockTargets — пороги fill=held/share.
-// lo/hi — мёртвая зона (18–25%); soft — ориентир в логах; over — жёсткий ↓; dump — залипший перезапас.
-// v3: soft↓ стартует сразу с hi (не HOLD до soft).
-func stockTargets(share int) (lo, hi, soft, over, dump int) {
+// stockBandFracs — доли fill для stockTargets.
+type stockBandFracs struct {
+	lo, hi, soft, over, dump float64
+}
+
+func isPozorCategory(item string, cfg ItemConfig) bool {
+	if strings.Contains(item, "позор") {
+		return true
+	}
+	return strings.Contains(cfg.Type, "позор")
+}
+
+func stockBandFor(item string, cfg ItemConfig) stockBandFracs {
+	if isPozorCategory(item, cfg) {
+		return stockBandFracs{
+			lo: pozorBandLoFrac, hi: pozorBandHiFrac, soft: pozorSoftDownFrac,
+			over: pozorOverFrac, dump: pozorDumpFrac,
+		}
+	}
+	return stockBandFracs{
+		lo: stockBandLoFrac, hi: stockBandHiFrac, soft: stockSoftDownFrac,
+		over: stockOverFrac, dump: stockDumpFrac,
+	}
+}
+
+// stockTargets — пороги fill=held/share по полосе (default или позор).
+func stockTargets(share int, band stockBandFracs) (lo, hi, soft, over, dump int) {
 	if share <= 0 {
 		return 1, 2, 3, 4, 5
 	}
-	lo = int(float64(share)*stockBandLoFrac + 0.5)
-	hi = int(float64(share)*stockBandHiFrac + 0.5)
-	soft = int(float64(share)*stockSoftDownFrac + 0.5)
-	over = int(float64(share)*stockOverFrac + 0.5)
-	dump = int(float64(share)*stockDumpFrac + 0.5)
+	lo = int(float64(share)*band.lo + 0.5)
+	hi = int(float64(share)*band.hi + 0.5)
+	soft = int(float64(share)*band.soft + 0.5)
+	over = int(float64(share)*band.over + 0.5)
+	dump = int(float64(share)*band.dump + 0.5)
 	if lo < 1 {
 		lo = 1
 	}
@@ -256,6 +286,18 @@ func stockTargets(share int) (lo, hi, soft, over, dump int) {
 		dump = over + 1
 	}
 	return lo, hi, soft, over, dump
+}
+
+// deepUnderstock — held далеко ниже lo (≤ половины lo): тонкий сток, имеет смысл чинить ↑ быстрее.
+func deepUnderstock(totalHeld, targetLo int) bool {
+	if totalHeld <= 0 || targetLo <= 0 {
+		return false
+	}
+	thresh := targetLo / 2
+	if thresh < 1 {
+		thresh = 1
+	}
+	return totalHeld <= thresh
 }
 
 // trySellsBlockUp — рынок уже отказывается от цены: ↑ запрещён даже при недоборе стока.
@@ -546,39 +588,41 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 func actionReasonRU(action string) string {
 	switch action {
 	case "corridor_price_down_dump":
-		return "corridor_v5: held ≥ 50% share → −цена (dump залипшего перезапаса)"
+		return "corridor_v6: held ≥ dump% share → −цена×2 (dump залипшего перезапаса)"
 	case "corridor_price_down_over":
-		return "corridor_v5: held ≥ 35% share → −цена (жёсткий перезапас, без overshoot-guard)"
+		return "corridor_v6: held ≥ over% share → −цена×2 (жёсткий перезапас)"
 	case "corridor_price_down_soft":
-		return "corridor_v5: held > hi → −цена (слив хвоста выше полосы)"
+		return "corridor_v6: held > hi → −цена (слив хвоста выше полосы)"
 	case "corridor_price_down_hi":
 		return "corridor_v3(legacy): held > hi → −цена"
 	case "corridor_price_up_demand":
-		return "corridor_v5: held < lo, сильный спрос (день≥3 / ночь≥4) → +цена"
+		return "corridor_v6: held < lo, сильный спрос (день≥3 / ночь≥4) → +цена"
+	case "corridor_price_up_deep":
+		return "corridor_v6: held ≤ lo/2 днём + сильный спрос → +цена (обход up_cd)"
 	case "corridor_hold_band":
-		return "corridor_v5: held в 18–25% share → hold (мёртвая зона)"
+		return "corridor_v6: held в полосе share → hold (мёртвая зона)"
 	case "corridor_hold_hysteresis":
 		return "corridor_v3(legacy): held 25–28% → hold"
 	case "corridor_hold_filling":
-		return "corridor_v5: held < lo, идут buys, sales=0 → hold (набираем сток)"
+		return "corridor_v6: held < lo, идут buys, sales=0 → hold (набираем сток)"
 	case "corridor_hold_dead":
-		return "corridor_v5: held < lo, sales=0 buys=0 → hold (не разгонять пустоту)"
+		return "corridor_v6: held < lo, sales=0 buys=0 → hold (не разгонять пустоту)"
 	case "corridor_hold_empty":
-		return "corridor_v5: held=0 — пустая витрина, ↑ запрещён (не путать с дефицитом цены)"
+		return "corridor_v6: held=0 — пустая витрина, ↑ запрещён"
 	case "corridor_hold_weak_demand":
-		return "corridor_v5: held < lo, но спрос слабый (день крошки / ночь <4) → ↑ запрещён"
+		return "corridor_v6: held < lo, спрос слабый (день крошки / ночь <4) → ↑ запрещён"
 	case "corridor_hold_up_cap":
-		return "corridor_v5: недобор, но лимит ↑ подряд → hold"
+		return "corridor_v6: недобор, но лимит ↑ подряд → hold"
 	case "corridor_hold_up_cd":
-		return "corridor_v5: недобор, но ↑ на cooldown после прошлого ↑ → hold"
+		return "corridor_v6: недобор, но ↑ на cooldown → hold"
 	case "corridor_hold_try_veto":
-		return "corridor_v5: недобор, но try_sells≫sales → ↑ запрещён"
+		return "corridor_v6: недобор, но try_sells≫sales → ↑ запрещён"
 	case "corridor_hold_buy_veto":
-		return "corridor_v5: недобор, но buys≥sales → ↑ запрещён"
+		return "corridor_v6: недобор, но buys≥sales → ↑ запрещён"
 	case "corridor_hold_overshoot":
-		return "corridor_v5: soft↓ пропустил бы ниже lo → hold"
+		return "corridor_v6: soft↓ пропустил бы ниже lo → hold"
 	case "corridor_hold_down_cd":
-		return "corridor_v5: soft↓ на cooldown → hold"
+		return "corridor_v6: soft↓ на cooldown → hold"
 	case "price_down_buy_surge":
 		return "surge: всплеск buys при стоке ≥ цели → −цена"
 	// legacy (старые логи/БД)
@@ -680,7 +724,7 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	surgeCount := data.BuySurgeCount[item]
 
 	share := itemSlotShareLocked(cfg.Type)
-	_, _, soft, _, _ := stockTargets(share)
+	_, _, soft, _, _ := stockTargets(share, stockBandFor(item, cfg))
 	threshold := maxInt(4, soft)
 	held := getItemCount(item) + getInventoryCount(item)
 
@@ -830,14 +874,15 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// stock_corridor_v5 — стратегический fill-контроллер.
-	// Мёртвая зона [lo,hi]≈18–25%: только hold.
-	// Сверху hi: soft↓ (с overshoot-guard); ≥35% hard↓ без guard; ≥50% dump.
-	// ↑ ниже lo: held>0, сильный спрос (ночь жёстче), sales>buys, try-veto,
-	// streak≤1, up-cooldown=1.
+	// stock_corridor_v6 — стратегический fill-контроллер.
+	// Default полоса [lo,hi]≈18–25%; позор ≈10–18% + earlier over/dump.
+	// ↑ ниже lo: held>0, спрос, sales>buys, try-veto, streak≤1, up_cd
+	//   (deep-↑ днём при held≤lo/2 обходит up_cd).
+	// hard↓ over/dump: step×2.
 	// ═══════════════════════════════════════════════════════════════════
 
-	targetLo, targetHi, targetSoft, targetOver, targetDump := stockTargets(share)
+	band := stockBandFor(item, cfg)
+	targetLo, targetHi, targetSoft, targetOver, targetDump := stockTargets(share, band)
 	stockLoad := 0.0
 	if share > 0 {
 		stockLoad = float64(totalHeld) / float64(share)
@@ -862,8 +907,11 @@ func adjustPrice(item string) AdjustReport {
 		tryRatio = float64(trySells)
 	}
 
-	applyDown := func(label, note string) {
-		cand := priceBefore - step
+	applyDown := func(label, note string, stepMult int) {
+		if stepMult < 1 {
+			stepMult = 1
+		}
+		cand := priceBefore - step*stepMult
 		if cand < priceFloor {
 			cand = priceFloor
 		}
@@ -897,9 +945,8 @@ func adjustPrice(item string) AdjustReport {
 			notes = append(notes, fmt.Sprintf("%s · down_cd=%d", note, state.CorridorDownCooldown))
 			return
 		}
-		applyDown(label, note)
+		applyDown(label, note, 1)
 		if changed && strings.Contains(action, "price_down") {
-			// corridorSoftDownEvery=1 → cooldown 0 (↓ снова на след. цикле).
 			state.CorridorDownCooldown = corridorSoftDownEvery - 1
 			if state.CorridorDownCooldown < 0 {
 				state.CorridorDownCooldown = 0
@@ -913,15 +960,17 @@ func adjustPrice(item string) AdjustReport {
 		notes = append(notes, "share=0 — нет базы для коридора")
 
 	case totalHeld >= targetDump:
-		// Залипший перезапас: ↓ каждый цикл без soft-cooldown.
 		applyDown("corridor_price_down_dump",
-			fmt.Sprintf("held=%d ≥ dump=%d (%.0f%% share=%d)", totalHeld, targetDump, stockLoad*100, share))
+			fmt.Sprintf("held=%d ≥ dump=%d (%.0f%% share=%d ×%d)",
+				totalHeld, targetDump, stockLoad*100, share, corridorHardDownStepMult),
+			corridorHardDownStepMult)
 		state.CorridorDownCooldown = 0
 
 	case totalHeld >= targetOver:
-		// hard over — всегда ↓, без overshoot-guard (иначе утренний пересток залипает).
 		applyDown("corridor_price_down_over",
-			fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d)", totalHeld, targetOver, stockLoad*100, share))
+			fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d ×%d)",
+				totalHeld, targetOver, stockLoad*100, share, corridorHardDownStepMult),
+			corridorHardDownStepMult)
 
 	case totalHeld > targetHi:
 		trySoftDown("corridor_price_down_soft",
@@ -929,6 +978,8 @@ func adjustPrice(item string) AdjustReport {
 				totalHeld, targetHi, targetLo, targetHi, targetSoft, share))
 
 	case totalHeld < targetLo:
+		deep := deepUnderstock(totalHeld, targetLo)
+		bypassUpCD := deep && !nightMSK
 		switch {
 		case trySellsBlockUp(sales, trySells):
 			action = "corridor_hold_try_veto"
@@ -952,14 +1003,24 @@ func adjustPrice(item string) AdjustReport {
 				notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d last=%d — слабый спрос, ↑ запрещён",
 					totalHeld, targetLo, sales, prevCycleSales))
 			}
-		case state.CorridorUpCooldown > 0:
+		case state.CorridorUpCooldown > 0 && !bypassUpCD:
 			action = "corridor_hold_up_cd"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d но up_cd=%d — пауза после ↑",
 				totalHeld, targetLo, sales, state.CorridorUpCooldown))
 		case sales > buys && state.CorridorUpStreak < corridorMaxUpStreak:
-			applyUp("corridor_price_up_demand",
-				fmt.Sprintf("held=%d < lo=%d sales=%d > buys=%d last=%d night=%v (сильный разбор витрины)",
-					totalHeld, targetLo, sales, buys, prevCycleSales, nightMSK))
+			upLabel := "corridor_price_up_demand"
+			upNote := fmt.Sprintf("held=%d < lo=%d sales=%d > buys=%d last=%d night=%v (сильный разбор витрины)",
+				totalHeld, targetLo, sales, buys, prevCycleSales, nightMSK)
+			if bypassUpCD && state.CorridorUpCooldown > 0 {
+				upLabel = "corridor_price_up_deep"
+				half := targetLo / 2
+				if half < 1 {
+					half = 1
+				}
+				upNote = fmt.Sprintf("held=%d ≤ lo/2=%d sales=%d > buys=%d — deep-↑ обход up_cd=%d",
+					totalHeld, half, sales, buys, state.CorridorUpCooldown)
+			}
+			applyUp(upLabel, upNote)
 		case sales > buys && state.CorridorUpStreak >= corridorMaxUpStreak:
 			action = "corridor_hold_up_cap"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d но up_streak=%d≥%d",
@@ -973,7 +1034,6 @@ func adjustPrice(item string) AdjustReport {
 		}
 
 	default:
-		// Мёртвая зона [lo, hi]: только hold. Soft↓ внутри полосы убран (выбивал вниз).
 		action = "corridor_hold_band"
 		notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] share=%d", totalHeld, targetLo, targetHi, share))
 	}
