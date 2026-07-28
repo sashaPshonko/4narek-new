@@ -21,7 +21,7 @@ const botTotalSlots = 32
 // v6→v7 (28.07): после дампа цен held=0/sales=0 залипали: buys≥sales ловило 0≥0 → buy_veto,
 //   empty/weak блокировали ↑. Цены у BasePrice/floor не поднимались.
 //   • buy-veto только при реальной активности (buys+sales>0)
-//   • recover-↑ днём у пола (≤floor+2·step), даже без sales — медленный выход с дампа
+//   • recover-↑ днём до max(floor+12·step, 2×BasePrice), даже без sales — выход с дампа
 // v5→v6: полоса позора, deep-↑, hard↓×2.
 // Онлайн в решение не входит.
 //
@@ -300,12 +300,20 @@ func deepUnderstock(totalHeld, targetLo int) bool {
 	return totalHeld <= thresh
 }
 
-// nearSellFloor — цена у пола (BasePrice / minBuy+nac): типичный след ручного дампа.
-func nearSellFloor(price, floor, step int) bool {
+// recoverPriceCap — до куда можно медленно ↑ без sales после дампа.
+// Антиvacuum: выше капа без спроса не лезем. Кап ≈ max(floor+12·step, 2×BasePrice).
+func recoverPriceCap(cfg ItemConfig, floor, step int) int {
 	if step < 1 {
 		step = 1
 	}
-	return price <= floor+2*step
+	cap := floor + 12*step
+	if cfg.BasePrice > 0 {
+		soft := cfg.BasePrice * 2
+		if soft > cap {
+			cap = soft
+		}
+	}
+	return cap
 }
 
 // trySellsBlockUp — рынок уже отказывается от цены: ↑ запрещён даже при недоборе стока.
@@ -608,7 +616,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_deep":
 		return "corridor_v7: held ≤ lo/2 днём + сильный спрос → +цена (обход up_cd)"
 	case "corridor_price_up_recover":
-		return "corridor_v7: у пола после дампа → медленный ↑ без sales"
+		return "corridor_v7: ниже recover-капа после дампа → медленный ↑ без sales"
 	case "corridor_hold_band":
 		return "corridor_v7: held в полосе share → hold (мёртвая зона)"
 	case "corridor_hold_hysteresis":
@@ -989,7 +997,7 @@ func adjustPrice(item string) AdjustReport {
 	case totalHeld < targetLo:
 		deep := deepUnderstock(totalHeld, targetLo)
 		bypassUpCD := deep && !nightMSK
-		atFloor := nearSellFloor(priceBefore, priceFloor, step)
+		atFloor := priceBefore < recoverPriceCap(cfg, priceFloor, step)
 		recoverOK := atFloor && !nightMSK &&
 			state.CorridorUpCooldown == 0 &&
 			state.CorridorUpStreak < corridorMaxUpStreak &&
@@ -1037,9 +1045,10 @@ func adjustPrice(item string) AdjustReport {
 			}
 			applyUp(upLabel, upNote)
 		case recoverOK:
+			cap := recoverPriceCap(cfg, priceFloor, step)
 			applyUp("corridor_price_up_recover",
-				fmt.Sprintf("held=%d < lo=%d price=%d ≤ floor+2step=%d — recover-↑ после дампа",
-					totalHeld, targetLo, priceBefore, priceFloor+2*step))
+				fmt.Sprintf("held=%d < lo=%d price=%d < recoverCap=%d — recover-↑ после дампа",
+					totalHeld, targetLo, priceBefore, cap))
 		case sales > buys && state.CorridorUpStreak >= corridorMaxUpStreak:
 			action = "corridor_hold_up_cap"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d но up_streak=%d≥%d",
@@ -1213,7 +1222,7 @@ func adjustPrice(item string) AdjustReport {
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice:  totalHeld < targetLo && state.CorridorUpCooldown == 0 && state.CorridorUpStreak < corridorMaxUpStreak && !trySellsBlockUp(sales, trySells) && ((totalHeld > 0 && sales > buys && demandStrongEnoughForUp(sales, prevCycleSales, nightMSK)) || (nearSellFloor(priceBefore, priceFloor, step) && !nightMSK && !((buys > sales) || (buys >= sales && buys+sales > 0)))),
+			CanRaisePrice:  totalHeld < targetLo && state.CorridorUpCooldown == 0 && state.CorridorUpStreak < corridorMaxUpStreak && !trySellsBlockUp(sales, trySells) && ((totalHeld > 0 && sales > buys && demandStrongEnoughForUp(sales, prevCycleSales, nightMSK)) || (priceBefore < recoverPriceCap(cfg, priceFloor, step) && !nightMSK && !((buys > sales) || (buys >= sales && buys+sales > 0)))),
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  online,
 		}
