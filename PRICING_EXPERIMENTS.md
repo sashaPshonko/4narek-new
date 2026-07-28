@@ -161,8 +161,8 @@ Policy: `stock_corridor_v5`.
 
 **Правила vs v6:**
 1. **buy-veto** только при живом обороте (`buys+sales>0`)
-2. **recover-↑** днём: цена < max(floor+12·step, 2×BasePrice), сток < lo, нет try-veto → ↑ с up_cd (даже без sales)
-3. Высокий vacuum (held=0 далеко над полом) по-прежнему без ↑
+2. **buy-veto** только при `buys > sales` (не при `buys==sales` / `0==0`)
+3. **recover-↑** днём при `held < lo` без try/buy-veto; **без BasePrice**. Deep-недобор обходит up_cd/streak. Тормоз: ≤8 ↑ без buys → пауза + редкий resume
 
 Policy: `stock_corridor_v7`.
 
