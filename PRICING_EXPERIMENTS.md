@@ -154,7 +154,21 @@ Policy: `stock_corridor_v5`.
 
 ---
 
-## stock_corridor_v6 (24.07.2026) ← текущий
+## stock_corridor_v7 (28.07.2026) ← текущий
+
+**Проблема live v6 после ручного дампа:** цены на BasePrice/floor с `held=0` не поднимались.
+`buys≥sales` ловило `0≥0` → вечный `buy_veto`; empty/weak резали ↑.
+
+**Правила vs v6:**
+1. **buy-veto** только при живом обороте (`buys+sales>0`)
+2. **recover-↑** днём: цена ≤ floor+2·step, сток < lo, нет try-veto → ↑ раз в цикл с up_cd (даже без sales)
+3. Высокий vacuum (held=0 далеко над полом) по-прежнему без ↑
+
+Policy: `stock_corridor_v7`.
+
+---
+
+## stock_corridor_v6 (24.07.2026)
 
 **Проблемы из live v5:**
 1. Fill часто < lo — up_cd тормозит восстановление при глубоком недоборе
