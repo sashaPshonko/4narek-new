@@ -49,6 +49,7 @@ const (
 	// recover-↑ без BasePrice: можно ↑ при недоборе без sales, но не бесконечно в пустоту.
 	corridorMaxNoBuyUps          = 8 // столько ↑ подряд без buys → пауза (антиvacuum)
 	corridorNoBuyUpResumeEvery   = 4 // раз в N мёртвых циклов разрешить ещё одну попытку
+	corridorRecoverMaxSteps      = 10 // recover не поднимает выше floor + N×step (demand-↑ без лимита)
 )
 
 // AdjustReport — итог цикла adjustPrice для TG/логов.
@@ -607,6 +608,8 @@ func actionReasonRU(action string) string {
 		return "corridor_v7: held ≤ lo/2 днём + сильный спрос → +цена (обход up_cd)"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
 		return "corridor_v7: недобор стока, рынок молчит → ↑ (без BasePrice)"
+	case "corridor_hold_recover_ceiling":
+		return "corridor_v7: recover упёрся в потолок (floor + N×step) — ждём demand"
 	case "corridor_hold_recover_pause":
 		return "corridor_v7: слишком много ↑ без buys → пауза (антиvacuum)"
 	case "corridor_hold_band":
@@ -997,12 +1000,14 @@ func adjustPrice(item string) AdjustReport {
 		// deep (пусто/почти пусто): обход up_cd и streak — быстрее выход с пола после дампа.
 		recoverCDOK := state.CorridorUpCooldown == 0 || bypassUpCD
 		recoverStreakOK := state.CorridorUpStreak < corridorMaxUpStreak || bypassUpCD
+		recoverAtCeiling := priceBefore >= priceFloor+corridorRecoverMaxSteps*step
 		recoverOK := !nightMSK &&
 			recoverCDOK &&
 			recoverStreakOK &&
 			!trySellsBlockUp(sales, trySells) &&
 			!liveBuyVeto &&
-			!noBuyBlocked
+			!noBuyBlocked &&
+			!recoverAtCeiling
 		switch {
 		case trySellsBlockUp(sales, trySells):
 			action = "corridor_hold_try_veto"
@@ -1053,6 +1058,10 @@ func adjustPrice(item string) AdjustReport {
 					totalHeld, targetLo, state.CorridorNoBuyUpStreak, corridorMaxNoBuyUps)
 			}
 			applyUp(label, note)
+		case recoverAtCeiling:
+			action = "corridor_hold_recover_ceiling"
+			notes = append(notes, fmt.Sprintf("held=%d < lo=%d price=%d ≥ floor+%d×step=%d — потолок recover",
+				totalHeld, targetLo, priceBefore, corridorRecoverMaxSteps, priceFloor+corridorRecoverMaxSteps*step))
 		case noBuyBlocked:
 			action = "corridor_hold_recover_pause"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d — пауза recover: %d ↑ без buys (антиvacuum)",

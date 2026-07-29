@@ -70,6 +70,7 @@ const priceHistoryLimit = 30
 // priceHistoryFloorRank — N-я самая дешёвая покупка из последних Limit для sell-floor
 // (1 = абсолютный минимум среди последних покупок).
 const priceHistoryFloorRank = 1
+var priceHistoryMaxAge = 30 * time.Minute // записи старше 30 мин не участвуют в floor
 
 var (
 	upgrader = websocket.Upgrader{
@@ -1450,16 +1451,22 @@ func addPriceToHistory(item string, price int) {
 
 // getMinPriceFromHistory — цена закупа для sell-floor:
 // N-я самая дешёвая среди последних покупок (N = priceHistoryFloorRank).
-// Если записей меньше N — берём самую дорогую из имеющихся (мягкий floor при малой выборке).
+// Записи старше priceHistoryMaxAge игнорируются — floor остаётся актуальным.
 func getMinPriceFromHistory(item string) int {
 	hist := priceHistory[item]
 	if hist == nil || len(hist.Records) == 0 {
 		return 0
 	}
 
-	prices := make([]int, len(hist.Records))
-	for i, r := range hist.Records {
-		prices[i] = r.Price
+	cutoff := time.Now().Add(-priceHistoryMaxAge)
+	var prices []int
+	for _, r := range hist.Records {
+		if r.Time.After(cutoff) {
+			prices = append(prices, r.Price)
+		}
+	}
+	if len(prices) == 0 {
+		return 0
 	}
 	sort.Ints(prices)
 
