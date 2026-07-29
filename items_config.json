@@ -169,11 +169,21 @@
         "lvl": 2
       }
     ],
+    "max_effects": [
+      {
+        "name": "poison",
+        "lvl": 2
+      },
+      {
+        "name": "detection",
+        "lvl": 2
+      }
+    ],
     "nacenka": 400000,
     "num": 6
   },
   "megasword-яд3-1.21": {
-    "base_price": 3500007,
+    "base_price": 3600007,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 100000,
@@ -413,25 +423,37 @@
     "nacenka": 300000,
     "num": 3
   },
-  "кирка-ванильная-1.21": {
-    "base_price": 1400017,
-    "normal_sales": 5,
-    "normal_count": 4,
+  "кирка-бульд-маг-1.21": {
+    "base_price": 1000018,
+    "normal_sales": 6,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
     "type": "netherite_pickaxe-1.21",
     "effects": [
       {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
         "name": "minecraft:efficiency",
         "lvl": 3
+      },
+      {
+        "name": "buldozing",
+        "lvl": 2
+      },
+      {
+        "name": "magnet",
+        "lvl": 1
       }
     ],
     "nacenka": 300000,
     "num": 1
   },
-  "кирка-ванильная-маг-1.21": {
-    "base_price": 1400018,
+  "кирка-эфф7-1.21": {
+    "base_price": 2000023,
     "normal_sales": 5,
     "normal_count": 4,
     "price_step": 100000,
@@ -440,40 +462,58 @@
     "type": "netherite_pickaxe-1.21",
     "effects": [
       {
-        "name": "minecraft:efficiency",
+        "name": "minecraft:unbreaking",
         "lvl": 3
       },
       {
-        "name": "magnet",
+        "name": "minecraft:efficiency",
+        "lvl": 7
+      }
+    ],
+    "forbidden_effects": [
+      {
+        "name": "buldozing",
         "lvl": 1
       }
     ],
-    "nacenka": 300000,
+    "nacenka": 400000,
     "num": 2
   },
-  "кирка-бульд-1.21": {
-    "base_price": 1200017,
-    "normal_sales": 5,
-    "normal_count": 4,
+  "кирка-мид-1.21": {
+    "base_price": 1200022,
+    "normal_sales": 6,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
     "type": "netherite_pickaxe-1.21",
     "effects": [
       {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
         "name": "minecraft:efficiency",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fortune",
         "lvl": 3
       },
       {
         "name": "buldozing",
         "lvl": 2
+      },
+      {
+        "name": "magnet",
+        "lvl": 1
       }
     ],
     "nacenka": 300000,
     "num": 3
   },
-  "кирка-бульд-маг-1.21": {
-    "base_price": 1500018,
+  "кирка-топ-1.21": {
+    "base_price": 2700025,
     "normal_sales": 5,
     "normal_count": 4,
     "price_step": 100000,
@@ -482,152 +522,9 @@
     "type": "netherite_pickaxe-1.21",
     "effects": [
       {
-        "name": "minecraft:efficiency",
+        "name": "minecraft:unbreaking",
         "lvl": 3
       },
-      {
-        "name": "buldozing",
-        "lvl": 2
-      },
-      {
-        "name": "magnet",
-        "lvl": 1
-      }
-    ],
-    "nacenka": 300000,
-    "num": 4
-  },
-  "кирка-эфф6-1.21": {
-    "base_price": 1500019,
-    "normal_sales": 4,
-    "normal_count": 3,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "effects": [
-      {
-        "name": "minecraft:efficiency",
-        "lvl": 6
-      }
-    ],
-    "nacenka": 300000,
-    "num": 5
-  },
-  "кирка-эфф6-маг-1.21": {
-    "base_price": 1600020,
-    "normal_sales": 4,
-    "normal_count": 3,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "effects": [
-      {
-        "name": "minecraft:efficiency",
-        "lvl": 6
-      },
-      {
-        "name": "magnet",
-        "lvl": 1
-      }
-    ],
-    "nacenka": 300000,
-    "num": 6
-  },
-  "кирка-эфф6-бульд-1.21": {
-    "base_price": 1300021,
-    "normal_sales": 4,
-    "normal_count": 3,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "effects": [
-      {
-        "name": "minecraft:efficiency",
-        "lvl": 6
-      },
-      {
-        "name": "buldozing",
-        "lvl": 2
-      }
-    ],
-    "nacenka": 300000,
-    "num": 7
-  },
-  "кирка-эфф6-бульд-маг-1.21": {
-    "base_price": 2200022,
-    "normal_sales": 4,
-    "normal_count": 3,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "effects": [
-      {
-        "name": "minecraft:efficiency",
-        "lvl": 6
-      },
-      {
-        "name": "buldozing",
-        "lvl": 2
-      },
-      {
-        "name": "magnet",
-        "lvl": 1
-      }
-    ],
-    "nacenka": 300000,
-    "num": 8
-  },
-  "кирка-эфф7-1.21": {
-    "base_price": 2000023,
-    "normal_sales": 4,
-    "normal_count": 3,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "effects": [
-      {
-        "name": "minecraft:efficiency",
-        "lvl": 7
-      }
-    ],
-    "nacenka": 400000,
-    "num": 9
-  },
-  "кирка-эфф7-бульд-1.21": {
-    "base_price": 2200024,
-    "normal_sales": 4,
-    "normal_count": 3,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "effects": [
-      {
-        "name": "minecraft:efficiency",
-        "lvl": 7
-      },
-      {
-        "name": "buldozing",
-        "lvl": 2
-      }
-    ],
-    "nacenka": 400000,
-    "num": 10
-  },
-  "кирка-топ-1.21": {
-    "base_price": 2700025,
-    "normal_sales": 4,
-    "normal_count": 3,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "effects": [
       {
         "name": "minecraft:efficiency",
         "lvl": 7
@@ -642,32 +539,7 @@
       }
     ],
     "nacenka": 500000,
-    "num": 11
-  },
-  "кирка-силк-1.21": {
-    "base_price": 2700026,
-    "normal_sales": 4,
-    "normal_count": 3,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "effects": [
-      {
-        "name": "minecraft:efficiency",
-        "lvl": 7
-      },
-      {
-        "name": "minecraft:silk_touch",
-        "lvl": 1
-      },
-      {
-        "name": "buldozing",
-        "lvl": 2
-      }
-    ],
-    "nacenka": 500000,
-    "num": 12
+    "num": 4
   },
   "шлем-позор-1.21": {
     "base_price": 500012,
