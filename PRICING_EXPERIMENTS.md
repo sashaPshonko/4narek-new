@@ -251,7 +251,7 @@ sqlite3 ~/4narek-new/ml_data/pricing.db \
 
 **megasword-яд3 (добавлен 29.07):**
 - фильтр: `poison≥3 + detection≥3`, `num=7` (перебивает megasword num=6)
-- base=1.2M (ориентир на sell mass с вайпа; свежих данных мало)
+- base=3.5M (текущая live-цена megasword из capital; p3d3 sell 28–29 ≈3.0M)
 - цель: увидеть реальный buy-распредел p3d3 без смешения с p2d2
 
 ---
