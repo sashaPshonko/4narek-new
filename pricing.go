@@ -16,16 +16,17 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
-// stock_corridor_v7 — v6 + выход с пола после ручного дампа.
+// stock_corridor_v8 — v7 + profit-skim в полосе.
 //
-// v6→v7 (28.07): после дампа held=0/sales=0 залипали: buys≥sales ловило 0≥0 → buy_veto.
-//   • buy-veto только buys > sales
-//   • recover-↑ при недоборе без sales; deep обходит cd/streak; стоп после N ↑ без buys
-//   • BasePrice только дефолт/floor конфига, не в решении ↑/↓
-// v5→v6: полоса позора, deep-↑, hard↓×2.
+// v7→v8 (29.07): в [lo,hi] всегда был hold → цена залипала в «удобном» равновесии
+// (шлемы 1.2M вместо прибыльных ~2.5M). Skim: если сток в полосе и рынок реально
+// разбирает (sales>buys, strong demand, без try/buy-veto) → ↑ пробуем дороже.
+// Не ночью. Те же veto/cd/streak, что у demand-↑. Soft↓ при перестоке откатывает.
+//
+// v6→v7 (28.07): recover-↑ с пола; buy-veto только buys>sales.
 // Онлайн в решение не входит.
 //
-// История: v1 15–25%; v2 try-veto; v3 lo=18% buy-veto; v4 weak_demand; v5 empty/night; v6 …
+// История: v1 15–25%; v2 try-veto; v3 lo=18% buy-veto; v4 weak_demand; v5 empty/night; v6–v7 …
 const (
 	stockBandLoFrac              = 0.18
 	stockBandHiFrac              = 0.25
@@ -603,35 +604,39 @@ func actionReasonRU(action string) string {
 	case "corridor_price_down_hi":
 		return "corridor_v3(legacy): held > hi → −цена"
 	case "corridor_price_up_demand":
-		return "corridor_v7: held < lo, сильный спрос (день≥3 / ночь≥4) → +цена"
+		return "corridor_v8: held < lo, сильный спрос (день≥3 / ночь≥4) → +цена"
 	case "corridor_price_up_deep":
-		return "corridor_v7: held ≤ lo/2 днём + сильный спрос → +цена (обход up_cd)"
+		return "corridor_v8: held ≤ lo/2 днём + сильный спрос → +цена (обход up_cd)"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
-		return "corridor_v7: недобор стока, рынок молчит → ↑ (без BasePrice)"
+		return "corridor_v8: недобор стока, рынок молчит → ↑ (без BasePrice)"
+	case "corridor_price_up_skim":
+		return "corridor_v8: held в полосе + сильный разбор → +цена (probe прибыли)"
 	case "corridor_hold_recover_ceiling":
-		return "corridor_v7: recover упёрся в потолок (floor + N×step) — ждём demand"
+		return "corridor_v8: recover упёрся в потолок (floor + N×step) — ждём demand"
 	case "corridor_hold_recover_pause":
-		return "corridor_v7: слишком много ↑ без buys → пауза (антиvacuum)"
+		return "corridor_v8: слишком много ↑ без buys → пауза (антиvacuum)"
 	case "corridor_hold_band":
-		return "corridor_v7: held в полосе share → hold (мёртвая зона)"
+		return "corridor_v8: held в полосе, нет сигнала для skim → hold"
+	case "corridor_hold_skim_veto":
+		return "corridor_v8: в полосе, но try/buy/weak → skim ↑ запрещён"
 	case "corridor_hold_hysteresis":
 		return "corridor_v3(legacy): held 25–28% → hold"
 	case "corridor_hold_filling":
-		return "corridor_v7: held < lo, идут buys, sales=0 → hold (набираем сток)"
+		return "corridor_v8: held < lo, идут buys, sales=0 → hold (набираем сток)"
 	case "corridor_hold_dead":
-		return "corridor_v7: held < lo, sales=0 buys=0, не у пола → hold"
+		return "corridor_v8: held < lo, sales=0 buys=0, не у пола → hold"
 	case "corridor_hold_empty":
-		return "corridor_v7: held=0 высоко над полом → ↑ запрещён (vacuum)"
+		return "corridor_v8: held=0 высоко над полом → ↑ запрещён (vacuum)"
 	case "corridor_hold_weak_demand":
-		return "corridor_v7: held < lo, спрос слабый → ↑ запрещён"
+		return "corridor_v8: held < lo, спрос слабый → ↑ запрещён"
 	case "corridor_hold_up_cap":
-		return "corridor_v6: недобор, но лимит ↑ подряд → hold"
+		return "corridor_v8: недобор, но лимит ↑ подряд → hold"
 	case "corridor_hold_up_cd":
-		return "corridor_v6: недобор, но ↑ на cooldown → hold"
+		return "corridor_v8: недобор, но ↑ на cooldown → hold"
 	case "corridor_hold_try_veto":
-		return "corridor_v6: недобор, но try_sells≫sales → ↑ запрещён"
+		return "corridor_v8: недобор, но try_sells≫sales → ↑ запрещён"
 	case "corridor_hold_buy_veto":
-		return "corridor_v7: недобор, buys≥sales при живом обороте → ↑ запрещён"
+		return "corridor_v8: недобор, buys>sales → ↑ запрещён"
 	case "corridor_hold_overshoot":
 		return "corridor_v6: soft↓ пропустил бы ниже lo → hold"
 	case "corridor_hold_down_cd":
@@ -887,9 +892,10 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// stock_corridor_v7 — fill-контроллер + recover-↑ с пола после дампа.
+	// stock_corridor_v8 — fill + recover + profit-skim в полосе.
 	// Default полоса [lo,hi]≈18–25%; позор ≈10–18% + earlier over/dump.
-	// ↑ ниже lo: спрос sales>buys / deep-↑ / recover у пола; try-veto; buy-veto только при обороте.
+	// ↑ ниже lo: спрос / deep / recover; try-veto; buy-veto buys>sales.
+	// ↑ в полосе (skim): сильный разбор днём → probe выше (прибыль, не только fill).
 	// hard↓ over/dump: step×2.
 	// ═══════════════════════════════════════════════════════════════════
 
@@ -1078,8 +1084,42 @@ func adjustPrice(item string) AdjustReport {
 		}
 
 	default:
-		action = "corridor_hold_band"
-		notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] share=%d", totalHeld, targetLo, targetHi, share))
+		// В полосе: не мёртвая зона. Если витрина стабильно разбирается —
+		// пробуем ↑ (skim), иначе залипаем в дешёвом локальном оптимуме.
+		skimOK := !nightMSK &&
+			state.CorridorUpCooldown == 0 &&
+			state.CorridorUpStreak < corridorMaxUpStreak &&
+			sales > buys &&
+			demandStrongEnoughForUp(sales, prevCycleSales, nightMSK) &&
+			!trySellsBlockUp(sales, trySells)
+		switch {
+		case trySellsBlockUp(sales, trySells):
+			action = "corridor_hold_skim_veto"
+			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] sales=%d try=%d — рынок не берёт, skim ↑ запрещён",
+				totalHeld, targetLo, targetHi, sales, trySells))
+		case buys > sales:
+			action = "corridor_hold_skim_veto"
+			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] buys=%d > sales=%d — набиваем, skim ↑ запрещён",
+				totalHeld, targetLo, targetHi, buys, sales))
+		case nightMSK:
+			action = "corridor_hold_band"
+			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] night — skim выкл", totalHeld, targetLo, targetHi))
+		case state.CorridorUpCooldown > 0:
+			action = "corridor_hold_band"
+			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] up_cd=%d — пауза skim",
+				totalHeld, targetLo, targetHi, state.CorridorUpCooldown))
+		case !demandStrongEnoughForUp(sales, prevCycleSales, nightMSK) || sales <= buys:
+			action = "corridor_hold_band"
+			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] sales=%d buys=%d last=%d — нет сигнала skim",
+				totalHeld, targetLo, targetHi, sales, buys, prevCycleSales))
+		case skimOK:
+			applyUp("corridor_price_up_skim",
+				fmt.Sprintf("held=%d в [%d,%d] sales=%d > buys=%d last=%d — skim-↑ (probe прибыли)",
+					totalHeld, targetLo, targetHi, sales, buys, prevCycleSales))
+		default:
+			action = "corridor_hold_band"
+			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] share=%d", totalHeld, targetLo, targetHi, share))
+		}
 	}
 
 	// После set_min: только ↑. После set_max: только ↓. Окно = AnalysisTime.

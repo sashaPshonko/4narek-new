@@ -154,7 +154,7 @@ Policy: `stock_corridor_v5`.
 
 ---
 
-## stock_corridor_v7 (28.07.2026) ← текущий
+## stock_corridor_v7 (28.07.2026)
 
 **Проблема live v6 после ручного дампа:** цены на BasePrice/floor с `held=0` не поднимались.
 `buys≥sales` ловило `0≥0` → вечный `buy_veto`; empty/weak резали ↑.
@@ -166,6 +166,24 @@ Policy: `stock_corridor_v5`.
 4. **recover ceiling**: recover не поднимает выше `floor + 10×step`; demand-↑ (с реальными sales) без лимита
 
 Policy: `stock_corridor_v7`.
+
+---
+
+## stock_corridor_v8 (29.07.2026) ← текущий
+
+**Проблема v7:** в полосе `[lo,hi]` всегда `hold_band` → локальный оптимум по стоку, не по деньгам.
+Пример: шлемы после рестарта стабилизировались ~1.2M (полоса ок), хотя на пике 23–24.07 было ~2.5M и +500–800M/день.
+
+**Новое vs v7 — skim-↑ в полосе (днём):**
+если `held ∈ [lo,hi]` и `sales > buys` + strong demand + нет try/buy-veto + up_cd/streak ок
+→ `corridor_price_up_skim` (+step).
+
+Иначе в полосе: `hold_band` / `hold_skim_veto`. Ночь — skim выкл.
+Soft↓ при перестоке по-прежнему откатывает неудачный probe.
+
+Policy: `stock_corridor_v8`.
+
+**Завтра проверить:** доля `up_skim`; шлем-крутой цена vs 1.2M; fwd после skim ≥0 и не хуже hold; нет ночного vacuum через skim.
 
 ---
 
