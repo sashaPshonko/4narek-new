@@ -242,28 +242,22 @@ func funauthNickKey(nick string) string {
 	return strings.ToLower(strings.TrimSpace(nick))
 }
 
-// Повторный bind только если ещё не ставили в очередь, или прошлый раз — «нет свободных TG»
-// (слишком много привязанных / no_accounts). Пока pending/ok/другой fail — не дублируем.
+// Повтор: всегда если очередь binder пуста; иначе — только новый nick / после no_accounts.
+// Пока этот nick уже pending и очередь не пуста — не дублируем.
 func funauthMayStartBind(nick string) (ok bool, reason string) {
+	idle := funauthBinderInst != nil && funauthBinderInst.queueLen() == 0
 	key := funauthNickKey(nick)
 	funauthNickStateMu.Lock()
 	defer funauthNickStateMu.Unlock()
 	st, exists := funauthNickState[key]
-	if !exists {
-		funauthNickState[key] = "pending"
-		return true, ""
-	}
-	switch st {
-	case "pending":
+	if st == "pending" && !idle {
 		return false, "already_pending"
-	case "ok":
-		return false, "already_ok"
-	case "no_accounts":
+	}
+	if idle || !exists || st == "no_accounts" {
 		funauthNickState[key] = "pending"
 		return true, ""
-	default: // fail и прочее
-		return false, "already_tried:" + st
 	}
+	return false, "skip:" + st
 }
 
 func funauthSetNickState(nick, state string) {
@@ -273,7 +267,8 @@ func funauthSetNickState(nick, state string) {
 	funauthNickStateMu.Unlock()
 }
 
-// handleFunauthBindWS — очередь bind; один nick не дублируется, кроме после no_accounts.
+// handleFunauthBindWS — очередь bind; дубликаты nick режем, пока binder занят.
+// Если очередь пуста — принимаем снова (уже привязан → ошибка от бота, ок).
 func handleFunauthBindWS(nick, password string) {
 	initFunauth()
 	nick = strings.TrimSpace(nick)
