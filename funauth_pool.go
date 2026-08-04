@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,9 @@ import (
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
+	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/tg"
+	"golang.org/x/net/proxy"
 )
 
 const (
@@ -160,6 +163,11 @@ func (p *funauthPool) init() {
 		return
 	}
 	log.Printf("[funauth] api_id=%d (Telegram Desktop)", p.apiID)
+	if proxyURL := resolveTelegramProxyURL(); proxyURL != "" {
+		log.Printf("[funauth] MTProto через прокси %s", proxyURL)
+	} else {
+		log.Printf("[funauth] MTProto без прокси (TELEGRAM_PROXY=off)")
+	}
 	entries, err := os.ReadDir(p.dir)
 	if err != nil {
 		log.Printf("[funauth] read sessions: %v", err)
@@ -290,6 +298,31 @@ func (p *funauthPool) markStarted(id string) {
 	}
 }
 
+// funauthClientOptions — сессия + апдейты + SOCKS как у Bot API (127.0.0.1:1080).
+func funauthClientOptions(sessionPath string, handler telegram.UpdateHandler) telegram.Options {
+	opt := telegram.Options{
+		SessionStorage: &session.FileStorage{Path: sessionPath},
+		UpdateHandler:  handler,
+	}
+	proxyURL := resolveTelegramProxyURL()
+	if proxyURL == "" {
+		return opt
+	}
+	host, port := parseSocksHostPort(proxyURL)
+	sock5, err := proxy.SOCKS5("tcp", net.JoinHostPort(host, port), nil, proxy.Direct)
+	if err != nil {
+		log.Printf("[funauth] SOCKS5: %v — без прокси", err)
+		return opt
+	}
+	cd, ok := sock5.(proxy.ContextDialer)
+	if !ok {
+		log.Printf("[funauth] SOCKS dialer без ContextDialer — без прокси")
+		return opt
+	}
+	opt.Resolver = dcs.Plain(dcs.PlainOptions{Dial: cd.DialContext})
+	return opt
+}
+
 func (p *funauthPool) connectAccount(meta funauthAccountMeta) {
 	dispatcher := tg.NewUpdateDispatcher()
 	acc := &funauthAccount{
@@ -300,10 +333,7 @@ func (p *funauthPool) connectAccount(meta funauthAccountMeta) {
 		return p.handleBotMessage(acc, e, u.Message)
 	})
 
-	client := telegram.NewClient(p.apiID, p.apiHash, telegram.Options{
-		SessionStorage: &session.FileStorage{Path: p.sessionPath(meta.ID)},
-		UpdateHandler:  dispatcher,
-	})
+	client := telegram.NewClient(p.apiID, p.apiHash, funauthClientOptions(p.sessionPath(meta.ID), dispatcher))
 	ctx, cancel := context.WithCancel(p.ctx)
 	acc.cancel = cancel
 
@@ -456,10 +486,7 @@ func (p *funauthPool) loginStart(phone string) (map[string]any, error) {
 func (p *funauthPool) runPendingLogin(pend *funauthPendingLogin) {
 	dispatcher := tg.NewUpdateDispatcher()
 	sessionFile := p.sessionPath(pend.id)
-	client := telegram.NewClient(p.apiID, p.apiHash, telegram.Options{
-		SessionStorage: &session.FileStorage{Path: sessionFile},
-		UpdateHandler:  dispatcher,
-	})
+	client := telegram.NewClient(p.apiID, p.apiHash, funauthClientOptions(sessionFile, dispatcher))
 
 	finished := false
 	err := client.Run(pend.ctx, func(ctx context.Context) error {

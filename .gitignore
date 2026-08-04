@@ -9,3 +9,4 @@ ml_data/
 *.db-shm
 *.db-wal
 backups/
+dist/

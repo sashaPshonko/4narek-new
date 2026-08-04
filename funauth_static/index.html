@@ -3,177 +3,284 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FunAuth — пул аккаунтов</title>
+  <title>FunAuth</title>
   <style>
     :root {
-      --bg: #0f1419;
-      --panel: #1a2332;
-      --border: #2d3a4f;
-      --text: #e7ecf3;
-      --muted: #8b9bb4;
-      --accent: #3d8bfd;
-      --ok: #3dd68c;
-      --warn: #f5a524;
-      --bad: #f31260;
+      --bg: #f5f5f7;
+      --bg-glow: radial-gradient(1200px 600px at 10% -10%, #e8eef8 0%, transparent 55%),
+                 radial-gradient(900px 500px at 100% 0%, #f0ebe4 0%, transparent 50%);
+      --surface: rgba(255, 255, 255, 0.72);
+      --surface-solid: #ffffff;
+      --line: rgba(0, 0, 0, 0.08);
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --accent: #0071e3;
+      --accent-press: #0077ed;
+      --ok: #1f8f4e;
+      --warn: #b86e00;
+      --bad: #d70015;
+      --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+      --radius: 16px;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+              "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       margin: 0;
-      font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
-      background: var(--bg);
+      font-family: var(--font);
       color: var(--text);
+      background: var(--bg);
+      background-image: var(--bg-glow);
+      background-attachment: fixed;
+      -webkit-font-smoothing: antialiased;
       line-height: 1.45;
-      padding: 24px;
     }
-    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 4px; }
-    .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 24px; }
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+    header {
+      margin-bottom: 28px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+    header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+      font-weight: 400;
+      max-width: 36em;
+    }
+    #health {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 16px;
+      padding: 8px 12px;
+      border-radius: 980px;
+      background: var(--surface-solid);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+      box-shadow: var(--shadow);
+    }
+    #health::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 0 3px rgba(31, 143, 78, 0.15);
+    }
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 16px;
-      max-width: 960px;
     }
-    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 780px) {
+      .grid { grid-template-columns: 1fr; }
+      .wrap { padding-top: 28px; }
+      header h1 { font-size: 28px; }
+    }
     .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px;
+      background: var(--surface);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px 22px 20px;
+      box-shadow: var(--shadow);
     }
+    .card.wide { grid-column: 1 / -1; }
     .card h2 {
-      font-size: 0.95rem;
-      margin: 0 0 12px;
+      margin: 0 0 16px;
+      font-size: 13px;
+      font-weight: 600;
       color: var(--muted);
-      font-weight: 500;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
     }
     label {
       display: block;
-      font-size: 0.75rem;
+      font-size: 13px;
+      font-weight: 500;
       color: var(--muted);
-      margin-bottom: 4px;
+      margin: 0 0 6px;
+    }
+    label + input { margin-bottom: 14px; }
+    .hint {
+      display: block;
+      margin: -8px 0 14px;
+      font-size: 12px;
+      color: var(--muted);
+      opacity: 0.9;
     }
     input {
       width: 100%;
-      padding: 8px 10px;
-      margin-bottom: 10px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
       color: var(--text);
       font: inherit;
+      font-size: 15px;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
     }
-    input:focus { outline: 1px solid var(--accent); }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    input:focus {
+      border-color: rgba(0, 113, 227, 0.55);
+      box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
     button {
-      padding: 8px 14px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 9px 16px;
+      border-radius: 980px;
       border: none;
-      border-radius: 6px;
       background: var(--accent);
       color: #fff;
-      font: inherit;
-      font-size: 0.85rem;
       cursor: pointer;
+      transition: transform .08s ease, background .15s ease, opacity .15s ease;
     }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button:hover { background: var(--accent-press); }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
     button.ghost {
       background: transparent;
-      border: 1px solid var(--border);
       color: var(--text);
+      border: 1px solid var(--line);
     }
-    button.danger { background: var(--bad); }
+    button.ghost:hover { background: rgba(0,0,0,0.03); }
+    button.danger {
+      background: transparent;
+      color: var(--bad);
+      border: 1px solid rgba(215, 0, 21, 0.25);
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+    button.danger:hover { background: rgba(215, 0, 21, 0.06); }
     .msg {
-      margin-top: 10px;
-      font-size: 0.8rem;
+      margin-top: 12px;
+      font-size: 13px;
       color: var(--muted);
       white-space: pre-wrap;
       word-break: break-word;
+      min-height: 1.2em;
     }
     .msg.ok { color: var(--ok); }
     .msg.err { color: var(--bad); }
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.8rem;
+      font-size: 14px;
     }
     th, td {
       text-align: left;
-      padding: 6px 8px;
-      border-bottom: 1px solid var(--border);
+      padding: 12px 8px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
     }
-    th { color: var(--muted); font-weight: 500; }
+    th {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    tr:last-child td { border-bottom: none; }
     .badge {
-      display: inline-block;
-      padding: 1px 6px;
-      border-radius: 4px;
-      font-size: 0.7rem;
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 980px;
+      font-size: 12px;
+      font-weight: 500;
     }
-    .badge.ready { background: #163527; color: var(--ok); }
-    .badge.full { background: #3a2810; color: var(--warn); }
-    .badge.off { background: #2a2030; color: var(--bad); }
-    .full-width { grid-column: 1 / -1; }
-    #health { font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }
+    .badge.ready { background: rgba(31, 143, 78, 0.12); color: var(--ok); }
+    .badge.full { background: rgba(184, 110, 0, 0.12); color: var(--warn); }
+    .badge.off { background: rgba(0, 0, 0, 0.06); color: var(--muted); }
+    .empty {
+      color: var(--muted);
+      font-size: 14px;
+      margin: 4px 0;
+    }
   </style>
 </head>
 <body>
-  <h1>FunAuth</h1>
-  <p class="sub">Пул Telegram-аккаунтов для привязки Minecraft через @FunAuthBot</p>
-  <div id="health">Загрузка…</div>
+  <div class="wrap">
+    <header>
+      <h1>FunAuth</h1>
+      <p>Пул Telegram-аккаунтов для привязки Minecraft через @FunAuthBot. Трафик идёт через Reality SOCKS на :1080.</p>
+      <div id="health">Загрузка…</div>
+    </header>
 
-  <div class="grid">
-    <div class="card">
-      <h2>Добавить аккаунт</h2>
-      <label>Телефон (+7…)</label>
-      <input id="phone" type="tel" placeholder="+79001234567" autocomplete="tel" />
-      <div class="row">
-        <button id="btnStart" type="button">Отправить код</button>
-      </div>
+    <div class="grid">
+      <section class="card">
+        <h2>Войти в Telegram</h2>
+        <label for="phone">Телефон</label>
+        <input id="phone" type="tel" placeholder="+79001234567" autocomplete="tel" />
+        <div class="row">
+          <button id="btnStart" type="button">Отправить код</button>
+        </div>
 
-      <label style="margin-top:14px">Код из Telegram</label>
-      <input id="code" type="text" placeholder="12345" inputmode="numeric" />
-      <div class="row">
-        <button id="btnCode" type="button" disabled>Подтвердить код</button>
-      </div>
+        <label for="code" style="margin-top:18px">Код из Telegram</label>
+        <input id="code" type="text" placeholder="12345" inputmode="numeric" autocomplete="one-time-code" />
+        <div class="row">
+          <button id="btnCode" type="button" disabled>Подтвердить</button>
+        </div>
 
-      <label style="margin-top:14px">Облачный пароль (2FA), если нужен</label>
-      <input id="tgPassword" type="password" placeholder="пароль 2FA" />
-      <div class="row">
-        <button id="btnPassword" type="button" disabled>Войти с паролем</button>
-      </div>
-      <div id="loginMsg" class="msg"></div>
-    </div>
+        <label for="tgPassword" style="margin-top:18px">Пароль Telegram (если включён)</label>
+        <span class="hint">Только если в аккаунте есть двухэтапная проверка. Иначе оставь пустым.</span>
+        <input id="tgPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
+        <div class="row">
+          <button id="btnPassword" type="button" disabled>Войти с паролем</button>
+        </div>
+        <div id="loginMsg" class="msg"></div>
+      </section>
 
-    <div class="card">
-      <h2>Очередь / тест bind</h2>
-      <label>Ник Minecraft</label>
-      <input id="nick" type="text" placeholder="Player123" />
-      <label>Пароль аккаунта</label>
-      <input id="mcPassword" type="password" placeholder="пароль" />
-      <div class="row">
-        <button id="btnBind" type="button">Привязать</button>
-        <button id="btnRefresh" class="ghost" type="button">Обновить</button>
-      </div>
-      <div id="bindMsg" class="msg"></div>
-      <div id="queueInfo" class="msg" style="margin-top:12px"></div>
-    </div>
+      <section class="card">
+        <h2>Привязка Minecraft</h2>
+        <label for="nick">Ник</label>
+        <input id="nick" type="text" placeholder="Player123" autocomplete="off" />
+        <label for="mcPassword">Пароль аккаунта</label>
+        <input id="mcPassword" type="password" placeholder="пароль" autocomplete="off" />
+        <div class="row">
+          <button id="btnBind" type="button">Привязать</button>
+          <button id="btnRefresh" class="ghost" type="button">Обновить</button>
+        </div>
+        <div id="bindMsg" class="msg"></div>
+        <div id="queueInfo" class="msg"></div>
+      </section>
 
-    <div class="card full-width">
-      <h2>Аккаунты</h2>
-      <div id="accounts"><p class="msg">Нет аккаунтов</p></div>
+      <section class="card wide">
+        <h2>Аккаунты</h2>
+        <div id="accounts"><p class="empty">Пока пусто</p></div>
+      </section>
     </div>
   </div>
 
   <script>
     const $ = (id) => document.getElementById(id);
     let currentPhone = '';
+    const API = '/funauth/api';
 
     function setMsg(el, text, kind) {
       el.textContent = text || '';
       el.className = 'msg' + (kind ? ' ' + kind : '');
     }
-
-    const API = '/funauth/api';
 
     async function api(path, opts = {}) {
       const res = await fetch(API + path, {
@@ -186,58 +293,11 @@
       return data;
     }
 
-    async function refresh() {
-      const [health, accounts, queue] = await Promise.all([
-        api('/health'),
-        api('/accounts'),
-        api('/queue'),
-      ]);
-      $('health').textContent =
-        `аккаунтов: ${health.accounts ?? '—'} · готовых: ${health.ready ?? '—'} · в очереди: ${health.queue ?? 0}`;
-
-      if (!Array.isArray(accounts) || !accounts.length) {
-        $('accounts').innerHTML = '<p class="msg">Нет аккаунтов</p>';
-      } else {
-        $('accounts').innerHTML = `
-          <table>
-            <thead>
-              <tr>
-                <th>Телефон</th>
-                <th>Username</th>
-                <th>Статус</th>
-                <th>/start</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${accounts.map((a) => `
-                <tr>
-                  <td>${esc(a.phone)}</td>
-                  <td>${esc(a.username ? '@' + a.username : '—')}</td>
-                  <td>${badge(a)}</td>
-                  <td>${a.started ? 'да' : 'нет'}</td>
-                  <td><button class="danger" data-del="${esc(a.id)}" type="button">Удалить</button></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>`;
-        $('accounts').querySelectorAll('[data-del]').forEach((btn) => {
-          btn.addEventListener('click', async () => {
-            if (!confirm('Удалить аккаунт?')) return;
-            await api('/accounts/' + btn.dataset.del, { method: 'DELETE' });
-            refresh();
-          });
-        });
-      }
-
-      const q = queue || {};
-      const lines = [];
-      if (q.current) lines.push('сейчас: ' + q.current.nick);
-      if (q.pending?.length) {
-        lines.push('ожидают: ' + q.pending.map((j) => j.nick).join(', '));
-      }
-      if (!lines.length) lines.push('очередь пуста');
-      $('queueInfo').textContent = lines.join('\n');
+    function esc(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/"/g, '&quot;');
     }
 
     function badge(a) {
@@ -246,11 +306,59 @@
       return '<span class="badge off">офлайн</span>';
     }
 
-    function esc(s) {
-      return String(s ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/"/g, '&quot;');
+    async function refresh() {
+      try {
+        const [health, accounts, queue] = await Promise.all([
+          api('/health'),
+          api('/accounts'),
+          api('/queue'),
+        ]);
+        $('health').textContent =
+          `${health.accounts ?? 0} акк. · ${health.ready ?? 0} готовых · очередь ${health.queue ?? 0}`;
+
+        if (!Array.isArray(accounts) || !accounts.length) {
+          $('accounts').innerHTML = '<p class="empty">Пока пусто — добавь телефон слева</p>';
+        } else {
+          $('accounts').innerHTML = `
+            <table>
+              <thead>
+                <tr>
+                  <th>Телефон</th>
+                  <th>Username</th>
+                  <th>Статус</th>
+                  <th>Start</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${accounts.map((a) => `
+                  <tr>
+                    <td>${esc(a.phone)}</td>
+                    <td>${esc(a.username ? '@' + a.username : '—')}</td>
+                    <td>${badge(a)}</td>
+                    <td>${a.started ? 'да' : 'нет'}</td>
+                    <td><button class="danger" data-del="${esc(a.id)}" type="button">Удалить</button></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>`;
+          $('accounts').querySelectorAll('[data-del]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              if (!confirm('Удалить аккаунт?')) return;
+              await api('/accounts/' + btn.dataset.del, { method: 'DELETE' });
+              refresh();
+            });
+          });
+        }
+
+        const q = queue || {};
+        const lines = [];
+        if (q.current) lines.push('Сейчас: ' + q.current.nick);
+        if (q.pending?.length) lines.push('Ждут: ' + q.pending.map((j) => j.nick).join(', '));
+        $('queueInfo').textContent = lines.length ? lines.join('\n') : 'Очередь пуста';
+      } catch (e) {
+        $('health').textContent = 'Сервер недоступен';
+      }
     }
 
     $('btnStart').onclick = async () => {
@@ -285,10 +393,10 @@
         if (r.error && r.ok === false) throw new Error(r.error);
         if (r.needPassword) {
           $('btnPassword').disabled = false;
-          setMsg($('loginMsg'), 'Нужен облачный пароль 2FA', 'ok');
+          setMsg($('loginMsg'), 'Нужен пароль двухэтапной проверки Telegram', 'ok');
           return;
         }
-        setMsg($('loginMsg'), 'Аккаунт добавлен: ' + (r.phone || phone), 'ok');
+        setMsg($('loginMsg'), 'Готово: ' + (r.phone || phone), 'ok');
         $('btnCode').disabled = true;
         $('btnPassword').disabled = true;
         refresh();
@@ -307,7 +415,7 @@
           body: JSON.stringify({ phone, password }),
         });
         if (r.error && r.ok === false) throw new Error(r.error);
-        setMsg($('loginMsg'), 'Аккаунт добавлен: ' + (r.phone || phone), 'ok');
+        setMsg($('loginMsg'), 'Готово: ' + (r.phone || phone), 'ok');
         $('btnCode').disabled = true;
         $('btnPassword').disabled = true;
         refresh();
@@ -319,7 +427,7 @@
     $('btnBind').onclick = async () => {
       const nick = $('nick').value.trim();
       const password = $('mcPassword').value;
-      setMsg($('bindMsg'), 'Ставим в очередь…');
+      setMsg($('bindMsg'), 'В очередь…');
       $('btnBind').disabled = true;
       try {
         const r = await api('/bind', {
@@ -327,26 +435,15 @@
           body: JSON.stringify({ nick, password }),
         });
         if (r.queued || r._status === 202) {
-          setMsg(
-            $('bindMsg'),
-            `В очереди: ${nick} — результат в Telegram / статус очереди ниже`,
-            'ok',
-          );
+          setMsg($('bindMsg'), `В очереди: ${nick}`, 'ok');
         } else if (r.ok) {
           setMsg(
             $('bindMsg'),
-            `OK · ${r.nick}` + (r.tgPhone ? ` · TG ${r.tgPhone}` : '') +
-              (r.reply ? `\n${r.reply}` : ''),
+            `OK · ${r.nick}` + (r.tgPhone ? ` · ${r.tgPhone}` : ''),
             'ok',
           );
         } else {
-          setMsg(
-            $('bindMsg'),
-            `Ошибка: ${r.error || 'unknown'}` +
-              (r.tgPhone ? ` · TG ${r.tgPhone}` : '') +
-              (r.reply ? `\n${r.reply}` : ''),
-            'err',
-          );
+          setMsg($('bindMsg'), `Ошибка: ${r.error || 'unknown'}`, 'err');
         }
         refresh();
       } catch (e) {
