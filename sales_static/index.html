@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>4narek · Sales</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #e9ecef;
+      --bg-deep: #dde3ea;
+      --ink: #0c1222;
+      --muted: #5b6578;
+      --line: rgba(12, 18, 34, 0.1);
+      --surface: rgba(255, 255, 255, 0.78);
+      --surface-solid: #ffffff;
+      --accent: #0f766e;
+      --accent-soft: rgba(15, 118, 110, 0.12);
+      --profit: #047857;
+      --profit-bg: rgba(4, 120, 87, 0.1);
+      --loss: #b91c1c;
+      --loss-bg: rgba(185, 28, 28, 0.1);
+      --buy: #1d4ed8;
+      --sell: #0f766e;
+      --try: #a16207;
+      --shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 40px rgba(12, 18, 34, 0.06);
+      --radius: 18px;
+      --font: "IBM Plex Sans", system-ui, sans-serif;
+      --display: "Syne", "IBM Plex Sans", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--font);
+      background:
+        radial-gradient(900px 480px at 8% -8%, #d7e8e4 0%, transparent 55%),
+        radial-gradient(700px 420px at 100% 0%, #d5dce8 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+      background-attachment: fixed;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.4;
+    }
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 36px 22px 72px;
+    }
+    header.hero {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 28px;
+      animation: rise 0.7s ease both;
+    }
+    .brand {
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: clamp(40px, 7vw, 72px);
+      letter-spacing: -0.045em;
+      line-height: 0.95;
+      margin: 0;
+    }
+    .brand span {
+      color: var(--accent);
+    }
+    .lede {
+      margin: 0;
+      max-width: 34em;
+      color: var(--muted);
+      font-size: 17px;
+      font-weight: 500;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--surface-solid);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+      width: fit-content;
+    }
+    .status .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+      animation: pulse 2.2s ease infinite;
+    }
+    .status.err .dot { background: var(--loss); box-shadow: 0 0 0 3px var(--loss-bg); }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+      animation: rise 0.75s 0.08s ease both;
+    }
+    .kpi {
+      background: var(--surface);
+      backdrop-filter: blur(16px) saturate(160%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 18px 16px;
+      box-shadow: var(--shadow);
+      min-height: 108px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.25s ease, border-color 0.25s ease;
+    }
+    .kpi:hover { transform: translateY(-2px); border-color: rgba(15, 118, 110, 0.28); }
+    .kpi .label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .kpi .value {
+      font-family: var(--mono);
+      font-size: clamp(22px, 2.6vw, 30px);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      margin-top: 10px;
+    }
+    .kpi .sub {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .pos { color: var(--profit); }
+    .neg { color: var(--loss); }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+      animation: rise 0.75s 0.12s ease both;
+    }
+    .toolbar input, .toolbar select, .toolbar button {
+      font: inherit;
+      font-size: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-solid);
+      color: var(--ink);
+      padding: 10px 12px;
+      outline: none;
+    }
+    .toolbar input {
+      min-width: min(280px, 100%);
+      flex: 1;
+    }
+    .toolbar input:focus, .toolbar select:focus {
+      border-color: rgba(15, 118, 110, 0.5);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+    }
+    .toolbar button {
+      cursor: pointer;
+      font-weight: 600;
+      background: var(--ink);
+      color: #fff;
+      border-color: transparent;
+      transition: transform 0.15s ease, opacity 0.15s;
+    }
+    .toolbar button:hover { opacity: 0.92; transform: translateY(-1px); }
+    .chiprow { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .chip.on {
+      background: var(--accent-soft);
+      border-color: rgba(15, 118, 110, 0.35);
+      color: var(--accent);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.45fr 0.9fr;
+      gap: 14px;
+      align-items: start;
+      animation: rise 0.8s 0.16s ease both;
+    }
+    .panel {
+      background: var(--surface);
+      backdrop-filter: blur(16px) saturate(160%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .panel h2 {
+      margin: 0;
+      padding: 16px 18px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+    }
+    .table-wrap { overflow: auto; max-height: min(72vh, 860px); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    th, td {
+      padding: 11px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: rgba(255,255,255,0.94);
+      backdrop-filter: blur(8px);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      z-index: 1;
+    }
+    th:hover { color: var(--ink); }
+    th .arrow { opacity: 0.35; margin-left: 4px; }
+    th.active .arrow { opacity: 1; color: var(--accent); }
+    tbody tr {
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    tbody tr:hover { background: rgba(15, 118, 110, 0.05); }
+    tbody tr.active { background: var(--accent-soft); }
+    .id {
+      font-family: var(--display);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      font-size: 14px;
+    }
+    .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .bar {
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(12,18,34,0.08);
+      overflow: hidden;
+      min-width: 72px;
+      margin-top: 6px;
+    }
+    .bar > i {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #1d4ed8, #0f766e);
+      border-radius: inherit;
+      transition: width 0.6s cubic-bezier(.2,.8,.2,1);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--mono);
+    }
+    .badge.profit { background: var(--profit-bg); color: var(--profit); }
+    .badge.loss { background: var(--loss-bg); color: var(--loss); }
+    .badge.flat { background: rgba(12,18,34,0.06); color: var(--muted); }
+
+    .detail { min-height: 420px; }
+    .detail-body { padding: 16px 18px 22px; }
+    .detail-empty {
+      color: var(--muted);
+      padding: 40px 18px;
+      text-align: center;
+      font-size: 15px;
+    }
+    .detail-title {
+      font-family: var(--display);
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin: 0 0 4px;
+    }
+    .detail-sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255,255,255,0.55);
+    }
+    .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+    .stat .v { font-family: var(--mono); font-size: 18px; font-weight: 600; margin-top: 4px; }
+    .section-label {
+      margin: 18px 0 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .spark {
+      width: 100%;
+      height: 72px;
+      display: block;
+      margin: 4px 0 8px;
+    }
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 240px;
+      overflow: auto;
+    }
+    .feed-row {
+      display: grid;
+      grid-template-columns: 64px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.55);
+      border: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .tag {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      padding: 3px 7px;
+      border-radius: 8px;
+      width: fit-content;
+    }
+    .tag.buy { background: rgba(29,78,216,0.12); color: var(--buy); }
+    .tag.sell { background: rgba(15,118,110,0.12); color: var(--sell); }
+    .tag.try-sell { background: rgba(161,98,7,0.12); color: var(--try); }
+    .cycles { max-height: 260px; overflow: auto; }
+    .cycle {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .cycle:last-child { border-bottom: 0; }
+    .cycle .act { font-weight: 700; }
+    .cycle .tiny { color: var(--muted); font-size: 12px; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.85); opacity: 0.7; }
+    }
+    @media (max-width: 980px) {
+      .kpis { grid-template-columns: 1fr 1fr; }
+      .layout { grid-template-columns: 1fr; }
+      .detail { order: -1; }
+    }
+    @media (max-width: 560px) {
+      .kpis { grid-template-columns: 1fr; }
+      .grid2 { grid-template-columns: 1fr; }
+      .wrap { padding-top: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1 class="brand">4narek <span>Sales</span></h1>
+      <p class="lede">Живая картина рынка: кто крутится, с какой наценкой, где прибыль и какой масштаб оборота за день.</p>
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">подключение…</span></div>
+    </header>
+
+    <section class="kpis" id="kpis">
+      <div class="kpi"><div class="label">Прибыль дня</div><div class="value mono" id="kpiProfit">—</div><div class="sub" id="kpiProfitSub">sell − buy</div></div>
+      <div class="kpi"><div class="label">Оборот</div><div class="value mono" id="kpiTurnover">—</div><div class="sub" id="kpiTurnoverSub">покупки + продажи</div></div>
+      <div class="kpi"><div class="label">Сделки</div><div class="value mono" id="kpiDeals">—</div><div class="sub" id="kpiDealsSub">buy / sell / try</div></div>
+      <div class="kpi"><div class="label">Сток</div><div class="value mono" id="kpiStock">—</div><div class="sub" id="kpiStockSub">AH + инвентарь</div></div>
+    </section>
+
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Поиск по id / типу…" autocomplete="off" />
+      <select id="typeFilter"><option value="">Все типы</option></select>
+      <div class="chiprow" id="sortChips">
+        <button type="button" class="chip on" data-sort="profit">Прибыль</button>
+        <button type="button" class="chip" data-sort="volume">Объём</button>
+        <button type="button" class="chip" data-sort="margin">Маржа %</button>
+        <button type="button" class="chip" data-sort="nacenka">Наценка</button>
+        <button type="button" class="chip" data-sort="held">Сток</button>
+      </div>
+      <button type="button" id="refreshBtn">Обновить</button>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2>Предметы · сегодня</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-col="id">Предмет <span class="arrow">↕</span></th>
+                <th data-col="price">Цена / наценка <span class="arrow">↕</span></th>
+                <th data-col="volume">Объём <span class="arrow">↕</span></th>
+                <th data-col="spread">Спред <span class="arrow">↕</span></th>
+                <th data-col="profit">Прибыль <span class="arrow">↕</span></th>
+                <th data-col="held">Сток <span class="arrow">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="panel detail" id="detail">
+        <h2>Карточка предмета</h2>
+        <div class="detail-empty" id="detailEmpty">Выбери строку слева — увидишь сделки, циклы и окна 1ч / текущий цикл.</div>
+        <div class="detail-body" id="detailBody" hidden></div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let overview = null;
+    let selectedId = null;
+    let sortKey = "profit";
+    let sortDir = -1;
+    let maxVol = 1;
+    let pollTimer = null;
+
+    const fmt = (n) => {
+      if (n == null || Number.isNaN(n)) return "—";
+      const sign = n < 0 ? "−" : "";
+      const abs = Math.abs(Math.round(n));
+      return sign + abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
+    };
+    const fmtPct = (n) => {
+      if (n == null || Number.isNaN(n)) return "—";
+      return (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
+    };
+    const clsMoney = (n) => (n > 0 ? "pos" : n < 0 ? "neg" : "");
+    const badgeCls = (n) => (n > 0 ? "profit" : n < 0 ? "loss" : "flat");
+
+    async function loadOverview() {
+      const status = $("status");
+      const statusText = $("statusText");
+      try {
+        const res = await fetch("/sales/api/overview", { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        overview = await res.json();
+        status.classList.remove("err");
+        const t = new Date(overview.updated_at);
+        statusText.textContent = `сегодня ${overview.date} · обновлено ${t.toLocaleTimeString("ru-RU")} · live ${overview.items_live}`;
+        renderAll();
+        if (selectedId) loadDetail(selectedId, false);
+      } catch (e) {
+        status.classList.add("err");
+        statusText.textContent = "нет связи с API: " + e.message;
+      }
+    }
+
+    function filteredItems() {
+      if (!overview) return [];
+      const q = $("q").value.trim().toLowerCase();
+      const type = $("typeFilter").value;
+      let items = overview.items.slice();
+      if (type) items = items.filter((i) => i.type === type);
+      if (q) {
+        items = items.filter((i) =>
+          i.id.toLowerCase().includes(q) ||
+          (i.name || "").toLowerCase().includes(q) ||
+          (i.type || "").toLowerCase().includes(q)
+        );
+      }
+      const vol = (i) => i.buys + i.sells;
+      const getters = {
+        profit: (i) => i.profit,
+        volume: vol,
+        margin: (i) => i.margin_pct || 0,
+        nacenka: (i) => i.nacenka || 0,
+        held: (i) => i.held || 0,
+        id: (i) => i.id,
+        price: (i) => i.price || 0,
+        spread: (i) => i.realized_spread || 0,
+      };
+      const get = getters[sortKey] || getters.profit;
+      items.sort((a, b) => {
+        const av = get(a), bv = get(b);
+        if (typeof av === "string") return sortDir * av.localeCompare(bv);
+        if (av !== bv) return sortDir * (av > bv ? 1 : -1);
+        return a.id.localeCompare(b.id);
+      });
+      return items;
+    }
+
+    function renderKpis() {
+      const t = overview.totals;
+      const profitEl = $("kpiProfit");
+      profitEl.textContent = fmt(t.profit);
+      profitEl.className = "value mono " + clsMoney(t.profit);
+      $("kpiProfitSub").textContent = overview.top_profit_id
+        ? `лидер: ${overview.top_profit_id}`
+        : "sell − buy";
+      $("kpiTurnover").textContent = fmt(t.buy_sum + t.sell_sum);
+      $("kpiTurnoverSub").textContent = `buy ${fmt(t.buy_sum)} · sell ${fmt(t.sell_sum)}`;
+      $("kpiDeals").textContent = `${t.buys + t.sells}`;
+      $("kpiDealsSub").textContent = `${t.buys} buy · ${t.sells} sell · ${t.try_sells} try`;
+      $("kpiStock").textContent = fmt(overview.stock_ah + overview.stock_inv);
+      $("kpiStockSub").textContent = `AH ${fmt(overview.stock_ah)} · inv ${fmt(overview.stock_inv)}`;
+    }
+
+    function fillTypes() {
+      const sel = $("typeFilter");
+      const cur = sel.value;
+      const types = [...new Set(overview.items.map((i) => i.type).filter(Boolean))].sort();
+      sel.innerHTML = `<option value="">Все типы</option>` + types.map((t) => `<option value="${t}">${t}</option>`).join("");
+      sel.value = cur;
+    }
+
+    function renderTable() {
+      const items = filteredItems();
+      maxVol = Math.max(1, ...items.map((i) => i.buys + i.sells));
+      const tb = $("tbody");
+      tb.innerHTML = items.map((i) => {
+        const vol = i.buys + i.sells;
+        const pct = Math.round((vol / maxVol) * 100);
+        const active = i.id === selectedId ? "active" : "";
+        return `<tr class="${active}" data-id="${escapeAttr(i.id)}">
+          <td>
+            <div class="id">${escapeHtml(i.id)}</div>
+            <div class="meta">${escapeHtml(i.type || "")}</div>
+          </td>
+          <td class="mono">
+            ${fmt(i.price)}
+            <div class="meta">+${fmt(i.nacenka)} · ${i.nacenka_pct ? i.nacenka_pct.toFixed(1) : "0"}%</div>
+          </td>
+          <td>
+            <div class="mono">${i.buys} / ${i.sells}${i.try_sells ? ` · ${i.try_sells}t` : ""}</div>
+            <div class="bar"><i style="width:${pct}%"></i></div>
+          </td>
+          <td class="mono">
+            ${i.realized_spread ? fmt(i.realized_spread) : "—"}
+            <div class="meta">${i.avg_buy ? `b ${fmt(i.avg_buy)}` : "—"} → ${i.avg_sell ? `s ${fmt(i.avg_sell)}` : "—"}</div>
+          </td>
+          <td><span class="badge ${badgeCls(i.profit)}">${fmt(i.profit)}</span>
+            <div class="meta">${fmtPct(i.margin_pct)}</div>
+          </td>
+          <td class="mono">${i.on_ah} + ${i.inv}
+            <div class="meta">held ${i.held}</div>
+          </td>
+        </tr>`;
+      }).join("");
+      tb.querySelectorAll("tr").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          selectedId = tr.dataset.id;
+          renderTable();
+          loadDetail(selectedId, true);
+        });
+      });
+      document.querySelectorAll("th[data-col]").forEach((th) => {
+        th.classList.toggle("active", th.dataset.col === sortKey ||
+          (sortKey === "volume" && th.dataset.col === "volume") ||
+          (sortKey === "margin" && th.dataset.col === "profit"));
+      });
+    }
+
+    function renderAll() {
+      if (!overview) return;
+      renderKpis();
+      fillTypes();
+      renderTable();
+    }
+
+    async function loadDetail(id, scroll) {
+      const empty = $("detailEmpty");
+      const body = $("detailBody");
+      try {
+        const res = await fetch("/sales/api/item/" + encodeURIComponent(id), { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        empty.hidden = true;
+        body.hidden = false;
+        const i = data.item;
+        body.innerHTML = `
+          <h3 class="detail-title">${escapeHtml(i.id)}</h3>
+          <p class="detail-sub">${escapeHtml(i.type)} · цикл ${i.cycle_minutes || "?"} мин · last cycle profit ${fmt(i.last_cycle_profit)}</p>
+          <div class="grid2">
+            <div class="stat"><div class="k">Sell цена</div><div class="v mono">${fmt(i.price)}</div></div>
+            <div class="stat"><div class="k">Наценка</div><div class="v mono">${fmt(i.nacenka)} <span style="font-size:13px;color:var(--muted)">${i.nacenka_pct ? i.nacenka_pct.toFixed(1) : "0"}%</span></div></div>
+            <div class="stat"><div class="k">Implied buy</div><div class="v mono">${fmt(i.implied_buy)}</div></div>
+            <div class="stat"><div class="k">Прибыль дня</div><div class="v mono ${clsMoney(i.profit)}">${fmt(i.profit)}</div></div>
+            <div class="stat"><div class="k">Окно 1ч</div><div class="v mono ${clsMoney(i.window_1h.profit)}">${fmt(i.window_1h.profit)}</div><div class="meta" style="margin-top:4px;color:var(--muted);font-size:12px">${i.window_1h.buys}b / ${i.window_1h.sells}s</div></div>
+            <div class="stat"><div class="k">Текущий цикл</div><div class="v mono ${clsMoney(i.window_cycle.profit)}">${fmt(i.window_cycle.profit)}</div><div class="meta" style="margin-top:4px;color:var(--muted);font-size:12px">${i.window_cycle.buys}b / ${i.window_cycle.sells}s</div></div>
+          </div>
+          <div class="section-label">Поток сделок</div>
+          <canvas class="spark" id="spark" width="640" height="144"></canvas>
+          <div class="feed" id="feed"></div>
+          <div class="section-label">Циклы adjust</div>
+          <div class="cycles" id="cycles"></div>
+        `;
+        renderFeed(data.trades || []);
+        renderCycles(data.cycles || []);
+        drawSpark("spark", data.trades || []);
+        if (scroll) $("detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (e) {
+        empty.hidden = false;
+        body.hidden = true;
+        empty.textContent = "Не удалось загрузить " + id + ": " + e.message;
+      }
+    }
+
+    function renderFeed(trades) {
+      const el = $("feed");
+      const rows = trades.slice().reverse().slice(0, 40);
+      if (!rows.length) {
+        el.innerHTML = `<div class="detail-empty" style="padding:16px">Пока нет сделок в окне истории</div>`;
+        return;
+      }
+      el.innerHTML = rows.map((t) => {
+        const tag = t.type === "try-sell" ? "try-sell" : t.type;
+        const time = new Date(t.time).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const extra = t.type === "sell" && t.nacenka ? ` · nac ${fmt(t.nacenka)}` : "";
+        return `<div class="feed-row">
+          <span class="tag ${tag}">${tag}</span>
+          <span class="mono">${fmt(t.price)}${extra}</span>
+          <span style="color:var(--muted);font-size:12px">${time}</span>
+        </div>`;
+      }).join("");
+    }
+
+    function renderCycles(cycles) {
+      const el = $("cycles");
+      if (!cycles.length) {
+        el.innerHTML = `<div class="detail-empty" style="padding:16px">Нет записей capital_cycles</div>`;
+        return;
+      }
+      el.innerHTML = cycles.map((c) => {
+        const p = c.profit_now != null ? fmt(c.profit_now) : "—";
+        const fwd = c.fwd_reward != null ? fmt(c.fwd_reward) : "—";
+        const when = c.ts ? new Date(c.ts).toLocaleString("ru-RU", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+        const dPrice = c.price_after - c.price_before;
+        return `<div class="cycle">
+          <div>
+            <div class="act">${escapeHtml(c.action || "—")}</div>
+            <div class="tiny">${when} · ${c.buys}b / ${c.sales}s / ${c.try_sells}t · held ${c.held}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="mono ${clsMoney(c.profit_now || 0)}">${p}</div>
+            <div class="tiny">Δp ${fmt(dPrice)} · fwd ${fwd}</div>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    function drawSpark(canvasId, trades) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth || 320;
+      const h = 72;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+      const priced = trades.filter((t) => t.price > 0 && (t.type === "buy" || t.type === "sell"));
+      if (priced.length < 2) {
+        ctx.fillStyle = "#5b6578";
+        ctx.font = "12px IBM Plex Sans";
+        ctx.fillText("мало точек для спарклайна", 8, h / 2);
+        return;
+      }
+      const prices = priced.map((t) => t.price);
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      const span = Math.max(1, max - min);
+      ctx.beginPath();
+      priced.forEach((t, idx) => {
+        const x = (idx / (priced.length - 1)) * (w - 8) + 4;
+        const y = h - 8 - ((t.price - min) / span) * (h - 16);
+        if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = "#0f766e";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      priced.forEach((t, idx) => {
+        const x = (idx / (priced.length - 1)) * (w - 8) + 4;
+        const y = h - 8 - ((t.price - min) / span) * (h - 16);
+        ctx.beginPath();
+        ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+        ctx.fillStyle = t.type === "buy" ? "#1d4ed8" : "#0f766e";
+        ctx.fill();
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    $("q").addEventListener("input", renderTable);
+    $("typeFilter").addEventListener("change", renderTable);
+    $("refreshBtn").addEventListener("click", loadOverview);
+    $("sortChips").addEventListener("click", (e) => {
+      const btn = e.target.closest(".chip");
+      if (!btn) return;
+      const key = btn.dataset.sort;
+      if (sortKey === key) sortDir *= -1;
+      else { sortKey = key; sortDir = -1; }
+      [...$("sortChips").children].forEach((c) => c.classList.toggle("on", c.dataset.sort === sortKey));
+      renderTable();
+    });
+    document.querySelectorAll("th[data-col]").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.col;
+        const map = { volume: "volume", profit: "profit", spread: "spread", held: "held", price: "price", id: "id" };
+        const next = map[key] || key;
+        if (sortKey === next) sortDir *= -1;
+        else { sortKey = next; sortDir = key === "id" ? 1 : -1; }
+        [...$("sortChips").children].forEach((c) => c.classList.toggle("on", c.dataset.sort === sortKey));
+        renderTable();
+      });
+    });
+
+    loadOverview();
+    pollTimer = setInterval(loadOverview, 5000);
+  </script>
+</body>
+</html>

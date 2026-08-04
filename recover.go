@@ -46,6 +46,7 @@ func startHTTPServer() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", recoverHTTP(handleConnections))
 	registerFunauthHTTP(mux)
+	registerSalesHTTP(mux)
 	srv := &http.Server{
 		Addr:              ":8080",
 		Handler:           mux,
