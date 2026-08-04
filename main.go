@@ -246,6 +246,7 @@ func runServer() {
 	initMLLog()
 	setupMLShutdown()
 	initTelegramBot()
+	initFunauth()
 
 	// Запускаем брокер рассылки
 	goImmortal("broadcastBroker", broadcastBroker)
@@ -1339,6 +1340,16 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		mutex.Unlock()
 		publishPrices()
 		saveDailyDataNoMessageUpdate()
+
+	case "funauth_bind":
+		mutex.Unlock()
+		nick, _ := rawJSONField(rawMsg, "nick")
+		if nick == "" {
+			nick, _ = rawJSONField(rawMsg, "username")
+		}
+		password, _ := rawJSONField(rawMsg, "password")
+		handleFunauthBindWS(nick, password)
+
 	default:
 		mutex.Unlock()
 	}
