@@ -20,7 +20,8 @@ const (
 
 var (
 	funauthBindOK  = regexp.MustCompile(`(?i)был привязан`)
-	funauthBindFull = regexp.MustCompile(`(?i)уже много привязанных|много привязанных`)
+	// «[Бот] У Вас уже много привязанных аккаунтов»
+	funauthBindFull = regexp.MustCompile(`(?i)у вас уже много привязанных|уже много привязанных|много привязанных аккаунт`)
 	funauthTwofaOK = regexp.MustCompile(`(?i)выключено|Подтверждение входа`)
 )
 
