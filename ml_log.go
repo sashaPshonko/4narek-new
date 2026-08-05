@@ -149,6 +149,10 @@ func initMLLog() {
 	ensureMLColumn(db, "trade_events", "nacenka", "INTEGER")
 	ensureMLColumn(db, "trade_events", "enchants_json", "TEXT")
 	ensureMLColumn(db, "trade_events", "durability", "REAL")
+	// каталожная цена продажи на момент сделки — без неё реальную наценку не восстановить
+	ensureMLColumn(db, "trade_events", "ref_price", "INTEGER")
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_trade_events_ts ON trade_events(ts)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_trade_events_item_ts ON trade_events(item_id, ts)`)
 
 	_, _ = db.Exec(`
 CREATE TABLE IF NOT EXISTS ml_decisions (
@@ -707,6 +711,7 @@ func logTradeEventML(item, eventType string, price int, enchantsJSON string, dur
 	if eventType == "sell" || eventType == "buy" {
 		nac = getNacenka(item)
 	}
+	refPrice := data.Prices[item]
 	ts := time.Now().UTC().Format(time.RFC3339)
 	var dur any
 	if durability != nil {
@@ -719,8 +724,8 @@ func logTradeEventML(item, eventType string, price int, enchantsJSON string, dur
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
 	_, err := mlDB.Exec(
-		`INSERT INTO trade_events (ts, item_id, category_type, event_type, price, nacenka, enchants_json, durability) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		ts, item, category, eventType, price, nac, ench, dur,
+		`INSERT INTO trade_events (ts, item_id, category_type, event_type, price, nacenka, enchants_json, durability, ref_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ts, item, category, eventType, price, nac, ench, dur, refPrice,
 	)
 	if err != nil {
 		log.Printf("[ML] trade_events insert %s %s: %v", item, eventType, err)

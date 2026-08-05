@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>4narek · Sales</title>
+  <title>4narek · Продажи</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
@@ -13,6 +13,7 @@
       --bg-deep: #dde3ea;
       --ink: #0c1222;
       --muted: #5b6578;
+      --faint: #8b94a5;
       --line: rgba(12, 18, 34, 0.1);
       --surface: rgba(255, 255, 255, 0.78);
       --surface-solid: #ffffff;
@@ -25,6 +26,7 @@
       --buy: #1d4ed8;
       --sell: #0f766e;
       --try: #a16207;
+      --plan: #94a3b8;
       --shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 40px rgba(12, 18, 34, 0.06);
       --radius: 18px;
       --font: "IBM Plex Sans", system-ui, sans-serif;
@@ -43,399 +45,220 @@
         linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
       background-attachment: fixed;
       -webkit-font-smoothing: antialiased;
-      line-height: 1.4;
+      line-height: 1.45;
     }
-    .wrap {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 36px 22px 72px;
-    }
-    header.hero {
-      display: grid;
-      gap: 18px;
-      margin-bottom: 28px;
-      animation: rise 0.7s ease both;
-    }
+    .wrap { max-width: 1340px; margin: 0 auto; padding: 34px 22px 72px; }
+
+    header.hero { display: grid; gap: 14px; margin-bottom: 22px; animation: rise .7s ease both; }
     .brand {
-      font-family: var(--display);
-      font-weight: 800;
-      font-size: clamp(40px, 7vw, 72px);
-      letter-spacing: -0.045em;
-      line-height: 0.95;
-      margin: 0;
+      font-family: var(--display); font-weight: 800;
+      font-size: clamp(36px, 6vw, 62px); letter-spacing: -.045em; line-height: .95; margin: 0;
     }
-    .brand span {
-      color: var(--accent);
-    }
-    .lede {
-      margin: 0;
-      max-width: 34em;
-      color: var(--muted);
-      font-size: 17px;
-      font-weight: 500;
-    }
+    .brand span { color: var(--accent); }
+    .lede { margin: 0; max-width: 46em; color: var(--muted); font-size: 16px; font-weight: 500; }
     .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 14px;
-      border-radius: 999px;
-      background: var(--surface-solid);
-      border: 1px solid var(--line);
-      font-size: 13px;
-      color: var(--muted);
-      width: fit-content;
+      display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px;
+      border-radius: 999px; background: var(--surface-solid); border: 1px solid var(--line);
+      font-size: 13px; color: var(--muted); width: fit-content;
     }
     .status .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
-      animation: pulse 2.2s ease infinite;
+      width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft); animation: pulse 2.2s ease infinite;
     }
     .status.err .dot { background: var(--loss); box-shadow: 0 0 0 3px var(--loss-bg); }
 
-    .kpis {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 18px;
-      animation: rise 0.75s 0.08s ease both;
+    .periodbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .periodbar .cap { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+    .seg {
+      display: inline-flex; background: var(--surface-solid); border: 1px solid var(--line);
+      border-radius: 999px; padding: 3px; gap: 2px;
     }
+    .seg button {
+      font: inherit; font-size: 13.5px; font-weight: 600; border: 0; background: transparent;
+      color: var(--muted); padding: 7px 14px; border-radius: 999px; cursor: pointer; transition: .18s;
+    }
+    .seg button:hover { color: var(--ink); }
+    .seg button.on { background: var(--ink); color: #fff; }
+
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; animation: rise .75s .08s ease both; }
     .kpi {
-      background: var(--surface);
-      backdrop-filter: blur(16px) saturate(160%);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 18px 18px 16px;
-      box-shadow: var(--shadow);
-      min-height: 108px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      transition: transform 0.25s ease, border-color 0.25s ease;
+      background: var(--surface); backdrop-filter: blur(16px) saturate(160%);
+      border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 14px;
+      box-shadow: var(--shadow); min-height: 116px; display: flex; flex-direction: column; justify-content: space-between;
+      transition: transform .25s ease, border-color .25s ease;
     }
-    .kpi:hover { transform: translateY(-2px); border-color: rgba(15, 118, 110, 0.28); }
-    .kpi .label {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-    .kpi .value {
-      font-family: var(--mono);
-      font-size: clamp(22px, 2.6vw, 30px);
-      font-weight: 600;
-      letter-spacing: -0.03em;
-      margin-top: 10px;
-    }
-    .kpi .sub {
-      margin-top: 6px;
-      font-size: 13px;
-      color: var(--muted);
-    }
+    .kpi:hover { transform: translateY(-2px); border-color: rgba(15,118,110,.28); }
+    .kpi .label { font-size: 12px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
+    .kpi .value { font-family: var(--mono); font-size: clamp(20px, 2.3vw, 27px); font-weight: 600; letter-spacing: -.03em; margin-top: 8px; }
+    .kpi .sub { margin-top: 5px; font-size: 12.5px; color: var(--faint); line-height: 1.35; }
     .pos { color: var(--profit); }
     .neg { color: var(--loss); }
 
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 12px;
-      animation: rise 0.75s 0.12s ease both;
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; animation: rise .75s .12s ease both; }
+    .toolbar input, .toolbar select, .toolbar button.btn {
+      font: inherit; font-size: 14px; border-radius: 12px; border: 1px solid var(--line);
+      background: var(--surface-solid); color: var(--ink); padding: 10px 12px; outline: none;
     }
-    .toolbar input, .toolbar select, .toolbar button {
-      font: inherit;
-      font-size: 14px;
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      background: var(--surface-solid);
-      color: var(--ink);
-      padding: 10px 12px;
-      outline: none;
-    }
-    .toolbar input {
-      min-width: min(280px, 100%);
-      flex: 1;
-    }
-    .toolbar input:focus, .toolbar select:focus {
-      border-color: rgba(15, 118, 110, 0.5);
-      box-shadow: 0 0 0 4px var(--accent-soft);
-    }
-    .toolbar button {
-      cursor: pointer;
-      font-weight: 600;
-      background: var(--ink);
-      color: #fff;
-      border-color: transparent;
-      transition: transform 0.15s ease, opacity 0.15s;
-    }
-    .toolbar button:hover { opacity: 0.92; transform: translateY(-1px); }
-    .chiprow { display: flex; gap: 6px; flex-wrap: wrap; }
-    .chip {
-      border: 1px solid var(--line);
-      background: transparent;
-      color: var(--muted);
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .chip.on {
-      background: var(--accent-soft);
-      border-color: rgba(15, 118, 110, 0.35);
-      color: var(--accent);
-    }
+    .toolbar input { min-width: min(260px, 100%); flex: 1; }
+    .toolbar input:focus, .toolbar select:focus { border-color: rgba(15,118,110,.5); box-shadow: 0 0 0 4px var(--accent-soft); }
+    .toolbar button.btn { cursor: pointer; font-weight: 600; background: var(--ink); color: #fff; border-color: transparent; }
+    .toolbar button.btn:hover { opacity: .92; }
 
-    .layout {
-      display: grid;
-      grid-template-columns: 1.45fr 0.9fr;
-      gap: 14px;
-      align-items: start;
-      animation: rise 0.8s 0.16s ease both;
-    }
+    .layout { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; align-items: start; animation: rise .8s .16s ease both; }
     .panel {
-      background: var(--surface);
-      backdrop-filter: blur(16px) saturate(160%);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow: hidden;
+      background: var(--surface); backdrop-filter: blur(16px) saturate(160%);
+      border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
     }
-    .panel h2 {
-      margin: 0;
-      padding: 16px 18px 12px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--muted);
-      border-bottom: 1px solid var(--line);
+    .panel > h2 {
+      margin: 0; padding: 15px 18px 12px; font-size: 13px; font-weight: 700; color: var(--ink);
+      border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
     }
-    .table-wrap { overflow: auto; max-height: min(72vh, 860px); }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13.5px;
-    }
-    th, td {
-      padding: 11px 12px;
-      text-align: left;
-      border-bottom: 1px solid var(--line);
-      white-space: nowrap;
-    }
+    .panel > h2 .hint { font-size: 12px; font-weight: 500; color: var(--faint); }
+
+    .table-wrap { overflow: auto; max-height: min(74vh, 900px); }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th, td { padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
     th {
-      position: sticky;
-      top: 0;
-      background: rgba(255,255,255,0.94);
-      backdrop-filter: blur(8px);
-      font-size: 11px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--muted);
-      cursor: pointer;
-      user-select: none;
-      z-index: 1;
+      position: sticky; top: 0; background: rgba(255,255,255,.95); backdrop-filter: blur(8px);
+      font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; user-select: none; z-index: 1;
     }
     th:hover { color: var(--ink); }
-    th .arrow { opacity: 0.35; margin-left: 4px; }
-    th.active .arrow { opacity: 1; color: var(--accent); }
-    tbody tr {
-      cursor: pointer;
-      transition: background 0.15s ease;
-    }
-    tbody tr:hover { background: rgba(15, 118, 110, 0.05); }
+    th .arrow { opacity: .3; margin-left: 4px; }
+    th.active { color: var(--accent); }
+    th.active .arrow { opacity: 1; }
+    tbody tr { cursor: pointer; transition: background .15s ease; }
+    tbody tr:hover { background: rgba(15,118,110,.05); }
     tbody tr.active { background: var(--accent-soft); }
-    .id {
-      font-family: var(--display);
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      font-size: 14px;
-    }
-    .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .id { font-family: var(--display); font-weight: 700; letter-spacing: -.02em; font-size: 14.5px; }
+    .meta { color: var(--faint); font-size: 12px; margin-top: 2px; }
     .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-    .bar {
-      height: 6px;
-      border-radius: 999px;
-      background: rgba(12,18,34,0.08);
-      overflow: hidden;
-      min-width: 72px;
-      margin-top: 6px;
-    }
-    .bar > i {
-      display: block;
-      height: 100%;
-      width: 0;
-      background: linear-gradient(90deg, #1d4ed8, #0f766e);
-      border-radius: inherit;
-      transition: width 0.6s cubic-bezier(.2,.8,.2,1);
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      font-family: var(--mono);
-    }
+    .bar { height: 5px; border-radius: 999px; background: rgba(12,18,34,.08); overflow: hidden; min-width: 70px; margin-top: 6px; }
+    .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg,#1d4ed8,#0f766e); border-radius: inherit; transition: width .6s cubic-bezier(.2,.8,.2,1); }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 12.5px; font-weight: 600; font-family: var(--mono); }
     .badge.profit { background: var(--profit-bg); color: var(--profit); }
     .badge.loss { background: var(--loss-bg); color: var(--loss); }
-    .badge.flat { background: rgba(12,18,34,0.06); color: var(--muted); }
+    .badge.flat { background: rgba(12,18,34,.06); color: var(--muted); }
+    .nodata { color: var(--faint); }
 
-    .detail { min-height: 420px; }
-    .detail-body { padding: 16px 18px 22px; }
-    .detail-empty {
-      color: var(--muted);
-      padding: 40px 18px;
-      text-align: center;
-      font-size: 15px;
-    }
-    .detail-title {
-      font-family: var(--display);
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      margin: 0 0 4px;
-    }
-    .detail-sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
-    .grid2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .stat {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px;
-      background: rgba(255,255,255,0.55);
-    }
-    .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
-    .stat .v { font-family: var(--mono); font-size: 18px; font-weight: 600; margin-top: 4px; }
-    .section-label {
-      margin: 18px 0 8px;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-    .spark {
-      width: 100%;
-      height: 72px;
-      display: block;
-      margin: 4px 0 8px;
-    }
-    .feed {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      max-height: 240px;
-      overflow: auto;
-    }
+    .markcell { display: flex; flex-direction: column; gap: 3px; }
+    .markrow { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+    .markrow .tagline { width: 34px; color: var(--faint); font-size: 11px; }
+    .markbar { flex: 1; height: 6px; min-width: 54px; border-radius: 999px; background: rgba(12,18,34,.07); overflow: hidden; }
+    .markbar > i { display: block; height: 100%; border-radius: inherit; }
+    .markbar.fact > i { background: var(--accent); }
+    .markbar.plan > i { background: var(--plan); }
+    .markval { font-family: var(--mono); width: 52px; text-align: right; }
+
+    .detail { min-height: 460px; position: sticky; top: 16px; }
+    .detail-body { padding: 16px 18px 22px; max-height: min(80vh, 1000px); overflow: auto; }
+    .detail-empty { color: var(--muted); padding: 44px 22px; text-align: center; font-size: 14.5px; line-height: 1.6; }
+    .detail-title { font-family: var(--display); font-size: 26px; font-weight: 800; letter-spacing: -.03em; margin: 0 0 3px; }
+    .detail-sub { color: var(--faint); margin: 0 0 14px; font-size: 12.5px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 8px; }
+    .stat { border: 1px solid var(--line); border-radius: 14px; padding: 11px 12px; background: rgba(255,255,255,.6); }
+    .stat .k { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+    .stat .v { font-family: var(--mono); font-size: 17px; font-weight: 600; margin-top: 3px; }
+    .stat .n { font-size: 11.5px; color: var(--faint); margin-top: 2px; }
+    .section-label { margin: 20px 0 4px; font-size: 13px; font-weight: 700; color: var(--ink); }
+    .section-note { margin: 0 0 10px; font-size: 12px; color: var(--faint); line-height: 1.5; }
+    .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+    canvas.chart { width: 100%; display: block; margin: 4px 0 6px; }
+
+    .bands { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .bands th, .bands td { padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .bands th { position: static; background: transparent; font-size: 11.5px; cursor: default; }
+
+    .feed { display: flex; flex-direction: column; gap: 5px; max-height: 230px; overflow: auto; }
     .feed-row {
-      display: grid;
-      grid-template-columns: 64px 1fr auto;
-      gap: 8px;
-      align-items: center;
-      padding: 8px 10px;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.55);
-      border: 1px solid var(--line);
-      font-size: 13px;
+      display: grid; grid-template-columns: 78px 1fr auto; gap: 8px; align-items: center;
+      padding: 7px 10px; border-radius: 11px; background: rgba(255,255,255,.6); border: 1px solid var(--line); font-size: 13px;
     }
-    .tag {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      padding: 3px 7px;
-      border-radius: 8px;
-      width: fit-content;
-    }
-    .tag.buy { background: rgba(29,78,216,0.12); color: var(--buy); }
-    .tag.sell { background: rgba(15,118,110,0.12); color: var(--sell); }
-    .tag.try-sell { background: rgba(161,98,7,0.12); color: var(--try); }
-    .cycles { max-height: 260px; overflow: auto; }
-    .cycle {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 4px 10px;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--line);
-      font-size: 13px;
-    }
+    .tag { font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 8px; width: fit-content; }
+    .tag.buy { background: rgba(29,78,216,.12); color: var(--buy); }
+    .tag.sell { background: rgba(15,118,110,.12); color: var(--sell); }
+    .tag.try { background: rgba(161,98,7,.12); color: var(--try); }
+    .cycles { max-height: 250px; overflow: auto; }
+    .cycle { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
     .cycle:last-child { border-bottom: 0; }
     .cycle .act { font-weight: 700; }
-    .cycle .tiny { color: var(--muted); font-size: 12px; }
+    .cycle .tiny { color: var(--faint); font-size: 12px; }
 
-    @keyframes rise {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: none; }
-    }
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(0.85); opacity: 0.7; }
-    }
-    @media (max-width: 980px) {
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.85); opacity: .7; } }
+    @media (max-width: 1080px) {
       .kpis { grid-template-columns: 1fr 1fr; }
       .layout { grid-template-columns: 1fr; }
-      .detail { order: -1; }
+      .detail { position: static; order: -1; }
     }
     @media (max-width: 560px) {
       .kpis { grid-template-columns: 1fr; }
       .grid2 { grid-template-columns: 1fr; }
-      .wrap { padding-top: 24px; }
+      .wrap { padding-top: 22px; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header class="hero">
-      <h1 class="brand">4narek <span>Sales</span></h1>
-      <p class="lede">Живая картина рынка: кто крутится, с какой наценкой, где прибыль и какой масштаб оборота за день.</p>
+      <h1 class="brand">4narek <span>Продажи</span></h1>
+      <p class="lede">Что покупаем, за сколько продаём и сколько на этом реально зарабатываем — с поправкой на прочность предметов.</p>
       <div class="status" id="status"><span class="dot"></span><span id="statusText">подключение…</span></div>
     </header>
 
-    <section class="kpis" id="kpis">
-      <div class="kpi"><div class="label">Прибыль дня</div><div class="value mono" id="kpiProfit">—</div><div class="sub" id="kpiProfitSub">sell − buy</div></div>
-      <div class="kpi"><div class="label">Оборот</div><div class="value mono" id="kpiTurnover">—</div><div class="sub" id="kpiTurnoverSub">покупки + продажи</div></div>
-      <div class="kpi"><div class="label">Сделки</div><div class="value mono" id="kpiDeals">—</div><div class="sub" id="kpiDealsSub">buy / sell / try</div></div>
-      <div class="kpi"><div class="label">Сток</div><div class="value mono" id="kpiStock">—</div><div class="sub" id="kpiStockSub">AH + инвентарь</div></div>
+    <div class="periodbar">
+      <span class="cap">Период</span>
+      <div class="seg" id="periodSeg">
+        <button type="button" data-p="1h">Час</button>
+        <button type="button" data-p="today" class="on">Сегодня</button>
+        <button type="button" data-p="24h">24 часа</button>
+        <button type="button" data-p="7d">7 дней</button>
+        <button type="button" data-p="30d">30 дней</button>
+      </div>
+    </div>
+
+    <section class="kpis">
+      <div class="kpi">
+        <div class="label">Заработали</div>
+        <div class="value mono" id="kpiProfit">—</div>
+        <div class="sub" id="kpiProfitSub">получено с продаж минус потрачено на закуп</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Наценка по факту</div>
+        <div class="value mono" id="kpiMarkup">—</div>
+        <div class="sub" id="kpiMarkupSub">сколько реально накидываем сверх цены закупа</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Сделок</div>
+        <div class="value mono" id="kpiDeals">—</div>
+        <div class="sub" id="kpiDealsSub">куплено / продано штук</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Товар на руках</div>
+        <div class="value mono" id="kpiStock">—</div>
+        <div class="sub" id="kpiStockSub">выставлено на АХ + лежит в инвентаре</div>
+      </div>
     </section>
 
     <div class="toolbar">
-      <input id="q" type="search" placeholder="Поиск по id / типу…" autocomplete="off" />
-      <select id="typeFilter"><option value="">Все типы</option></select>
-      <div class="chiprow" id="sortChips">
-        <button type="button" class="chip on" data-sort="profit">Прибыль</button>
-        <button type="button" class="chip" data-sort="volume">Объём</button>
-        <button type="button" class="chip" data-sort="margin">Маржа %</button>
-        <button type="button" class="chip" data-sort="nacenka">Наценка</button>
-        <button type="button" class="chip" data-sort="held">Сток</button>
-      </div>
-      <button type="button" id="refreshBtn">Обновить</button>
+      <input id="q" type="search" placeholder="Поиск по названию или типу…" autocomplete="off" />
+      <select id="typeFilter"><option value="">Все категории</option></select>
+      <button type="button" class="btn" id="refreshBtn">Обновить</button>
     </div>
 
     <div class="layout">
       <section class="panel">
-        <h2>Предметы · сегодня</h2>
+        <h2><span id="tableTitle">Предметы</span><span class="hint">клик по строке — подробности</span></h2>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th data-col="id">Предмет <span class="arrow">↕</span></th>
-                <th data-col="price">Цена / наценка <span class="arrow">↕</span></th>
-                <th data-col="volume">Объём <span class="arrow">↕</span></th>
-                <th data-col="spread">Спред <span class="arrow">↕</span></th>
-                <th data-col="profit">Прибыль <span class="arrow">↕</span></th>
-                <th data-col="held">Сток <span class="arrow">↕</span></th>
+                <th data-col="volume">Куплено / продано <span class="arrow">↕</span></th>
+                <th data-col="prices">Цены сделок <span class="arrow">↕</span></th>
+                <th data-col="markup">Наценка: план / факт <span class="arrow">↕</span></th>
+                <th data-col="profit">Заработали <span class="arrow">↕</span></th>
+                <th data-col="held">На руках <span class="arrow">↕</span></th>
               </tr>
             </thead>
             <tbody id="tbody"></tbody>
@@ -445,7 +268,10 @@
 
       <aside class="panel detail" id="detail">
         <h2>Карточка предмета</h2>
-        <div class="detail-empty" id="detailEmpty">Выбери строку слева — увидишь сделки, циклы и окна 1ч / текущий цикл.</div>
+        <div class="detail-empty" id="detailEmpty">
+          Выбери предмет слева.<br />
+          Покажу, за сколько его берут по факту, какая прочность попадается и сколько на этом выходит сверх плана.
+        </div>
         <div class="detail-body" id="detailBody" hidden></div>
       </aside>
     </div>
@@ -457,37 +283,50 @@
     let selectedId = null;
     let sortKey = "profit";
     let sortDir = -1;
-    let maxVol = 1;
-    let pollTimer = null;
+    let period = "today";
 
     const fmt = (n) => {
       if (n == null || Number.isNaN(n)) return "—";
       const sign = n < 0 ? "−" : "";
-      const abs = Math.abs(Math.round(n));
-      return sign + abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
+      return sign + Math.abs(Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
     };
-    const fmtPct = (n) => {
+    const fmtShort = (n) => {
       if (n == null || Number.isNaN(n)) return "—";
-      return (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
+      const a = Math.abs(n), sign = n < 0 ? "−" : "";
+      if (a >= 1e9) return sign + (a / 1e9).toFixed(a >= 1e10 ? 0 : 1) + " млрд";
+      if (a >= 1e6) return sign + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + " млн";
+      if (a >= 1e3) return sign + (a / 1e3).toFixed(0) + " тыс";
+      return fmt(n);
     };
+    const pct = (n, digits = 1) => (n == null || Number.isNaN(n) ? "—" : n.toFixed(digits) + "%");
+    const signPct = (n) => (n == null || Number.isNaN(n) ? "—" : (n >= 0 ? "+" : "−") + Math.abs(n).toFixed(1) + "%");
     const clsMoney = (n) => (n > 0 ? "pos" : n < 0 ? "neg" : "");
     const badgeCls = (n) => (n > 0 ? "profit" : n < 0 ? "loss" : "flat");
+    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const plural = (n, one, few, many) => {
+      const a = Math.abs(n) % 100, b = a % 10;
+      if (a > 10 && a < 20) return many;
+      if (b > 1 && b < 5) return few;
+      if (b === 1) return one;
+      return many;
+    };
 
     async function loadOverview() {
       const status = $("status");
-      const statusText = $("statusText");
       try {
-        const res = await fetch("/sales/api/overview", { cache: "no-store" });
+        const res = await fetch("/sales/api/overview?period=" + period, { cache: "no-store" });
         if (!res.ok) throw new Error("HTTP " + res.status);
         overview = await res.json();
         status.classList.remove("err");
         const t = new Date(overview.updated_at);
-        statusText.textContent = `сегодня ${overview.date} · обновлено ${t.toLocaleTimeString("ru-RU")} · live ${overview.items_live}`;
+        const since = overview.since ? new Date(overview.since).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "всё время";
+        $("statusText").textContent = `${overview.period_label} · считаем с ${since} · обновлено ${t.toLocaleTimeString("ru-RU")} · торгуется ${overview.items_live} ${plural(overview.items_live, "предмет", "предмета", "предметов")}`;
+        $("tableTitle").textContent = "Предметы · " + overview.period_label;
         renderAll();
         if (selectedId) loadDetail(selectedId, false);
       } catch (e) {
         status.classList.add("err");
-        statusText.textContent = "нет связи с API: " + e.message;
+        $("statusText").textContent = "нет связи с сервером: " + e.message;
       }
     }
 
@@ -501,19 +340,15 @@
         items = items.filter((i) =>
           i.id.toLowerCase().includes(q) ||
           (i.name || "").toLowerCase().includes(q) ||
-          (i.type || "").toLowerCase().includes(q)
-        );
+          (i.type || "").toLowerCase().includes(q));
       }
-      const vol = (i) => i.buys + i.sells;
       const getters = {
         profit: (i) => i.profit,
-        volume: vol,
-        margin: (i) => i.margin_pct || 0,
-        nacenka: (i) => i.nacenka || 0,
+        volume: (i) => i.buys + i.sells,
+        markup: (i) => (i.fact_samples ? i.fact_markup_pct : -1e9),
+        prices: (i) => i.avg_buy || 0,
         held: (i) => i.held || 0,
         id: (i) => i.id,
-        price: (i) => i.price || 0,
-        spread: (i) => i.realized_spread || 0,
       };
       const get = getters[sortKey] || getters.profit;
       items.sort((a, b) => {
@@ -527,73 +362,103 @@
 
     function renderKpis() {
       const t = overview.totals;
-      const profitEl = $("kpiProfit");
-      profitEl.textContent = fmt(t.profit);
-      profitEl.className = "value mono " + clsMoney(t.profit);
-      $("kpiProfitSub").textContent = overview.top_profit_id
-        ? `лидер: ${overview.top_profit_id}`
-        : "sell − buy";
-      $("kpiTurnover").textContent = fmt(t.buy_sum + t.sell_sum);
-      $("kpiTurnoverSub").textContent = `buy ${fmt(t.buy_sum)} · sell ${fmt(t.sell_sum)}`;
-      $("kpiDeals").textContent = `${t.buys + t.sells}`;
-      $("kpiDealsSub").textContent = `${t.buys} buy · ${t.sells} sell · ${t.try_sells} try`;
+      const el = $("kpiProfit");
+      el.textContent = fmt(t.profit);
+      el.className = "value mono " + clsMoney(t.profit);
+      $("kpiProfitSub").innerHTML = `потратили ${fmtShort(t.buy_sum)} · получили ${fmtShort(t.sell_sum)}` +
+        (overview.top_profit_id ? `<br />больше всех принёс: <b>${escapeHtml(overview.top_profit_id)}</b>` : "");
+
+      const mk = $("kpiMarkup");
+      if (overview.fact_markup_pct) {
+        mk.textContent = pct(overview.fact_markup_pct);
+        const diff = overview.fact_markup_pct - overview.plan_markup_pct;
+        $("kpiMarkupSub").innerHTML = `по настройкам должно быть ${pct(overview.plan_markup_pct)} · ` +
+          `<span class="${diff >= 0 ? "pos" : "neg"}">${signPct(diff)} к плану</span><br />уже с поправкой на битые предметы`;
+      } else {
+        mk.textContent = "—";
+        $("kpiMarkupSub").textContent = "данные копятся с момента обновления сервера";
+      }
+
+      $("kpiDeals").textContent = `${fmt(t.buys)} / ${fmt(t.sells)}`;
+      $("kpiDealsSub").innerHTML = `куплено ${fmt(t.buys)} · продано ${fmt(t.sells)}<br />средний чек: закуп ${fmtShort(t.avg_buy)} → продажа ${fmtShort(t.avg_sell)}`;
+
       $("kpiStock").textContent = fmt(overview.stock_ah + overview.stock_inv);
-      $("kpiStockSub").textContent = `AH ${fmt(overview.stock_ah)} · inv ${fmt(overview.stock_inv)}`;
+      $("kpiStockSub").textContent = `на аукционе ${fmt(overview.stock_ah)} · в инвентаре ${fmt(overview.stock_inv)}`;
     }
 
     function fillTypes() {
       const sel = $("typeFilter");
       const cur = sel.value;
       const types = [...new Set(overview.items.map((i) => i.type).filter(Boolean))].sort();
-      sel.innerHTML = `<option value="">Все типы</option>` + types.map((t) => `<option value="${t}">${t}</option>`).join("");
+      sel.innerHTML = `<option value="">Все категории</option>` + types.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
       sel.value = cur;
+    }
+
+    function markupCell(i) {
+      if (!i.fact_samples) {
+        return `<div class="markcell"><span class="mono">${pct(i.nacenka_pct)}</span>
+          <div class="meta">по плану · факта пока нет</div></div>`;
+      }
+      const scale = Math.max(i.fact_markup_pct, i.plan_markup_pct, 1) * 1.15;
+      const diff = i.fact_markup_pct - i.plan_markup_pct;
+      return `<div class="markcell">
+        <div class="markrow"><span class="tagline">план</span>
+          <span class="markbar plan"><i style="width:${Math.min(100, (i.plan_markup_pct / scale) * 100)}%"></i></span>
+          <span class="markval">${pct(i.plan_markup_pct)}</span></div>
+        <div class="markrow"><span class="tagline">факт</span>
+          <span class="markbar fact"><i style="width:${Math.min(100, (i.fact_markup_pct / scale) * 100)}%"></i></span>
+          <span class="markval">${pct(i.fact_markup_pct)}</span></div>
+        <div class="meta ${diff >= 0 ? "pos" : "neg"}">${signPct(diff)} к плану · прочность ${Math.round(i.avg_durability * 100)}%</div>
+      </div>`;
     }
 
     function renderTable() {
       const items = filteredItems();
-      maxVol = Math.max(1, ...items.map((i) => i.buys + i.sells));
+      const maxVol = Math.max(1, ...items.map((i) => i.buys + i.sells));
       const tb = $("tbody");
+      if (!items.length) {
+        tb.innerHTML = `<tr><td colspan="6" class="nodata" style="padding:26px;text-align:center">Ничего не нашлось</td></tr>`;
+        return;
+      }
       tb.innerHTML = items.map((i) => {
         const vol = i.buys + i.sells;
-        const pct = Math.round((vol / maxVol) * 100);
-        const active = i.id === selectedId ? "active" : "";
-        return `<tr class="${active}" data-id="${escapeAttr(i.id)}">
+        const w = Math.round((vol / maxVol) * 100);
+        return `<tr class="${i.id === selectedId ? "active" : ""}" data-id="${escapeHtml(i.id)}">
           <td>
             <div class="id">${escapeHtml(i.id)}</div>
-            <div class="meta">${escapeHtml(i.type || "")}</div>
-          </td>
-          <td class="mono">
-            ${fmt(i.price)}
-            <div class="meta">+${fmt(i.nacenka)} · ${i.nacenka_pct ? i.nacenka_pct.toFixed(1) : "0"}%</div>
+            <div class="meta">${escapeHtml(i.type || "")} · цена ${fmt(i.price)}</div>
           </td>
           <td>
-            <div class="mono">${i.buys} / ${i.sells}${i.try_sells ? ` · ${i.try_sells}t` : ""}</div>
-            <div class="bar"><i style="width:${pct}%"></i></div>
+            <div class="mono">${fmt(i.buys)} / ${fmt(i.sells)}</div>
+            <div class="bar"><i style="width:${w}%"></i></div>
+            <div class="meta">${i.try_sells ? fmt(i.try_sells) + " попыток продать" : "&nbsp;"}</div>
           </td>
-          <td class="mono">
-            ${i.realized_spread ? fmt(i.realized_spread) : "—"}
-            <div class="meta">${i.avg_buy ? `b ${fmt(i.avg_buy)}` : "—"} → ${i.avg_sell ? `s ${fmt(i.avg_sell)}` : "—"}</div>
+          <td>
+            <div class="mono">${i.avg_buy ? fmt(i.avg_buy) : "—"}</div>
+            <div class="meta">в среднем берём</div>
+            <div class="mono" style="margin-top:4px">${i.avg_sell ? fmt(i.avg_sell) : "—"}</div>
+            <div class="meta">в среднем продаём</div>
           </td>
-          <td><span class="badge ${badgeCls(i.profit)}">${fmt(i.profit)}</span>
-            <div class="meta">${fmtPct(i.margin_pct)}</div>
+          <td>${markupCell(i)}</td>
+          <td>
+            <span class="badge ${badgeCls(i.profit)}">${fmtShort(i.profit)}</span>
+            <div class="meta">${fmt(i.profit)}</div>
+            <div class="meta">${i.margin_pct ? signPct(i.margin_pct) + " к вложенному" : "&nbsp;"}</div>
           </td>
-          <td class="mono">${i.on_ah} + ${i.inv}
-            <div class="meta">held ${i.held}</div>
+          <td>
+            <div class="mono">${fmt(i.held)}</div>
+            <div class="meta">АХ ${fmt(i.on_ah)} · инв ${fmt(i.inv)}</div>
           </td>
         </tr>`;
       }).join("");
-      tb.querySelectorAll("tr").forEach((tr) => {
+      tb.querySelectorAll("tr[data-id]").forEach((tr) => {
         tr.addEventListener("click", () => {
           selectedId = tr.dataset.id;
           renderTable();
           loadDetail(selectedId, true);
         });
       });
-      document.querySelectorAll("th[data-col]").forEach((th) => {
-        th.classList.toggle("active", th.dataset.col === sortKey ||
-          (sortKey === "volume" && th.dataset.col === "volume") ||
-          (sortKey === "margin" && th.dataset.col === "profit"));
-      });
+      document.querySelectorAll("th[data-col]").forEach((th) => th.classList.toggle("active", th.dataset.col === sortKey));
     }
 
     function renderAll() {
@@ -607,32 +472,83 @@
       const empty = $("detailEmpty");
       const body = $("detailBody");
       try {
-        const res = await fetch("/sales/api/item/" + encodeURIComponent(id), { cache: "no-store" });
+        const res = await fetch(`/sales/api/item/${encodeURIComponent(id)}?period=${period}`, { cache: "no-store" });
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
+        const keepScroll = body.hidden ? 0 : body.scrollTop;
         empty.hidden = true;
         body.hidden = false;
         const i = data.item;
+        const m = data.markups || {};
+
         body.innerHTML = `
           <h3 class="detail-title">${escapeHtml(i.id)}</h3>
-          <p class="detail-sub">${escapeHtml(i.type)} · цикл ${i.cycle_minutes || "?"} мин · last cycle profit ${fmt(i.last_cycle_profit)}</p>
+          <p class="detail-sub">${escapeHtml(i.type || "")} · ${escapeHtml(i.name || "")} · цикл переоценки ${i.cycle_minutes || "?"} мин</p>
+
           <div class="grid2">
-            <div class="stat"><div class="k">Sell цена</div><div class="v mono">${fmt(i.price)}</div></div>
-            <div class="stat"><div class="k">Наценка</div><div class="v mono">${fmt(i.nacenka)} <span style="font-size:13px;color:var(--muted)">${i.nacenka_pct ? i.nacenka_pct.toFixed(1) : "0"}%</span></div></div>
-            <div class="stat"><div class="k">Implied buy</div><div class="v mono">${fmt(i.implied_buy)}</div></div>
-            <div class="stat"><div class="k">Прибыль дня</div><div class="v mono ${clsMoney(i.profit)}">${fmt(i.profit)}</div></div>
-            <div class="stat"><div class="k">Окно 1ч</div><div class="v mono ${clsMoney(i.window_1h.profit)}">${fmt(i.window_1h.profit)}</div><div class="meta" style="margin-top:4px;color:var(--muted);font-size:12px">${i.window_1h.buys}b / ${i.window_1h.sells}s</div></div>
-            <div class="stat"><div class="k">Текущий цикл</div><div class="v mono ${clsMoney(i.window_cycle.profit)}">${fmt(i.window_cycle.profit)}</div><div class="meta" style="margin-top:4px;color:var(--muted);font-size:12px">${i.window_cycle.buys}b / ${i.window_cycle.sells}s</div></div>
+            <div class="stat"><div class="k">Продаём по</div><div class="v mono">${fmt(i.price)}</div><div class="n">целый предмет, битый — пропорционально дешевле</div></div>
+            <div class="stat"><div class="k">Готовы платить</div><div class="v mono">${fmt(i.implied_buy)}</div><div class="n">потолок закупа: цена минус наценка ${fmt(i.nacenka)}</div></div>
+            <div class="stat"><div class="k">Заработали ${escapeHtml(data.period_label || "")}</div><div class="v mono ${clsMoney(i.profit)}">${fmt(i.profit)}</div><div class="n">${fmt(i.buys)} закупов на ${fmtShort(i.buy_sum)}, ${fmt(i.sells)} продаж на ${fmtShort(i.sell_sum)}</div></div>
+            <div class="stat"><div class="k">Наценка факт / план</div><div class="v mono">${i.fact_samples ? pct(i.fact_markup_pct) : "—"} <span style="color:var(--faint);font-size:13px">/ ${i.fact_samples ? pct(i.plan_markup_pct) : pct(i.nacenka_pct)}</span></div><div class="n">${i.fact_samples ? `по ${fmt(i.fact_samples)} ${plural(i.fact_samples, "покупке", "покупкам", "покупкам")}` : "нет данных за период"}</div></div>
           </div>
-          <div class="section-label">Поток сделок</div>
-          <canvas class="spark" id="spark" width="640" height="144"></canvas>
+
+          <div class="section-label">Реальная наценка на закупах</div>
+          <p class="section-note">
+            Для каждой покупки считаем, за сколько этот конкретный экземпляр можно выставить
+            <b>с его прочностью</b>, и вычитаем то, что за него отдали. Битый на 40% предмет уходит на 40% дешевле,
+            так что халявой он не считается. «План» — наценка, которая заложена в настройках.
+          </p>
+          ${m.samples ? `
+            <div class="grid2">
+              <div class="stat"><div class="k">Обычная наценка</div><div class="v mono">${pct(m.fact_pct_median)}</div><div class="n">медиана; половина закупов лучше, половина хуже</div></div>
+              <div class="stat"><div class="k">Разброс</div><div class="v mono">${pct(m.fact_pct_p10, 0)} … ${pct(m.fact_pct_p90, 0)}</div><div class="n">80% закупов попадают в этот коридор</div></div>
+              <div class="stat"><div class="k">Сверх плана</div><div class="v mono ${clsMoney(m.bonus_avg)}">${fmt(m.bonus_avg)}</div><div class="n">в среднем с одной покупки: ${fmt(m.fact_abs_avg)} против плановых ${fmt(m.plan_abs_avg)}</div></div>
+              <div class="stat"><div class="k">Битых предметов</div><div class="v mono">${pct(m.broken_pct, 0)}</div><div class="n">средняя прочность закупа ${Math.round(m.avg_durability * 100)}%</div></div>
+            </div>
+            ${m.note ? `<p class="section-note">${escapeHtml(m.note)}</p>` : ""}
+
+            <div class="legend"><span><i style="background:var(--accent)"></i>факт</span><span><i style="background:var(--plan)"></i>план</span><span><i style="background:rgba(29,78,216,.25)"></i>сколько покупок</span></div>
+            <canvas class="chart" id="chTime" height="150"></canvas>
+            <div class="section-note">Как менялась наценка по времени. Столбики снизу — количество закупов в этот момент.</div>
+
+            <div class="section-label" style="margin-top:16px">Из чего складывается</div>
+            <canvas class="chart" id="chHist" height="130"></canvas>
+            <div class="section-note">Сколько закупов прошло с той или иной наценкой.</div>
+
+            ${(m.bands && m.bands.length > 1) ? `
+              <div class="section-label" style="margin-top:16px">Разбивка по прочности</div>
+              <table class="bands">
+                <thead><tr><th>Прочность</th><th>Закупов</th><th>Платим</th><th>Продаём</th><th>Наценка</th></tr></thead>
+                <tbody>${m.bands.map((b) => `<tr>
+                  <td>${escapeHtml(b.label)}</td>
+                  <td class="mono">${fmt(b.count)}</td>
+                  <td class="mono">${fmt(b.avg_paid)}</td>
+                  <td class="mono">${fmt(b.avg_fair)}</td>
+                  <td class="mono">${pct(b.avg_pct)} <span style="color:var(--faint)">/ ${pct(b.plan_pct)}</span></td>
+                </tr>`).join("")}</tbody>
+              </table>
+              <div class="section-note">«Продаём» — цена лота уже с учётом износа. Видно, выгоднее ли брать битые.</div>
+            ` : ""}
+          ` : `<p class="section-note">${escapeHtml(m.note || "Пока нет закупов за выбранный период.")}</p>`}
+
+          <div class="section-label">Последние сделки</div>
+          <p class="section-note">Живая лента из памяти сервера — последние операции ботов по этому предмету.</p>
+          <canvas class="chart" id="chSpark" height="80"></canvas>
           <div class="feed" id="feed"></div>
-          <div class="section-label">Циклы adjust</div>
+
+          <div class="section-label">Переоценки</div>
+          <p class="section-note">Что решал алгоритм на прошлых циклах: поднять цену, опустить или оставить.</p>
           <div class="cycles" id="cycles"></div>
         `;
+
         renderFeed(data.trades || []);
         renderCycles(data.cycles || []);
-        drawSpark("spark", data.trades || []);
+        drawSpark("chSpark", data.trades || []);
+        if (m.samples) {
+          drawTimeline("chTime", m.timeline || []);
+          drawHistogram("chHist", m.hist || []);
+        }
+        body.scrollTop = keepScroll;
         if (scroll) $("detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
       } catch (e) {
         empty.hidden = false;
@@ -645,17 +561,17 @@
       const el = $("feed");
       const rows = trades.slice().reverse().slice(0, 40);
       if (!rows.length) {
-        el.innerHTML = `<div class="detail-empty" style="padding:16px">Пока нет сделок в окне истории</div>`;
+        el.innerHTML = `<div class="nodata" style="padding:14px;font-size:13px">Свежих сделок в памяти нет</div>`;
         return;
       }
+      const words = { buy: ["buy", "Купили"], sell: ["sell", "Продали"], "try-sell": ["try", "Выставили"] };
       el.innerHTML = rows.map((t) => {
-        const tag = t.type === "try-sell" ? "try-sell" : t.type;
+        const [cls, word] = words[t.type] || ["try", t.type];
         const time = new Date(t.time).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        const extra = t.type === "sell" && t.nacenka ? ` · nac ${fmt(t.nacenka)}` : "";
         return `<div class="feed-row">
-          <span class="tag ${tag}">${tag}</span>
-          <span class="mono">${fmt(t.price)}${extra}</span>
-          <span style="color:var(--muted);font-size:12px">${time}</span>
+          <span class="tag ${cls}">${word}</span>
+          <span class="mono">${t.price ? fmt(t.price) : "—"}</span>
+          <span style="color:var(--faint);font-size:12px">${time}</span>
         </div>`;
       }).join("");
     }
@@ -663,99 +579,175 @@
     function renderCycles(cycles) {
       const el = $("cycles");
       if (!cycles.length) {
-        el.innerHTML = `<div class="detail-empty" style="padding:16px">Нет записей capital_cycles</div>`;
+        el.innerHTML = `<div class="nodata" style="padding:14px;font-size:13px">Записей о переоценках пока нет</div>`;
         return;
       }
+      const actions = { up: "подняли цену", down: "опустили цену", hold: "оставили как есть", keep: "оставили как есть" };
       el.innerHTML = cycles.map((c) => {
-        const p = c.profit_now != null ? fmt(c.profit_now) : "—";
-        const fwd = c.fwd_reward != null ? fmt(c.fwd_reward) : "—";
         const when = c.ts ? new Date(c.ts).toLocaleString("ru-RU", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
         const dPrice = c.price_after - c.price_before;
+        const act = actions[String(c.action || "").toLowerCase()] || c.action || "—";
         return `<div class="cycle">
           <div>
-            <div class="act">${escapeHtml(c.action || "—")}</div>
-            <div class="tiny">${when} · ${c.buys}b / ${c.sales}s / ${c.try_sells}t · held ${c.held}</div>
+            <div class="act">${escapeHtml(act)}</div>
+            <div class="tiny">${when} · куплено ${c.buys}, продано ${c.sales}, на руках ${c.held}</div>
           </div>
           <div style="text-align:right">
-            <div class="mono ${clsMoney(c.profit_now || 0)}">${p}</div>
-            <div class="tiny">Δp ${fmt(dPrice)} · fwd ${fwd}</div>
+            <div class="mono ${clsMoney(c.profit_now || 0)}">${c.profit_now != null ? fmtShort(c.profit_now) : "—"}</div>
+            <div class="tiny">цена ${dPrice >= 0 ? "+" : "−"}${fmt(Math.abs(dPrice))}</div>
           </div>
         </div>`;
       }).join("");
     }
 
-    function drawSpark(canvasId, trades) {
-      const canvas = document.getElementById(canvasId);
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
+    function prepCanvas(id, height) {
+      const canvas = document.getElementById(id);
+      if (!canvas) return null;
       const dpr = window.devicePixelRatio || 1;
-      const w = canvas.clientWidth || 320;
-      const h = 72;
+      const w = canvas.clientWidth || 420;
       canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      ctx.scale(dpr, dpr);
-      ctx.clearRect(0, 0, w, h);
+      canvas.height = height * dpr;
+      canvas.style.height = height + "px";
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, height);
+      ctx.font = "11px IBM Plex Sans";
+      return { ctx, w, h: height };
+    }
+
+    function drawTimeline(id, points) {
+      const c = prepCanvas(id, 150);
+      if (!c) return;
+      const { ctx, w, h } = c;
+      if (!points.length) return;
+      const padL = 38, padR = 8, padT = 10, padB = 20;
+      const iw = w - padL - padR, ih = h - padT - padB;
+      const vals = points.flatMap((p) => [p.fact_pct, p.plan_pct]);
+      let lo = Math.min(...vals), hi = Math.max(...vals);
+      if (hi - lo < 1) { hi += 1; lo -= 1; }
+      const padY = (hi - lo) * 0.15;
+      lo -= padY; hi += padY;
+      const x = (idx) => padL + (points.length === 1 ? iw / 2 : (idx / (points.length - 1)) * iw);
+      const y = (v) => padT + ih - ((v - lo) / (hi - lo)) * ih;
+
+      const maxCount = Math.max(1, ...points.map((p) => p.count));
+      ctx.fillStyle = "rgba(29,78,216,.18)";
+      const bw = Math.max(2, iw / points.length - 1);
+      points.forEach((p, idx) => {
+        const bh = (p.count / maxCount) * (ih * 0.32);
+        ctx.fillRect(x(idx) - bw / 2, padT + ih - bh, bw, bh);
+      });
+
+      ctx.strokeStyle = "rgba(12,18,34,.1)";
+      ctx.fillStyle = "#8b94a5";
+      [lo, (lo + hi) / 2, hi].forEach((v) => {
+        const yy = y(v);
+        ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(w - padR, yy); ctx.stroke();
+        ctx.fillText(v.toFixed(0) + "%", 4, yy + 3.5);
+      });
+
+      const line = (key, color, dash) => {
+        ctx.beginPath();
+        ctx.setLineDash(dash);
+        points.forEach((p, idx) => (idx ? ctx.lineTo(x(idx), y(p[key])) : ctx.moveTo(x(idx), y(p[key]))));
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      };
+      line("plan_pct", "#94a3b8", [4, 4]);
+      line("fact_pct", "#0f766e", []);
+
+      ctx.fillStyle = "#8b94a5";
+      const first = new Date(points[0].ts), last = new Date(points[points.length - 1].ts);
+      const opt = { hour: "2-digit", minute: "2-digit" };
+      ctx.fillText(first.toLocaleTimeString("ru-RU", opt), padL, h - 6);
+      const lbl = last.toLocaleTimeString("ru-RU", opt);
+      ctx.fillText(lbl, w - padR - ctx.measureText(lbl).width, h - 6);
+    }
+
+    function drawHistogram(id, buckets) {
+      const c = prepCanvas(id, 130);
+      if (!c) return;
+      const { ctx, w, h } = c;
+      if (!buckets.length) return;
+      const padL = 8, padR = 8, padT = 8, padB = 22;
+      const iw = w - padL - padR, ih = h - padT - padB;
+      const max = Math.max(1, ...buckets.map((b) => b.count));
+      const bw = iw / buckets.length;
+      buckets.forEach((b, idx) => {
+        const bh = (b.count / max) * ih;
+        const grad = ctx.createLinearGradient(0, padT + ih - bh, 0, padT + ih);
+        grad.addColorStop(0, "#0f766e");
+        grad.addColorStop(1, "rgba(15,118,110,.35)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(padL + idx * bw + 1, padT + ih - bh, Math.max(1, bw - 2), bh);
+      });
+      ctx.fillStyle = "#8b94a5";
+      ctx.fillText(buckets[0].from.toFixed(0) + "%", padL, h - 6);
+      const rightLbl = buckets[buckets.length - 1].to.toFixed(0) + "%";
+      ctx.fillText(rightLbl, w - padR - ctx.measureText(rightLbl).width, h - 6);
+      const mid = ((buckets[0].from + buckets[buckets.length - 1].to) / 2).toFixed(0) + "%";
+      ctx.fillText(mid, padL + iw / 2 - ctx.measureText(mid).width / 2, h - 6);
+    }
+
+    function drawSpark(id, trades) {
+      const c = prepCanvas(id, 80);
+      if (!c) return;
+      const { ctx, w, h } = c;
       const priced = trades.filter((t) => t.price > 0 && (t.type === "buy" || t.type === "sell"));
       if (priced.length < 2) {
-        ctx.fillStyle = "#5b6578";
-        ctx.font = "12px IBM Plex Sans";
-        ctx.fillText("мало точек для спарклайна", 8, h / 2);
+        ctx.fillStyle = "#8b94a5";
+        ctx.fillText("мало сделок для графика", 6, h / 2);
         return;
       }
       const prices = priced.map((t) => t.price);
-      const min = Math.min(...prices);
-      const max = Math.max(...prices);
+      const min = Math.min(...prices), max = Math.max(...prices);
       const span = Math.max(1, max - min);
+      const x = (i) => (i / (priced.length - 1)) * (w - 10) + 5;
+      const y = (p) => h - 12 - ((p - min) / span) * (h - 24);
       ctx.beginPath();
-      priced.forEach((t, idx) => {
-        const x = (idx / (priced.length - 1)) * (w - 8) + 4;
-        const y = h - 8 - ((t.price - min) / span) * (h - 16);
-        if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = "#0f766e";
-      ctx.lineWidth = 2;
+      priced.forEach((t, i) => (i ? ctx.lineTo(x(i), y(t.price)) : ctx.moveTo(x(i), y(t.price))));
+      ctx.strokeStyle = "rgba(15,118,110,.55)";
+      ctx.lineWidth = 1.5;
       ctx.stroke();
-      priced.forEach((t, idx) => {
-        const x = (idx / (priced.length - 1)) * (w - 8) + 4;
-        const y = h - 8 - ((t.price - min) / span) * (h - 16);
+      priced.forEach((t, i) => {
         ctx.beginPath();
-        ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+        ctx.arc(x(i), y(t.price), 2.6, 0, Math.PI * 2);
         ctx.fillStyle = t.type === "buy" ? "#1d4ed8" : "#0f766e";
         ctx.fill();
       });
+      ctx.fillStyle = "#8b94a5";
+      ctx.fillText(fmtShort(max), 4, 10);
+      ctx.fillText(fmtShort(min), 4, h - 2);
     }
-
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-    }
-    function escapeAttr(s) { return escapeHtml(s); }
 
     $("q").addEventListener("input", renderTable);
     $("typeFilter").addEventListener("change", renderTable);
     $("refreshBtn").addEventListener("click", loadOverview);
-    $("sortChips").addEventListener("click", (e) => {
-      const btn = e.target.closest(".chip");
+    $("periodSeg").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-p]");
       if (!btn) return;
-      const key = btn.dataset.sort;
-      if (sortKey === key) sortDir *= -1;
-      else { sortKey = key; sortDir = -1; }
-      [...$("sortChips").children].forEach((c) => c.classList.toggle("on", c.dataset.sort === sortKey));
-      renderTable();
+      period = btn.dataset.p;
+      [...$("periodSeg").children].forEach((b) => b.classList.toggle("on", b === btn));
+      loadOverview();
     });
     document.querySelectorAll("th[data-col]").forEach((th) => {
       th.addEventListener("click", () => {
         const key = th.dataset.col;
-        const map = { volume: "volume", profit: "profit", spread: "spread", held: "held", price: "price", id: "id" };
-        const next = map[key] || key;
-        if (sortKey === next) sortDir *= -1;
-        else { sortKey = next; sortDir = key === "id" ? 1 : -1; }
-        [...$("sortChips").children].forEach((c) => c.classList.toggle("on", c.dataset.sort === sortKey));
+        if (sortKey === key) sortDir *= -1;
+        else { sortKey = key; sortDir = key === "id" ? 1 : -1; }
         renderTable();
       });
     });
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => { if (selectedId) loadDetail(selectedId, false); }, 250);
+    });
 
     loadOverview();
-    pollTimer = setInterval(loadOverview, 5000);
+    setInterval(loadOverview, 7000);
   </script>
 </body>
 </html>

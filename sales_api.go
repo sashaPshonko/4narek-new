@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"io/fs"
 	"log"
+	"math"
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -30,32 +32,45 @@ type salesWindowView struct {
 }
 
 type salesItemView struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Type         string `json:"type"`
-	Price        int    `json:"price"`
-	Nacenka      int    `json:"nacenka"`
-	NacenkaPct   float64 `json:"nacenka_pct"`
-	ImpliedBuy   int    `json:"implied_buy"`
-	Buys         int    `json:"buys"`
-	Sells        int    `json:"sells"`
-	TrySells     int    `json:"try_sells"`
-	BuySum       int    `json:"buy_sum"`
-	SellSum      int    `json:"sell_sum"`
-	Profit       int    `json:"profit"`
-	AvgBuy       int    `json:"avg_buy,omitempty"`
-	AvgSell      int    `json:"avg_sell,omitempty"`
-	RealizedSpread int  `json:"realized_spread,omitempty"`
-	MarginPct    float64 `json:"margin_pct"`
-	OnAH         int    `json:"on_ah"`
-	Inv          int    `json:"inv"`
-	Held         int    `json:"held"`
-	LastCycleProfit int `json:"last_cycle_profit"`
-	LastCycleSales  int `json:"last_cycle_sales"`
-	CycleMinutes float64 `json:"cycle_minutes"`
-	Window1h     salesWindowView `json:"window_1h"`
-	WindowCycle  salesWindowView `json:"window_cycle"`
-	LastTradeAt  *time.Time `json:"last_trade_at,omitempty"`
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Type       string  `json:"type"`
+	Price      int     `json:"price"`
+	Nacenka    int     `json:"nacenka"`
+	NacenkaPct float64 `json:"nacenka_pct"`
+	ImpliedBuy int     `json:"implied_buy"`
+
+	Buys     int `json:"buys"`
+	Sells    int `json:"sells"`
+	TrySells int `json:"try_sells"`
+	BuySum   int `json:"buy_sum"`
+	SellSum  int `json:"sell_sum"`
+	Profit   int `json:"profit"`
+	AvgBuy   int `json:"avg_buy,omitempty"`
+	AvgSell  int `json:"avg_sell,omitempty"`
+
+	RealizedSpread int     `json:"realized_spread,omitempty"`
+	MarginPct      float64 `json:"margin_pct"`
+
+	// Фактическая наценка: сколько реально заработали на купленном экземпляре
+	// с поправкой на его прочность (битый предмет и продаётся дешевле).
+	FactSamples  int     `json:"fact_samples"`
+	FactMarkup   int     `json:"fact_markup"`
+	FactMarkupPc float64 `json:"fact_markup_pct"`
+	PlanMarkupPc float64 `json:"plan_markup_pct"`
+	AvgDurab     float64 `json:"avg_durability"`
+
+	OnAH int `json:"on_ah"`
+	Inv  int `json:"inv"`
+	Held int `json:"held"`
+
+	LastCycleProfit int     `json:"last_cycle_profit"`
+	LastCycleSales  int     `json:"last_cycle_sales"`
+	CycleMinutes    float64 `json:"cycle_minutes"`
+
+	Window1h    salesWindowView `json:"window_1h"`
+	WindowCycle salesWindowView `json:"window_cycle"`
+	LastTradeAt *time.Time      `json:"last_trade_at,omitempty"`
 }
 
 type salesCycleView struct {
@@ -81,16 +96,22 @@ type salesCycleView struct {
 }
 
 type salesOverview struct {
-	OK        bool            `json:"ok"`
-	Date      string          `json:"date"`
-	UpdatedAt time.Time       `json:"updated_at"`
-	Totals    salesWindowView `json:"totals"`
-	StockAH   int             `json:"stock_ah"`
-	StockInv  int             `json:"stock_inv"`
-	ItemsLive int             `json:"items_live"`
-	TopProfit string          `json:"top_profit_id,omitempty"`
-	TopVolume string          `json:"top_volume_id,omitempty"`
-	Items     []salesItemView `json:"items"`
+	OK          bool            `json:"ok"`
+	Date        string          `json:"date"`
+	Period      string          `json:"period"`
+	PeriodLabel string          `json:"period_label"`
+	Since       *time.Time      `json:"since,omitempty"`
+	Source      string          `json:"source"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+	Totals      salesWindowView `json:"totals"`
+	FactMarkup  float64         `json:"fact_markup_pct"`
+	PlanMarkup  float64         `json:"plan_markup_pct"`
+	StockAH     int             `json:"stock_ah"`
+	StockInv    int             `json:"stock_inv"`
+	ItemsLive   int             `json:"items_live"`
+	TopProfit   string          `json:"top_profit_id,omitempty"`
+	TopVolume   string          `json:"top_volume_id,omitempty"`
+	Items       []salesItemView `json:"items"`
 }
 
 func registerSalesHTTP(mux *http.ServeMux) {
@@ -126,25 +147,29 @@ func salesAPI(w http.ResponseWriter, r *http.Request) {
 	if path == "" {
 		path = "/"
 	}
+	period := r.URL.Query().Get("period")
 
 	switch {
 	case path == "/overview" && r.Method == http.MethodGet:
-		salesJSON(w, http.StatusOK, buildSalesOverview())
+		salesJSON(w, http.StatusOK, buildSalesOverview(period))
 		return
 
 	case strings.HasPrefix(path, "/item/") && r.Method == http.MethodGet:
-		id := strings.TrimPrefix(path, "/item/")
-		id = strings.Trim(id, "/")
+		id := strings.Trim(strings.TrimPrefix(path, "/item/"), "/")
 		if id == "" {
 			salesJSONErr(w, http.StatusBadRequest, "missing item id")
 			return
 		}
-		item, ok := buildSalesItemDetail(id)
+		item, ok := buildSalesItemDetail(id, period)
 		if !ok {
 			salesJSONErr(w, http.StatusNotFound, "unknown item")
 			return
 		}
 		salesJSON(w, http.StatusOK, item)
+		return
+
+	case path == "/markups" && r.Method == http.MethodGet:
+		salesJSON(w, http.StatusOK, buildSalesMarkups(r.URL.Query().Get("item"), period))
 		return
 
 	default:
@@ -164,6 +189,241 @@ func salesJSON(w http.ResponseWriter, code int, v any) {
 func salesJSONErr(w http.ResponseWriter, code int, msg string) {
 	salesJSON(w, code, map[string]any{"ok": false, "error": msg})
 }
+
+// ── период ───────────────────────────────────────────────────────────────────
+
+var (
+	salesLocOnce sync.Once
+	salesLoc     *time.Location
+)
+
+func salesLocation() *time.Location {
+	salesLocOnce.Do(func() {
+		l, err := time.LoadLocation(timezone)
+		if err != nil {
+			l = time.UTC
+		}
+		salesLoc = l
+	})
+	return salesLoc
+}
+
+func salesPeriodSince(key string) (string, string, time.Time) {
+	now := time.Now()
+	switch key {
+	case "1h":
+		return "1h", "за последний час", now.Add(-time.Hour)
+	case "24h":
+		return "24h", "за 24 часа", now.Add(-24 * time.Hour)
+	case "7d":
+		return "7d", "за 7 дней", now.Add(-7 * 24 * time.Hour)
+	case "30d":
+		return "30d", "за 30 дней", now.Add(-30 * 24 * time.Hour)
+	case "all":
+		return "all", "за всё время", time.Time{}
+	default:
+		loc := salesLocation()
+		n := now.In(loc)
+		return "today", "сегодня с 00:00", time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, loc)
+	}
+}
+
+func salesTSBound(since time.Time) string {
+	if since.IsZero() {
+		return "0000"
+	}
+	return since.UTC().Format(time.RFC3339)
+}
+
+// Длинные периоды — это скан сотен тысяч строк, а фронт опрашивает раз в 7 секунд.
+func salesPeriodTTL(period string) time.Duration {
+	switch period {
+	case "7d":
+		return 30 * time.Second
+	case "30d", "all":
+		return 2 * time.Minute
+	default:
+		return 3 * time.Second
+	}
+}
+
+type salesAggCache struct {
+	at    time.Time
+	aggs  map[string]*tradeAgg
+	ok    bool
+	facts map[string]*factMarkupAgg
+}
+
+var (
+	salesCacheMu   sync.Mutex
+	salesAggCached = map[string]*salesAggCache{}
+	salesMarkCache = map[string]*salesMarkCacheEntry{}
+)
+
+type salesMarkCacheEntry struct {
+	at    time.Time
+	stats salesMarkupStats
+}
+
+func salesAggregates(period string, since time.Time) (map[string]*tradeAgg, bool, map[string]*factMarkupAgg) {
+	ttl := salesPeriodTTL(period)
+	salesCacheMu.Lock()
+	if c, ok := salesAggCached[period]; ok && time.Since(c.at) < ttl {
+		salesCacheMu.Unlock()
+		return c.aggs, c.ok, c.facts
+	}
+	salesCacheMu.Unlock()
+
+	aggs, ok := queryTradeAggregates(since)
+	facts := queryFactMarkups(since)
+
+	salesCacheMu.Lock()
+	salesAggCached[period] = &salesAggCache{at: time.Now(), aggs: aggs, ok: ok, facts: facts}
+	salesCacheMu.Unlock()
+	return aggs, ok, facts
+}
+
+func salesMarkups(item, period string, since time.Time, fallbackPrice int) salesMarkupStats {
+	key := period + "|" + item
+	ttl := salesPeriodTTL(period)
+	salesCacheMu.Lock()
+	if c, ok := salesMarkCache[key]; ok && time.Since(c.at) < ttl {
+		salesCacheMu.Unlock()
+		return c.stats
+	}
+	salesCacheMu.Unlock()
+
+	stats := computeMarkupStats(item, since, fallbackPrice)
+
+	salesCacheMu.Lock()
+	salesMarkCache[key] = &salesMarkCacheEntry{at: time.Now(), stats: stats}
+	salesCacheMu.Unlock()
+	return stats
+}
+
+// ── прочность → честная цена продажи ─────────────────────────────────────────
+
+// fairSellPrice повторяет priceWithDurability из items/slotInfo.mjs:
+// битый предмет бот выставляет пропорционально остатку прочности, ниже 50% — не берёт.
+func fairSellPrice(basePrice int, durability float64) int {
+	if basePrice <= 0 {
+		return 0
+	}
+	if durability <= 0 || durability >= 1 {
+		return basePrice
+	}
+	if durability < 0.5 {
+		return 0
+	}
+	marker := basePrice % 100
+	price := int(math.Floor(float64(basePrice) * durability))
+	return (price/100)*100 + marker
+}
+
+// ── агрегаты из trade_events ─────────────────────────────────────────────────
+
+type tradeAgg struct {
+	Buys, Sells, Tries int
+	BuySum, SellSum    int
+}
+
+type factMarkupAgg struct {
+	Samples   int
+	MarkupAbs float64
+	MarkupPct float64
+	PlanPct   float64
+	Durab     float64
+}
+
+func queryTradeAggregates(since time.Time) (map[string]*tradeAgg, bool) {
+	if mlDB == nil {
+		return nil, false
+	}
+	mlDBMu.Lock()
+	defer mlDBMu.Unlock()
+
+	rows, err := mlDB.Query(`
+SELECT item_id, event_type, COUNT(*), COALESCE(SUM(price), 0)
+FROM trade_events
+WHERE ts >= ?
+GROUP BY item_id, event_type`, salesTSBound(since))
+	if err != nil {
+		log.Printf("[sales] aggregates: %v", err)
+		return nil, false
+	}
+	defer rows.Close()
+
+	out := make(map[string]*tradeAgg, 64)
+	for rows.Next() {
+		var item, ev string
+		var cnt, sum int
+		if err := rows.Scan(&item, &ev, &cnt, &sum); err != nil {
+			log.Printf("[sales] aggregates scan: %v", err)
+			return nil, false
+		}
+		a := out[item]
+		if a == nil {
+			a = &tradeAgg{}
+			out[item] = a
+		}
+		switch ev {
+		case "buy":
+			a.Buys, a.BuySum = cnt, sum
+		case "sell":
+			a.Sells, a.SellSum = cnt, sum
+		case "try-sell":
+			a.Tries = cnt
+		}
+	}
+	return out, rows.Err() == nil
+}
+
+// queryFactMarkups — средняя фактическая наценка по каждому предмету.
+// fair = ref_price * прочность (как её считает бот при выставлении лота),
+// поэтому купленный полудохлый предмет не завышает наценку.
+func queryFactMarkups(since time.Time) map[string]*factMarkupAgg {
+	if mlDB == nil {
+		return nil
+	}
+	mlDBMu.Lock()
+	defer mlDBMu.Unlock()
+
+	rows, err := mlDB.Query(`
+SELECT item_id,
+       COUNT(*),
+       AVG(fair - price),
+       AVG((fair - price) * 100.0 / price),
+       AVG(nacenka * 100.0 / MAX(1, fair - nacenka)),
+       AVG(dur)
+FROM (
+  SELECT item_id, price, nacenka,
+         COALESCE(durability, 1.0) AS dur,
+         CAST(ref_price * COALESCE(durability, 1.0) AS INTEGER) AS fair
+  FROM trade_events
+  WHERE ts >= ? AND event_type = 'buy' AND price > 0 AND COALESCE(ref_price, 0) > 0
+)
+GROUP BY item_id`, salesTSBound(since))
+	if err != nil {
+		log.Printf("[sales] fact markups: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	out := make(map[string]*factMarkupAgg, 64)
+	for rows.Next() {
+		var item string
+		var a factMarkupAgg
+		if err := rows.Scan(&item, &a.Samples, &a.MarkupAbs, &a.MarkupPct, &a.PlanPct, &a.Durab); err != nil {
+			log.Printf("[sales] fact markups scan: %v", err)
+			continue
+		}
+		cp := a
+		out[item] = &cp
+	}
+	return out
+}
+
+// ── overview ─────────────────────────────────────────────────────────────────
 
 func windowFromTrades(item string, since time.Time) salesWindowView {
 	var w salesWindowView
@@ -193,15 +453,9 @@ func windowFromTrades(item string, since time.Time) salesWindowView {
 	return w
 }
 
-func buildSalesItemViewLocked(id string, cfg ItemConfig, now time.Time) salesItemView {
+func buildSalesItemViewLocked(id string, cfg ItemConfig, now time.Time, agg *tradeAgg, fact *factMarkupAgg) salesItemView {
 	price := data.Prices[id]
 	nac := getNacenka(id)
-	buys := data.BuyStats[id]
-	sells := data.SellStats[id]
-	tries := data.TrySellStats[id]
-	buySum := data.BuySum[id]
-	sellSum := data.SellSum[id]
-	profit := sellSum - buySum
 	onAH := getItemCount(id)
 	inv := getInventoryCount(id)
 	st := data.AdjustState[id]
@@ -213,12 +467,6 @@ func buildSalesItemViewLocked(id string, cfg ItemConfig, now time.Time) salesIte
 		Price:           price,
 		Nacenka:         nac,
 		ImpliedBuy:      price - nac,
-		Buys:            buys,
-		Sells:           sells,
-		TrySells:        tries,
-		BuySum:          buySum,
-		SellSum:         sellSum,
-		Profit:          profit,
 		OnAH:            onAH,
 		Inv:             inv,
 		Held:            onAH + inv,
@@ -226,21 +474,39 @@ func buildSalesItemViewLocked(id string, cfg ItemConfig, now time.Time) salesIte
 		LastCycleSales:  st.LastCycleSales,
 		CycleMinutes:    cfg.AnalysisTime.Minutes(),
 	}
+
+	if agg != nil {
+		v.Buys, v.Sells, v.TrySells = agg.Buys, agg.Sells, agg.Tries
+		v.BuySum, v.SellSum = agg.BuySum, agg.SellSum
+	} else {
+		v.Buys, v.Sells, v.TrySells = data.BuyStats[id], data.SellStats[id], data.TrySellStats[id]
+		v.BuySum, v.SellSum = data.BuySum[id], data.SellSum[id]
+	}
+	v.Profit = v.SellSum - v.BuySum
+
 	if price > 0 && nac > 0 {
-		v.NacenkaPct = float64(nac) * 100 / float64(price)
+		v.NacenkaPct = float64(nac) * 100 / float64(price-nac)
 	}
-	if buys > 0 {
-		v.AvgBuy = buySum / buys
+	if v.Buys > 0 {
+		v.AvgBuy = v.BuySum / v.Buys
 	}
-	if sells > 0 {
-		v.AvgSell = sellSum / sells
+	if v.Sells > 0 {
+		v.AvgSell = v.SellSum / v.Sells
 	}
 	if v.AvgBuy > 0 && v.AvgSell > 0 {
 		v.RealizedSpread = v.AvgSell - v.AvgBuy
 	}
-	if buySum > 0 {
-		v.MarginPct = float64(profit) * 100 / float64(buySum)
+	if v.BuySum > 0 {
+		v.MarginPct = float64(v.Profit) * 100 / float64(v.BuySum)
 	}
+	if fact != nil && fact.Samples > 0 {
+		v.FactSamples = fact.Samples
+		v.FactMarkup = int(math.Round(fact.MarkupAbs))
+		v.FactMarkupPc = fact.MarkupPct
+		v.PlanMarkupPc = fact.PlanPct
+		v.AvgDurab = fact.Durab
+	}
+
 	v.Window1h = windowFromTrades(id, now.Add(-time.Hour))
 	cycleSince := data.LastCycleAt[id]
 	if cycleSince.IsZero() {
@@ -257,22 +523,34 @@ func buildSalesItemViewLocked(id string, cfg ItemConfig, now time.Time) salesIte
 	return v
 }
 
-func buildSalesOverview() salesOverview {
+func buildSalesOverview(periodKey string) salesOverview {
 	now := time.Now()
+	period, label, since := salesPeriodSince(periodKey)
+	aggs, aggOK, facts := salesAggregates(period, since)
+
 	mutex.RLock()
 	defer mutex.RUnlock()
 
 	out := salesOverview{
-		OK:        true,
-		Date:      currentDay,
-		UpdatedAt: now,
-		Items:     make([]salesItemView, 0, len(itemsConfig)),
+		OK:          true,
+		Date:        currentDay,
+		Period:      period,
+		PeriodLabel: label,
+		Source:      "trade_events",
+		UpdatedAt:   now,
+		Items:       make([]salesItemView, 0, len(itemsConfig)),
 	}
-
-	var topProfitID, topVolID string
-	var topProfit int
-	var topVol int
-	haveTopProfit := false
+	if !since.IsZero() {
+		s := since
+		out.Since = &s
+	}
+	if !aggOK {
+		aggs = nil
+		out.Source = "counters"
+		if period != "today" {
+			out.PeriodLabel = label + " (нет БД — показываем счётчики за сегодня)"
+		}
+	}
 
 	ids := make([]string, 0, len(itemsConfig))
 	for id := range itemsConfig {
@@ -280,10 +558,24 @@ func buildSalesOverview() salesOverview {
 	}
 	sort.Strings(ids)
 
+	var topProfitID, topVolID string
+	var topProfit, topVol int
+	haveTopProfit := false
+	var factWeighted, planWeighted, factWeight float64
+
 	for _, id := range ids {
 		cfg := itemsConfig[id]
-		v := buildSalesItemViewLocked(id, cfg, now)
+		var agg *tradeAgg
+		if aggs != nil {
+			if a, ok := aggs[id]; ok {
+				agg = a
+			} else {
+				agg = &tradeAgg{}
+			}
+		}
+		v := buildSalesItemViewLocked(id, cfg, now, agg, facts[id])
 		out.Items = append(out.Items, v)
+
 		out.Totals.Buys += v.Buys
 		out.Totals.Sells += v.Sells
 		out.Totals.TrySells += v.TrySells
@@ -295,22 +587,29 @@ func buildSalesOverview() salesOverview {
 		if v.Buys > 0 || v.Sells > 0 || v.OnAH > 0 || v.Inv > 0 {
 			out.ItemsLive++
 		}
-		if !haveTopProfit || v.Profit > topProfit {
-			topProfit = v.Profit
-			topProfitID = id
-			haveTopProfit = true
+		if v.FactSamples > 0 {
+			w := float64(v.FactSamples)
+			factWeighted += v.FactMarkupPc * w
+			planWeighted += v.PlanMarkupPc * w
+			factWeight += w
 		}
-		vol := v.Buys + v.Sells
-		if vol > topVol {
-			topVol = vol
-			topVolID = id
+		if !haveTopProfit || v.Profit > topProfit {
+			topProfit, topProfitID, haveTopProfit = v.Profit, id, true
+		}
+		if vol := v.Buys + v.Sells; vol > topVol {
+			topVol, topVolID = vol, id
 		}
 	}
+
 	if out.Totals.Buys > 0 {
 		out.Totals.AvgBuy = out.Totals.BuySum / out.Totals.Buys
 	}
 	if out.Totals.Sells > 0 {
 		out.Totals.AvgSell = out.Totals.SellSum / out.Totals.Sells
+	}
+	if factWeight > 0 {
+		out.FactMarkup = factWeighted / factWeight
+		out.PlanMarkup = planWeighted / factWeight
 	}
 	out.TopProfit = topProfitID
 	out.TopVolume = topVolID
@@ -329,52 +628,420 @@ func buildSalesOverview() salesOverview {
 	return out
 }
 
+// ── карточка предмета ────────────────────────────────────────────────────────
+
 type salesItemDetail struct {
-	OK     bool             `json:"ok"`
-	Item   salesItemView    `json:"item"`
-	Trades []salesTradeView `json:"trades"`
-	Cycles []salesCycleView `json:"cycles"`
-	PriceHistory []PriceRecord `json:"price_history,omitempty"`
+	OK           bool             `json:"ok"`
+	Period       string           `json:"period"`
+	PeriodLabel  string           `json:"period_label"`
+	Item         salesItemView    `json:"item"`
+	Trades       []salesTradeView `json:"trades"`
+	Cycles       []salesCycleView `json:"cycles"`
+	Markups      salesMarkupStats `json:"markups"`
+	PriceHistory []PriceRecord    `json:"price_history,omitempty"`
 }
 
-func buildSalesItemDetail(id string) (salesItemDetail, bool) {
+func buildSalesItemDetail(id, periodKey string) (salesItemDetail, bool) {
 	now := time.Now()
+	period, label, since := salesPeriodSince(periodKey)
+	aggs, aggOK, facts := salesAggregates(period, since)
+
 	mutex.RLock()
 	cfg, ok := itemsConfig[id]
 	if !ok {
 		mutex.RUnlock()
 		return salesItemDetail{}, false
 	}
-	item := buildSalesItemViewLocked(id, cfg, now)
-	trades := make([]salesTradeView, 0, 80)
+	var agg *tradeAgg
+	if aggOK {
+		if a, found := aggs[id]; found {
+			agg = a
+		} else {
+			agg = &tradeAgg{}
+		}
+	}
+	item := buildSalesItemViewLocked(id, cfg, now, agg, facts[id])
+
 	logs := data.TradeHistory[id]
 	start := 0
 	if len(logs) > 80 {
 		start = len(logs) - 80
 	}
+	trades := make([]salesTradeView, 0, len(logs)-start)
 	for _, t := range logs[start:] {
-		trades = append(trades, salesTradeView{
-			Time:    t.Time,
-			Type:    t.Type,
-			Price:   t.Price,
-			Nacenka: t.Nacenka,
-		})
+		trades = append(trades, salesTradeView{Time: t.Time, Type: t.Type, Price: t.Price, Nacenka: t.Nacenka})
 	}
 	var ph []PriceRecord
 	if h := priceHistory[id]; h != nil && len(h.Records) > 0 {
 		ph = append([]PriceRecord(nil), h.Records...)
 	}
+	fallbackPrice := data.Prices[id]
 	mutex.RUnlock()
 
-	cycles := querySalesCycles(id, 40)
 	return salesItemDetail{
 		OK:           true,
+		Period:       period,
+		PeriodLabel:  label,
 		Item:         item,
 		Trades:       trades,
-		Cycles:       cycles,
+		Cycles:       querySalesCycles(id, 40),
+		Markups:      salesMarkups(id, period, since, fallbackPrice),
 		PriceHistory: ph,
 	}, true
 }
+
+// ── реальные наценки ─────────────────────────────────────────────────────────
+
+type markupBucket struct {
+	From  float64 `json:"from"`
+	To    float64 `json:"to"`
+	Count int     `json:"count"`
+}
+
+type markupBand struct {
+	Label     string  `json:"label"`
+	From      float64 `json:"from"`
+	To        float64 `json:"to"`
+	Count     int     `json:"count"`
+	AvgPaid   int     `json:"avg_paid"`
+	AvgFair   int     `json:"avg_fair"`
+	AvgMarkup int     `json:"avg_markup"`
+	AvgPct    float64 `json:"avg_pct"`
+	PlanPct   float64 `json:"plan_pct"`
+}
+
+type markupTimePoint struct {
+	TS      time.Time `json:"ts"`
+	Count   int       `json:"count"`
+	FactPct float64   `json:"fact_pct"`
+	PlanPct float64   `json:"plan_pct"`
+	AvgDur  float64   `json:"avg_dur"`
+}
+
+type salesMarkupStats struct {
+	OK        bool   `json:"ok"`
+	Item      string `json:"item,omitempty"`
+	Samples   int    `json:"samples"`
+	Approx    int    `json:"approx"`
+	Note      string `json:"note,omitempty"`
+	BrokenPct float64 `json:"broken_pct"`
+
+	FactPctAvg float64 `json:"fact_pct_avg"`
+	FactPctMed float64 `json:"fact_pct_median"`
+	FactPctP10 float64 `json:"fact_pct_p10"`
+	FactPctP90 float64 `json:"fact_pct_p90"`
+	FactAbsAvg int     `json:"fact_abs_avg"`
+	PlanPctAvg float64 `json:"plan_pct_avg"`
+	PlanAbsAvg int     `json:"plan_abs_avg"`
+	BonusAvg   int     `json:"bonus_avg"`
+	AvgDurab   float64 `json:"avg_durability"`
+
+	Hist     []markupBucket    `json:"hist"`
+	DurHist  []markupBucket    `json:"dur_hist"`
+	Bands    []markupBand      `json:"bands"`
+	Timeline []markupTimePoint `json:"timeline"`
+}
+
+type markupSample struct {
+	ts      time.Time
+	paid    int
+	fair    int
+	plan    int
+	dur     float64
+	factPct float64
+	planPct float64
+}
+
+func buildSalesMarkups(item, periodKey string) salesMarkupStats {
+	period, _, since := salesPeriodSince(periodKey)
+	fallback := 0
+	if item != "" {
+		mutex.RLock()
+		fallback = data.Prices[item]
+		mutex.RUnlock()
+	}
+	return salesMarkups(item, period, since, fallback)
+}
+
+func loadMarkupSamples(item string, since time.Time, fallbackPrice int) ([]markupSample, int) {
+	if mlDB == nil {
+		return nil, 0
+	}
+	const maxSamples = 25000
+	query := `
+SELECT ts, price, COALESCE(nacenka, 0), COALESCE(durability, 1.0), COALESCE(ref_price, 0)
+FROM trade_events
+WHERE ts >= ? AND event_type = 'buy' AND price > 0`
+	args := []any{salesTSBound(since)}
+	if item != "" {
+		query += ` AND item_id = ?`
+		args = append(args, item)
+	}
+	// свежие сделки важнее: на длинных периодах отрезаем хвост, а не голову
+	query += ` ORDER BY ts DESC LIMIT ?`
+	args = append(args, maxSamples)
+
+	mlDBMu.Lock()
+	rows, err := mlDB.Query(query, args...)
+	if err != nil {
+		mlDBMu.Unlock()
+		log.Printf("[sales] markup samples: %v", err)
+		return nil, 0
+	}
+	defer mlDBMu.Unlock()
+	defer rows.Close()
+
+	out := make([]markupSample, 0, 512)
+	approx := 0
+	for rows.Next() {
+		var tsRaw string
+		var paid, nac, ref int
+		var dur float64
+		if err := rows.Scan(&tsRaw, &paid, &nac, &dur, &ref); err != nil {
+			log.Printf("[sales] markup scan: %v", err)
+			break
+		}
+		if ref <= 0 {
+			// старые записи без ref_price: берём текущую цену, помечаем как приблизительные
+			if fallbackPrice <= 0 {
+				continue
+			}
+			ref = fallbackPrice
+			approx++
+		}
+		if dur <= 0 || dur > 1 {
+			dur = 1
+		}
+		fair := fairSellPrice(ref, dur)
+		if fair <= 0 {
+			continue
+		}
+		ts, err := time.Parse(time.RFC3339, tsRaw)
+		if err != nil {
+			ts = time.Time{}
+		}
+		s := markupSample{
+			ts:      ts.Local(),
+			paid:    paid,
+			fair:    fair,
+			plan:    nac,
+			dur:     dur,
+			factPct: float64(fair-paid) * 100 / float64(paid),
+		}
+		if fair-nac > 0 {
+			s.planPct = float64(nac) * 100 / float64(fair-nac)
+		}
+		out = append(out, s)
+	}
+	// вернулись в хронологический порядок — на нём строятся таймлайн и окна
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out, approx
+}
+
+func computeMarkupStats(item string, since time.Time, fallbackPrice int) salesMarkupStats {
+	samples, approx := loadMarkupSamples(item, since, fallbackPrice)
+	st := salesMarkupStats{OK: true, Item: item, Samples: len(samples), Approx: approx}
+	if len(samples) == 0 {
+		st.Note = "нет покупок за период"
+		return st
+	}
+	if approx > 0 {
+		st.Note = "часть сделок записана до обновления — для них взята текущая цена продажи"
+	}
+
+	var sumFact, sumPlan, sumDur float64
+	var sumAbs, sumPlanAbs, broken int
+	pcts := make([]float64, 0, len(samples))
+	for _, s := range samples {
+		sumFact += s.factPct
+		sumPlan += s.planPct
+		sumDur += s.dur
+		sumAbs += s.fair - s.paid
+		sumPlanAbs += s.plan
+		if s.dur < 0.999 {
+			broken++
+		}
+		pcts = append(pcts, s.factPct)
+	}
+	n := float64(len(samples))
+	st.FactPctAvg = sumFact / n
+	st.PlanPctAvg = sumPlan / n
+	st.AvgDurab = sumDur / n
+	st.FactAbsAvg = int(math.Round(float64(sumAbs) / n))
+	st.PlanAbsAvg = int(math.Round(float64(sumPlanAbs) / n))
+	st.BonusAvg = st.FactAbsAvg - st.PlanAbsAvg
+	st.BrokenPct = float64(broken) * 100 / n
+
+	sort.Float64s(pcts)
+	st.FactPctMed = percentileSorted(pcts, 0.5)
+	st.FactPctP10 = percentileSorted(pcts, 0.1)
+	st.FactPctP90 = percentileSorted(pcts, 0.9)
+
+	st.Hist = buildHistogram(pcts, 16)
+	durs := make([]float64, 0, len(samples))
+	for _, s := range samples {
+		durs = append(durs, s.dur*100)
+	}
+	sort.Float64s(durs)
+	st.DurHist = buildHistogram(durs, 12)
+	st.Bands = buildDurabilityBands(samples)
+	st.Timeline = buildMarkupTimeline(samples)
+	return st
+}
+
+func percentileSorted(sorted []float64, p float64) float64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	idx := int(math.Round(p * float64(len(sorted)-1)))
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(sorted) {
+		idx = len(sorted) - 1
+	}
+	return sorted[idx]
+}
+
+func buildHistogram(sorted []float64, buckets int) []markupBucket {
+	if len(sorted) == 0 || buckets <= 0 {
+		return nil
+	}
+	// хвосты обрезаем по 2%, иначе один выброс растягивает всю шкалу
+	lo := percentileSorted(sorted, 0.02)
+	hi := percentileSorted(sorted, 0.98)
+	if hi <= lo {
+		hi = lo + 1
+	}
+	step := (hi - lo) / float64(buckets)
+	out := make([]markupBucket, buckets)
+	for i := range out {
+		out[i] = markupBucket{From: lo + step*float64(i), To: lo + step*float64(i+1)}
+	}
+	for _, v := range sorted {
+		idx := int((v - lo) / step)
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= buckets {
+			idx = buckets - 1
+		}
+		out[idx].Count++
+	}
+	return out
+}
+
+func buildDurabilityBands(samples []markupSample) []markupBand {
+	type bandDef struct {
+		label    string
+		from, to float64
+	}
+	defs := []bandDef{
+		{"целые (100%)", 0.999, 1.01},
+		{"90–99%", 0.90, 0.999},
+		{"80–90%", 0.80, 0.90},
+		{"70–80%", 0.70, 0.80},
+		{"60–70%", 0.60, 0.70},
+		{"50–60%", 0.50, 0.60},
+	}
+	acc := make([]struct {
+		count                      int
+		paid, fair, markup, planAb int
+		pct, planPct               float64
+	}, len(defs))
+
+	for _, s := range samples {
+		for i, d := range defs {
+			if s.dur >= d.from && s.dur < d.to {
+				acc[i].count++
+				acc[i].paid += s.paid
+				acc[i].fair += s.fair
+				acc[i].markup += s.fair - s.paid
+				acc[i].planAb += s.plan
+				acc[i].pct += s.factPct
+				acc[i].planPct += s.planPct
+				break
+			}
+		}
+	}
+
+	out := make([]markupBand, 0, len(defs))
+	for i, d := range defs {
+		a := acc[i]
+		if a.count == 0 {
+			continue
+		}
+		c := float64(a.count)
+		out = append(out, markupBand{
+			Label:     d.label,
+			From:      d.from,
+			To:        d.to,
+			Count:     a.count,
+			AvgPaid:   a.paid / a.count,
+			AvgFair:   a.fair / a.count,
+			AvgMarkup: a.markup / a.count,
+			AvgPct:    a.pct / c,
+			PlanPct:   a.planPct / c,
+		})
+	}
+	return out
+}
+
+func buildMarkupTimeline(samples []markupSample) []markupTimePoint {
+	if len(samples) == 0 {
+		return nil
+	}
+	first, last := samples[0].ts, samples[len(samples)-1].ts
+	span := last.Sub(first)
+	if span <= 0 {
+		span = time.Minute
+	}
+	const slots = 48
+	step := span / slots
+	if step < time.Minute {
+		step = time.Minute
+	}
+
+	type acc struct {
+		count              int
+		fact, plan, durSum float64
+	}
+	buckets := make(map[int64]*acc, slots)
+	order := make([]int64, 0, slots)
+	for _, s := range samples {
+		key := s.ts.Sub(first) / step
+		k := int64(key)
+		a := buckets[k]
+		if a == nil {
+			a = &acc{}
+			buckets[k] = a
+			order = append(order, k)
+		}
+		a.count++
+		a.fact += s.factPct
+		a.plan += s.planPct
+		a.durSum += s.dur
+	}
+	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
+
+	out := make([]markupTimePoint, 0, len(order))
+	for _, k := range order {
+		a := buckets[k]
+		c := float64(a.count)
+		out = append(out, markupTimePoint{
+			TS:      first.Add(time.Duration(k) * step),
+			Count:   a.count,
+			FactPct: a.fact / c,
+			PlanPct: a.plan / c,
+			AvgDur:  a.durSum / c,
+		})
+	}
+	return out
+}
+
+// ── циклы ────────────────────────────────────────────────────────────────────
 
 func querySalesCycles(itemID string, limit int) []salesCycleView {
 	if mlDB == nil || limit <= 0 {

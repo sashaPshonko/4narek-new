@@ -641,6 +641,13 @@ func loadDailyData(loc *time.Location) {
 	currentDay = today
 	filename := fmt.Sprintf("data_%s.json", today)
 
+	// Счётчики суточные: без сброса они переползали в новый день и копились неделями.
+	clear(data.BuyStats)
+	clear(data.SellStats)
+	clear(data.TrySellStats)
+	clear(data.BuySum)
+	clear(data.SellSum)
+
 	dailyData = DailyData{
 		Date:         today,
 		Prices:       make(map[string]int),
