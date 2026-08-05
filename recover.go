@@ -20,6 +20,13 @@ func runSafe(name string, fn func()) {
 	fn()
 }
 
+// goSafe — фоновая задача с recover (паника не убивает весь процесс).
+func goSafe(name string, fn func()) {
+	go func() {
+		runSafe(name, fn)
+	}()
+}
+
 // goImmortal запускает fn в фоне и перезапускает после panic или нормального выхода.
 func goImmortal(name string, fn func()) {
 	go func() {

@@ -113,7 +113,7 @@ func (b *funauthBinder) Bind(nick, password string) funauthBindResult {
 	b.mu.Lock()
 	b.queue = append(b.queue, job)
 	b.mu.Unlock()
-	go b.pump()
+	goSafe("funauth:pump", b.pump)
 
 	timer := time.NewTimer(funauthJobTimeout)
 	defer timer.Stop()
@@ -157,6 +157,20 @@ func (b *funauthBinder) pump() {
 	b.current = job
 	b.mu.Unlock()
 
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logPanic("funauth:pump", recovered)
+		}
+		b.mu.Lock()
+		b.current = nil
+		b.running = false
+		more := len(b.queue) > 0
+		b.mu.Unlock()
+		if more {
+			goSafe("funauth:pump", b.pump)
+		}
+	}()
+
 	res := b.processJob(job)
 	job.mu.Lock()
 	cancelled := job.cancelled
@@ -166,15 +180,6 @@ func (b *funauthBinder) pump() {
 		case job.result <- res:
 		default:
 		}
-	}
-
-	b.mu.Lock()
-	b.current = nil
-	b.running = false
-	more := len(b.queue) > 0
-	b.mu.Unlock()
-	if more {
-		go b.pump()
 	}
 }
 

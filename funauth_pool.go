@@ -194,7 +194,10 @@ func (p *funauthPool) init() {
 			continue
 		}
 		n++
-		go p.connectAccount(meta)
+		metaCopy := meta
+		goSafe("funauth:connect:"+meta.ID, func() {
+			p.connectAccount(metaCopy)
+		})
 	}
 	log.Printf("[funauth] loading %d account(s) from %s", n, p.dir)
 }
@@ -462,7 +465,9 @@ func (p *funauthPool) loginStart(phone string) (map[string]any, error) {
 	p.pending[normalized] = pend
 	p.mu.Unlock()
 
-	go p.runPendingLogin(pend)
+	goSafe("funauth:login:"+normalized, func() {
+		p.runPendingLogin(pend)
+	})
 
 	select {
 	case <-a.codeSent:

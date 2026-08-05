@@ -227,12 +227,14 @@ func startTelegramOutbox() {
 		return
 	}
 	tgOutbox = make(chan tgQueuedMsg, telegramQueueSize)
-	go func() {
+	goSafe("telegram:outbox", func() {
 		for msg := range tgOutbox {
-			sendTelegramNow(msg.text, msg.parseMode)
+			runSafe("telegram:send", func() {
+				sendTelegramNow(msg.text, msg.parseMode)
+			})
 			time.Sleep(telegramMinInterval)
 		}
-	}()
+	})
 	log.Printf("[Telegram] outbox: пауза %v между сообщениями", telegramMinInterval)
 }
 

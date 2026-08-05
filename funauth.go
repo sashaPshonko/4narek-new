@@ -282,7 +282,7 @@ func handleFunauthBindWS(nick, password string) {
 		return
 	}
 
-	go func() {
+	goSafe("funauth:bind:"+nick, func() {
 		log.Printf("[funauth] bind start %s", nick)
 
 		if funauthPoolInst == nil || !funauthPoolInst.configured() {
@@ -342,7 +342,7 @@ func handleFunauthBindWS(nick, password string) {
 			"tgPhone": result.TgPhone,
 			"error":   result.Error,
 		})
-	}()
+	})
 }
 
 func broadcastFunauthResult(payload map[string]interface{}) {
