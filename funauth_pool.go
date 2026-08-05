@@ -2,17 +2,21 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gotd/td/crypto"
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
@@ -681,3 +685,138 @@ func (p *funauthPool) remove(id string) error {
 	_ = os.Remove(p.metaPath(id))
 	return nil
 }
+
+// Production DC endpoints (Telethon defaults).
+var funauthDCAddr = map[int]string{
+	1: "149.154.175.53:443",
+	2: "149.154.167.51:443",
+	3: "149.154.175.100:443",
+	4: "149.154.167.91:443",
+	5: "91.108.56.165:443",
+}
+
+func parseFunauthSessionInput(raw string, dcID int) (*session.Data, error) {
+	s := strings.TrimSpace(raw)
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, " ", "")
+	if s == "" {
+		return nil, errors.New("authkey_required")
+	}
+	if strings.Contains(s, "...") {
+		return nil, errors.New("authkey_truncated: вставь полный ключ без «...»")
+	}
+
+	// dc:hexauthkey
+	if i := strings.IndexByte(s, ':'); i > 0 && i < 3 {
+		prefix := s[:i]
+		rest := s[i+1:]
+		if n, err := strconv.Atoi(prefix); err == nil && n >= 1 && n <= 5 {
+			dcID = n
+			s = rest
+		}
+	}
+
+	// Telethon StringSession: starts with '1' and is not pure hex of length 512.
+	if len(s) > 1 && s[0] == '1' {
+		hexOnly := true
+		for _, c := range s {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				hexOnly = false
+				break
+			}
+		}
+		if !hexOnly || len(s) != 513 {
+			data, err := session.TelethonSession(s)
+			if err != nil {
+				return nil, fmt.Errorf("telethon_session: %w", err)
+			}
+			return data, nil
+		}
+	}
+
+	hexStr := strings.Builder{}
+	for _, c := range s {
+		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
+			hexStr.WriteRune(c)
+		}
+	}
+	h := hexStr.String()
+	if len(h) != 512 {
+		return nil, fmt.Errorf("authkey_len: нужно 512 hex-символов (256 байт), сейчас %d", len(h))
+	}
+	keyBytes, err := hex.DecodeString(h)
+	if err != nil {
+		return nil, errors.New("authkey_hex_invalid")
+	}
+	if dcID < 1 || dcID > 5 {
+		dcID = 2
+	}
+	addr, ok := funauthDCAddr[dcID]
+	if !ok {
+		return nil, errors.New("dc_invalid")
+	}
+	var key crypto.Key
+	copy(key[:], keyBytes)
+	id := key.WithID().ID
+	return &session.Data{
+		DC:        dcID,
+		Addr:      addr,
+		AuthKey:   key[:],
+		AuthKeyID: id[:],
+	}, nil
+}
+
+// importAuthKey — добавить аккаунт из hex auth_key или Telethon StringSession.
+func (p *funauthPool) importAuthKey(raw string, dcID int) (funauthAccountView, error) {
+	if !p.configured() {
+		return funauthAccountView{}, errFunauthNotConfigured
+	}
+	data, err := parseFunauthSessionInput(raw, dcID)
+	if err != nil {
+		return funauthAccountView{}, err
+	}
+
+	id := uuid.New().String()
+	sessionFile := p.sessionPath(id)
+	loader := session.Loader{Storage: &session.FileStorage{Path: sessionFile}}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := loader.Save(ctx, data); err != nil {
+		return funauthAccountView{}, fmt.Errorf("session_save: %w", err)
+	}
+
+	meta := funauthAccountMeta{
+		ID:    id,
+		Phone: "authkey:" + id[:8],
+	}
+	if err := p.saveMeta(meta); err != nil {
+		_ = os.Remove(sessionFile)
+		return funauthAccountView{}, err
+	}
+
+	goSafe("funauth:connect:"+id, func() {
+		p.connectAccount(meta)
+	})
+
+	deadline := time.Now().Add(45 * time.Second)
+	for time.Now().Before(deadline) {
+		p.mu.Lock()
+		acc := p.accounts[id]
+		ready := acc != nil && acc.ready
+		var view funauthAccountView
+		if ready {
+			view = acc.view()
+		}
+		p.mu.Unlock()
+		if ready {
+			log.Printf("[funauth] authkey import ok %s (%s)", view.Phone, id[:8])
+			return view, nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	_ = p.remove(id)
+	return funauthAccountView{}, errors.New("authkey_connect_timeout")
+}
+

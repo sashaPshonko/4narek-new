@@ -129,6 +129,10 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 		funauthLoginPassword(w, r)
 		return
 
+	case path == "/login/authkey" && r.Method == http.MethodPost:
+		funauthLoginAuthKey(w, r)
+		return
+
 	case path == "/bind" && r.Method == http.MethodPost:
 		var body funauthBindReq
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
@@ -220,6 +224,36 @@ func funauthLoginPassword(w http.ResponseWriter, r *http.Request) {
 	funauthJSON(w, http.StatusOK, out)
 }
 
+func funauthLoginAuthKey(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		AuthKey string `json:"auth_key"`
+		Session string `json:"session"`
+		DCID    int    `json:"dc_id"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<18)).Decode(&body); err != nil {
+		funauthJSONErr(w, http.StatusBadRequest, "bad json")
+		return
+	}
+	raw := strings.TrimSpace(body.AuthKey)
+	if raw == "" {
+		raw = strings.TrimSpace(body.Session)
+	}
+	view, err := funauthPoolInst.importAuthKey(raw, body.DCID)
+	if err != nil {
+		funauthWritePoolErr(w, err)
+		return
+	}
+	funauthJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"id":       view.ID,
+		"phone":    view.Phone,
+		"username": view.Username,
+		"ready":    view.Ready,
+		"full":     view.Full,
+		"started":  view.Started,
+	})
+}
+
 func funauthWritePoolErr(w http.ResponseWriter, err error) {
 	msg := err.Error()
 	status := http.StatusInternalServerError
@@ -227,7 +261,11 @@ func funauthWritePoolErr(w http.ResponseWriter, err error) {
 	case errors.Is(err, errFunauthNotConfigured):
 		status = http.StatusServiceUnavailable
 		msg = "funauth not ready"
-	case strings.Contains(msg, "required") || strings.Contains(msg, "not_started"):
+	case strings.Contains(msg, "required") ||
+		strings.Contains(msg, "not_started") ||
+		strings.Contains(msg, "authkey_") ||
+		strings.Contains(msg, "telethon_session") ||
+		strings.Contains(msg, "dc_invalid"):
 		status = http.StatusBadRequest
 	}
 	funauthJSONErr(w, status, msg)

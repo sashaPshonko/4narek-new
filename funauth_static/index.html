@@ -133,9 +133,36 @@
       outline: none;
       transition: border-color .15s ease, box-shadow .15s ease;
     }
-    input:focus {
+    textarea {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.45;
+      outline: none;
+      resize: vertical;
+      min-height: 96px;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    input:focus, textarea:focus {
       border-color: rgba(0, 113, 227, 0.55);
       box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
+    }
+    select {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: 15px;
+      outline: none;
+      margin-bottom: 14px;
     }
     .row {
       display: flex;
@@ -263,6 +290,25 @@
         </div>
         <div id="bindMsg" class="msg"></div>
         <div id="queueInfo" class="msg"></div>
+      </section>
+
+      <section class="card wide">
+        <h2>Импорт auth key</h2>
+        <p class="hint" style="margin:0 0 14px">Вставь <b>полный</b> hex auth_key (512 символов) или Telethon StringSession (начинается с <code>1</code>). Можно <code>2:hex…</code> — DC перед ключом.</p>
+        <label for="authKey">Auth key / StringSession</label>
+        <textarea id="authKey" placeholder="9ffeb1b27f15efae2b4b8b1099e9cb3b… (полный ключ, без троеточия)" spellcheck="false" autocomplete="off"></textarea>
+        <label for="dcId" style="margin-top:14px">DC (для сырого hex)</label>
+        <select id="dcId">
+          <option value="2" selected>DC 2 (по умолчанию)</option>
+          <option value="1">DC 1</option>
+          <option value="3">DC 3</option>
+          <option value="4">DC 4</option>
+          <option value="5">DC 5</option>
+        </select>
+        <div class="row">
+          <button id="btnAuthKey" type="button">Импортировать</button>
+        </div>
+        <div id="authKeyMsg" class="msg"></div>
       </section>
 
       <section class="card wide">
@@ -421,6 +467,31 @@
         refresh();
       } catch (e) {
         setMsg($('loginMsg'), String(e.message || e), 'err');
+      }
+    };
+
+    $('btnAuthKey').onclick = async () => {
+      const auth_key = $('authKey').value.trim();
+      const dc_id = Number($('dcId').value) || 2;
+      setMsg($('authKeyMsg'), 'Импорт и подключение…');
+      $('btnAuthKey').disabled = true;
+      try {
+        const r = await api('/login/authkey', {
+          method: 'POST',
+          body: JSON.stringify({ auth_key, dc_id }),
+        });
+        if (r.error && r.ok === false) throw new Error(r.error);
+        setMsg(
+          $('authKeyMsg'),
+          `OK · ${r.phone || r.id}` + (r.username ? ` · @${r.username}` : ''),
+          'ok',
+        );
+        $('authKey').value = '';
+        refresh();
+      } catch (e) {
+        setMsg($('authKeyMsg'), String(e.message || e), 'err');
+      } finally {
+        $('btnAuthKey').disabled = false;
       }
     };
 
