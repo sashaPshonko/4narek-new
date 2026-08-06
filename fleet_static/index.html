@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>4narek · Флот</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #eceff3;
+      --ink: #0c1222;
+      --muted: #5b6578;
+      --faint: #8b94a5;
+      --line: rgba(12,18,34,.1);
+      --ban: #b91c1c;
+      --ban-bg: rgba(185,28,28,.08);
+      --ok: #047857;
+      --surface: #fff;
+      --font: "IBM Plex Sans", system-ui, sans-serif;
+      --display: "Syne", sans-serif;
+      --mono: "IBM Plex Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; color: var(--ink); font-family: var(--font);
+      background: radial-gradient(800px 400px at 10% -10%, #f4d6d6 0%, transparent 50%),
+                  linear-gradient(180deg, #f0f2f5, #e4e8ee);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-family: var(--display); font-size: clamp(32px, 6vw, 48px); margin: 0 0 6px; letter-spacing: -.04em; }
+    h1 span { color: var(--ban); }
+    .lede { color: var(--muted); margin: 0 0 18px; max-width: 36em; }
+    .status {
+      display: inline-flex; gap: 8px; align-items: center; padding: 7px 12px;
+      border-radius: 999px; background: var(--surface); border: 1px solid var(--line);
+      font-size: 13px; color: var(--muted); margin-bottom: 18px;
+    }
+    .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+    .status.err .dot { background: var(--ban); }
+    .kpi {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 18px;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+      padding: 14px 16px; box-shadow: 0 10px 30px rgba(12,18,34,.04);
+    }
+    .card .k { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .card .v { font-family: var(--mono); font-size: 28px; font-weight: 600; margin-top: 4px; }
+    .card .v.ban { color: var(--ban); }
+    .nav { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .nav a {
+      color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600;
+      padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+    }
+    .nav a:hover { color: var(--ink); }
+    .anarchy {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+      margin-bottom: 12px; overflow: hidden;
+    }
+    .anarchy > header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--ban-bg);
+    }
+    .anarchy > header h2 { margin: 0; font-size: 16px; font-family: var(--display); }
+    .anarchy > header .cnt { font-family: var(--mono); color: var(--ban); font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+    .nick { font-family: var(--display); font-weight: 700; }
+    .meta { color: var(--faint); font-size: 12px; margin-top: 2px; }
+    .mono { font-family: var(--mono); }
+    .empty { text-align: center; padding: 40px 16px; color: var(--muted); }
+    .reason { max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
+    @media (max-width: 560px) { .kpi { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>4narek <span>Баны</span></h1>
+    <p class="lede">Какие аккаунты помечены забаненными и на каких анархиях. Данные с оркестраторов через presence.</p>
+    <div class="nav">
+      <a href="/sales/">Продажи</a>
+      <a href="/funauth/">FunAuth</a>
+      <a href="/fleet/">Флот / баны</a>
+    </div>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">подключение…</span></div>
+    <div class="kpi">
+      <div class="card"><div class="k">Забанено сейчас</div><div class="v ban mono" id="kpiTotal">—</div></div>
+      <div class="card"><div class="k">Анархии с банами</div><div class="v mono" id="kpiAn">—</div></div>
+    </div>
+    <div id="list"></div>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const fmtWhen = (iso) => {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return escapeHtml(iso);
+      return d.toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    };
+
+    async function load() {
+      try {
+        const res = await fetch("/fleet/api/overview", { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        $("status").classList.remove("err");
+        const t = new Date(data.updated_at);
+        $("statusText").textContent = `обновлено ${t.toLocaleTimeString("ru-RU")} · ${data.total_banned} бан(ов)`;
+        $("kpiTotal").textContent = data.total_banned;
+        $("kpiAn").textContent = (data.anarchies || []).filter((a) => a.count > 0).length;
+
+        const list = $("list");
+        if (!data.total_banned) {
+          list.innerHTML = `<div class="anarchy"><div class="empty">Сейчас никто не помечен забаненным.<br/>Как только оркестратор поймает бан — появится здесь.</div></div>`;
+          return;
+        }
+        list.innerHTML = (data.anarchies || []).map((a) => {
+          const title = a.anarchy ? `Анархия ${a.anarchy}` : "Без анархии";
+          const rows = (a.banned || []).map((b) => `
+            <tr>
+              <td>
+                <div class="nick">${escapeHtml(b.username)}</div>
+                <div class="meta">${escapeHtml(b.role || "—")} · ${escapeHtml(b.go_type || "—")}</div>
+              </td>
+              <td class="mono">${fmtWhen(b.banned_at)}</td>
+              <td><div class="reason" title="${escapeHtml(b.reason || "")}">${escapeHtml(b.reason || "—")}</div></td>
+            </tr>`).join("");
+          return `<section class="anarchy">
+            <header><h2>${title}</h2><span class="cnt">${a.count}</span></header>
+            <table>
+              <thead><tr><th>Бот</th><th>Когда</th><th>Причина</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </section>`;
+        }).join("");
+      } catch (e) {
+        $("status").classList.add("err");
+        $("statusText").textContent = "нет связи: " + e.message;
+      }
+    }
+    load();
+    setInterval(load, 5000);
+  </script>
+</body>
+</html>

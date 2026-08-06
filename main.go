@@ -27,11 +27,11 @@ type PriceUpdate struct {
 }
 
 type CatalogItemOut struct {
-	ID      string       `json:"id"`
-	Name    string       `json:"name"`
-	Type    string       `json:"type"`
-	Nacenka int          `json:"nacenka"`
-	Num     int          `json:"num"`
+	ID               string       `json:"id"`
+	Name             string       `json:"name"`
+	Type             string       `json:"type"`
+	Nacenka          int          `json:"nacenka"`
+	Num              int          `json:"num"`
 	Effects          []ItemEffect `json:"effects"`
 	ForbiddenEffects []ItemEffect `json:"forbidden_effects,omitempty"`
 	MaxEffects       []ItemEffect `json:"max_effects,omitempty"`
@@ -65,11 +65,13 @@ type PriceHistory struct {
 }
 
 var priceHistory = make(map[string]*PriceHistory)
+
 const priceHistoryLimit = 30
 
 // priceHistoryFloorRank — N-я самая дешёвая покупка из последних Limit для sell-floor
 // (1 = абсолютный минимум среди последних покупок).
 const priceHistoryFloorRank = 1
+
 var priceHistoryMaxAge = 30 * time.Minute // записи старше 30 мин не участвуют в floor
 
 var (
@@ -81,9 +83,9 @@ var (
 var (
 	clientItems       = make(map[*websocket.Conn]map[string]int)
 	clientInventory   = make(map[*websocket.Conn]map[string]int)
-	clientActiveTypes  = make(map[*websocket.Conn]map[string]struct{})
-	clientFleetTypes   = make(map[*websocket.Conn]map[string]struct{})
-	clientBotsPerType  = make(map[*websocket.Conn]map[string]int)
+	clientActiveTypes = make(map[*websocket.Conn]map[string]struct{})
+	clientFleetTypes  = make(map[*websocket.Conn]map[string]struct{})
+	clientBotsPerType = make(map[*websocket.Conn]map[string]int)
 )
 
 var itemLimit = map[string]int{
@@ -97,17 +99,17 @@ var inventoryLimit = map[string]int{
 }
 
 type ItemConfig struct {
-	ID           string
-	Name         string
-	Type         string
-	BasePrice    int
-	NormalSales  int
-	NormalCount  int
-	PriceStep    int
-	AnalysisTime time.Duration
-	Nacenka      int
-	NacenkaMin   int
-	Num          int
+	ID               string
+	Name             string
+	Type             string
+	BasePrice        int
+	NormalSales      int
+	NormalCount      int
+	PriceStep        int
+	AnalysisTime     time.Duration
+	Nacenka          int
+	NacenkaMin       int
+	Num              int
 	Effects          []ItemEffect
 	ForbiddenEffects []ItemEffect
 	MaxEffects       []ItemEffect
@@ -168,7 +170,7 @@ type Data struct {
 }
 
 var (
-	data    = &Data{}
+	data = &Data{}
 	// mutex: Lock — запись (data, clients, adjustPrice). RLock — только чтение (publishPriceUpdate).
 	// Нельзя: Lock и в той же горутине RLock/publishPrices — дедлок RWMutex.
 	mutex   = sync.RWMutex{}
@@ -469,6 +471,7 @@ func removeClient(ws *websocket.Conn) {
 	delete(clientActiveTypes, ws)
 	delete(clientFleetTypes, ws)
 	delete(clientBotsPerType, ws)
+	delete(clientBannedBots, ws)
 }
 
 func broadcastBroker() {
@@ -661,8 +664,8 @@ func loadDailyData(loc *time.Location) {
 	}
 
 	if file, err := os.ReadFile(filename); err == nil {
-			if err := json.Unmarshal(file, &dailyData); err == nil && dailyData.Date == today {
-				if dailyData.BuySum == nil {
+		if err := json.Unmarshal(file, &dailyData); err == nil && dailyData.Date == today {
+			if dailyData.BuySum == nil {
 				dailyData.BuySum = make(map[string]int)
 			}
 			if dailyData.SellSum == nil {
@@ -1164,20 +1167,21 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var msg struct {
-			Action         string         `json:"action"`
-			Type           string         `json:"type"`
-			Items          map[string]int `json:"items"`
-			Inventory      map[string]int `json:"inventory"`
-			Types          []string       `json:"types"`
-			ActiveTypes    []string       `json:"active_types"`
-			BotsPerType    map[string]int `json:"bots_per_type"`
-			Price          int            `json:"price"`
-			Enchants       []ItemEffect   `json:"enchants"`
-			Durability     *float64       `json:"durability"`
-			Floors         map[string]int `json:"floors"`
-			WindowStartMs  int64          `json:"window_start_ms"`
-			WindowEndMs    int64          `json:"window_end_ms"`
-			WindowMs       int64          `json:"window_ms"`
+			Action        string          `json:"action"`
+			Type          string          `json:"type"`
+			Items         map[string]int  `json:"items"`
+			Inventory     map[string]int  `json:"inventory"`
+			Types         []string        `json:"types"`
+			ActiveTypes   []string        `json:"active_types"`
+			BotsPerType   map[string]int  `json:"bots_per_type"`
+			Banned        []bannedBotView `json:"banned"`
+			Price         int             `json:"price"`
+			Enchants      []ItemEffect    `json:"enchants"`
+			Durability    *float64        `json:"durability"`
+			Floors        map[string]int  `json:"floors"`
+			WindowStartMs int64           `json:"window_start_ms"`
+			WindowEndMs   int64           `json:"window_end_ms"`
+			WindowMs      int64           `json:"window_ms"`
 		}
 		if msg.Action != "add" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
@@ -1194,20 +1198,21 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
-	Action        string         `json:"action"`
-	Type          string         `json:"type"`
-	Items         map[string]int `json:"items"`
-	Inventory     map[string]int `json:"inventory"`
-	Types         []string       `json:"types"`
-	ActiveTypes   []string       `json:"active_types"`
-	BotsPerType   map[string]int `json:"bots_per_type"`
-	Price         int            `json:"price"`
-	Enchants      []ItemEffect   `json:"enchants"`
-	Durability    *float64       `json:"durability"`
-	Floors        map[string]int `json:"floors"`
-	WindowStartMs int64          `json:"window_start_ms"`
-	WindowEndMs   int64          `json:"window_end_ms"`
-	WindowMs      int64          `json:"window_ms"`
+	Action        string          `json:"action"`
+	Type          string          `json:"type"`
+	Items         map[string]int  `json:"items"`
+	Inventory     map[string]int  `json:"inventory"`
+	Types         []string        `json:"types"`
+	ActiveTypes   []string        `json:"active_types"`
+	BotsPerType   map[string]int  `json:"bots_per_type"`
+	Banned        []bannedBotView `json:"banned"`
+	Price         int             `json:"price"`
+	Enchants      []ItemEffect    `json:"enchants"`
+	Durability    *float64        `json:"durability"`
+	Floors        map[string]int  `json:"floors"`
+	WindowStartMs int64           `json:"window_start_ms"`
+	WindowEndMs   int64           `json:"window_end_ms"`
+	WindowMs      int64           `json:"window_ms"`
 }) {
 	mutex.Lock()
 	enchJSON := tradeEnchantsJSON(msg.Enchants)
@@ -1274,6 +1279,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		clientInventory[ws] = copyMap(msg.Inventory)
 		setClientActiveTypes(ws, msg.ActiveTypes)
 		setClientBotsPerType(ws, msg.BotsPerType)
+		setClientBannedBots(ws, msg.Banned)
 		updateTypeFleetActivityLocked()
 		mutex.Unlock()
 
@@ -1498,5 +1504,3 @@ func getMinPriceFromHistory(item string) int {
 	}
 	return prices[idx]
 }
-
-

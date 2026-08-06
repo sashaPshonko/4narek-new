@@ -96,22 +96,24 @@ type salesCycleView struct {
 }
 
 type salesOverview struct {
-	OK          bool            `json:"ok"`
-	Date        string          `json:"date"`
-	Period      string          `json:"period"`
-	PeriodLabel string          `json:"period_label"`
-	Since       *time.Time      `json:"since,omitempty"`
-	Source      string          `json:"source"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	Totals      salesWindowView `json:"totals"`
-	FactMarkup  float64         `json:"fact_markup_pct"`
-	PlanMarkup  float64         `json:"plan_markup_pct"`
-	StockAH     int             `json:"stock_ah"`
-	StockInv    int             `json:"stock_inv"`
-	ItemsLive   int             `json:"items_live"`
-	TopProfit   string          `json:"top_profit_id,omitempty"`
-	TopVolume   string          `json:"top_volume_id,omitempty"`
-	Items       []salesItemView `json:"items"`
+	OK           bool            `json:"ok"`
+	Date         string          `json:"date"`
+	Period       string          `json:"period"`
+	PeriodLabel  string          `json:"period_label"`
+	Since        *time.Time      `json:"since,omitempty"`
+	Source       string          `json:"source"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+	Totals       salesWindowView `json:"totals"`
+	FactMarkup   int             `json:"fact_markup"`
+	PlanMarkup   int             `json:"plan_markup"`
+	FactMarkupPc float64         `json:"fact_markup_pct"`
+	PlanMarkupPc float64         `json:"plan_markup_pct"`
+	StockAH      int             `json:"stock_ah"`
+	StockInv     int             `json:"stock_inv"`
+	ItemsLive    int             `json:"items_live"`
+	TopProfit    string          `json:"top_profit_id,omitempty"`
+	TopVolume    string          `json:"top_volume_id,omitempty"`
+	Items        []salesItemView `json:"items"`
 }
 
 func registerSalesHTTP(mux *http.ServeMux) {
@@ -274,8 +276,15 @@ func salesAggregates(period string, since time.Time) (map[string]*tradeAgg, bool
 	}
 	salesCacheMu.Unlock()
 
+	mutex.RLock()
+	fallbackPrices := make(map[string]int, len(data.Prices))
+	for item, price := range data.Prices {
+		fallbackPrices[item] = price
+	}
+	mutex.RUnlock()
+
 	aggs, ok := queryTradeAggregates(since)
-	facts := queryFactMarkups(since)
+	facts := queryFactMarkups(since, fallbackPrices)
 
 	salesCacheMu.Lock()
 	salesAggCached[period] = &salesAggCache{at: time.Now(), aggs: aggs, ok: ok, facts: facts}
@@ -330,6 +339,7 @@ type tradeAgg struct {
 type factMarkupAgg struct {
 	Samples   int
 	MarkupAbs float64
+	PlanAbs   float64
 	MarkupPct float64
 	PlanPct   float64
 	Durab     float64
@@ -381,7 +391,7 @@ GROUP BY item_id, event_type`, salesTSBound(since))
 // queryFactMarkups — средняя фактическая наценка по каждому предмету.
 // fair = ref_price * прочность (как её считает бот при выставлении лота),
 // поэтому купленный полудохлый предмет не завышает наценку.
-func queryFactMarkups(since time.Time) map[string]*factMarkupAgg {
+func queryFactMarkups(since time.Time, fallbackPrices map[string]int) map[string]*factMarkupAgg {
 	if mlDB == nil {
 		return nil
 	}
@@ -389,20 +399,10 @@ func queryFactMarkups(since time.Time) map[string]*factMarkupAgg {
 	defer mlDBMu.Unlock()
 
 	rows, err := mlDB.Query(`
-SELECT item_id,
-       COUNT(*),
-       AVG(fair - price),
-       AVG((fair - price) * 100.0 / price),
-       AVG(nacenka * 100.0 / MAX(1, fair - nacenka)),
-       AVG(dur)
-FROM (
-  SELECT item_id, price, nacenka,
-         COALESCE(durability, 1.0) AS dur,
-         CAST(ref_price * COALESCE(durability, 1.0) AS INTEGER) AS fair
-  FROM trade_events
-  WHERE ts >= ? AND event_type = 'buy' AND price > 0 AND COALESCE(ref_price, 0) > 0
-)
-GROUP BY item_id`, salesTSBound(since))
+SELECT item_id, price, COALESCE(nacenka, 0),
+       COALESCE(durability, 1.0), COALESCE(ref_price, 0)
+FROM trade_events
+WHERE ts >= ? AND event_type = 'buy' AND price > 0`, salesTSBound(since))
 	if err != nil {
 		log.Printf("[sales] fact markups: %v", err)
 		return nil
@@ -412,13 +412,43 @@ GROUP BY item_id`, salesTSBound(since))
 	out := make(map[string]*factMarkupAgg, 64)
 	for rows.Next() {
 		var item string
-		var a factMarkupAgg
-		if err := rows.Scan(&item, &a.Samples, &a.MarkupAbs, &a.MarkupPct, &a.PlanPct, &a.Durab); err != nil {
+		var paid, plan, ref int
+		var dur float64
+		if err := rows.Scan(&item, &paid, &plan, &dur, &ref); err != nil {
 			log.Printf("[sales] fact markups scan: %v", err)
 			continue
 		}
-		cp := a
-		out[item] = &cp
+		if ref <= 0 {
+			ref = fallbackPrices[item]
+		}
+		if dur <= 0 || dur > 1 {
+			dur = 1
+		}
+		fair := fairSellPrice(ref, dur)
+		if fair <= 0 {
+			continue
+		}
+		a := out[item]
+		if a == nil {
+			a = &factMarkupAgg{}
+			out[item] = a
+		}
+		a.Samples++
+		a.MarkupAbs += float64(fair - paid)
+		a.PlanAbs += float64(plan)
+		a.MarkupPct += float64(fair-paid) * 100 / float64(paid)
+		if fair-plan > 0 {
+			a.PlanPct += float64(plan) * 100 / float64(fair-plan)
+		}
+		a.Durab += dur
+	}
+	for _, a := range out {
+		n := float64(a.Samples)
+		a.MarkupAbs /= n
+		a.PlanAbs /= n
+		a.MarkupPct /= n
+		a.PlanPct /= n
+		a.Durab /= n
 	}
 	return out
 }
@@ -561,7 +591,7 @@ func buildSalesOverview(periodKey string) salesOverview {
 	var topProfitID, topVolID string
 	var topProfit, topVol int
 	haveTopProfit := false
-	var factWeighted, planWeighted, factWeight float64
+	var factWeighted, planWeighted, factPctWeighted, planPctWeighted, factWeight float64
 
 	for _, id := range ids {
 		cfg := itemsConfig[id]
@@ -589,8 +619,10 @@ func buildSalesOverview(periodKey string) salesOverview {
 		}
 		if v.FactSamples > 0 {
 			w := float64(v.FactSamples)
-			factWeighted += v.FactMarkupPc * w
-			planWeighted += v.PlanMarkupPc * w
+			factWeighted += float64(v.FactMarkup) * w
+			planWeighted += facts[id].PlanAbs * w
+			factPctWeighted += v.FactMarkupPc * w
+			planPctWeighted += v.PlanMarkupPc * w
 			factWeight += w
 		}
 		if !haveTopProfit || v.Profit > topProfit {
@@ -608,8 +640,10 @@ func buildSalesOverview(periodKey string) salesOverview {
 		out.Totals.AvgSell = out.Totals.SellSum / out.Totals.Sells
 	}
 	if factWeight > 0 {
-		out.FactMarkup = factWeighted / factWeight
-		out.PlanMarkup = planWeighted / factWeight
+		out.FactMarkup = int(math.Round(factWeighted / factWeight))
+		out.PlanMarkup = int(math.Round(planWeighted / factWeight))
+		out.FactMarkupPc = factPctWeighted / factWeight
+		out.PlanMarkupPc = planPctWeighted / factWeight
 	}
 	out.TopProfit = topProfitID
 	out.TopVolume = topVolID
@@ -706,6 +740,7 @@ type markupBand struct {
 	AvgPaid   int     `json:"avg_paid"`
 	AvgFair   int     `json:"avg_fair"`
 	AvgMarkup int     `json:"avg_markup"`
+	AvgPlan   int     `json:"avg_plan"`
 	AvgPct    float64 `json:"avg_pct"`
 	PlanPct   float64 `json:"plan_pct"`
 }
@@ -713,17 +748,19 @@ type markupBand struct {
 type markupTimePoint struct {
 	TS      time.Time `json:"ts"`
 	Count   int       `json:"count"`
+	FactAbs int       `json:"fact_abs"`
+	PlanAbs int       `json:"plan_abs"`
 	FactPct float64   `json:"fact_pct"`
 	PlanPct float64   `json:"plan_pct"`
 	AvgDur  float64   `json:"avg_dur"`
 }
 
 type salesMarkupStats struct {
-	OK        bool   `json:"ok"`
-	Item      string `json:"item,omitempty"`
-	Samples   int    `json:"samples"`
-	Approx    int    `json:"approx"`
-	Note      string `json:"note,omitempty"`
+	OK        bool    `json:"ok"`
+	Item      string  `json:"item,omitempty"`
+	Samples   int     `json:"samples"`
+	Approx    int     `json:"approx"`
+	Note      string  `json:"note,omitempty"`
 	BrokenPct float64 `json:"broken_pct"`
 
 	FactPctAvg float64 `json:"fact_pct_avg"`
@@ -731,6 +768,9 @@ type salesMarkupStats struct {
 	FactPctP10 float64 `json:"fact_pct_p10"`
 	FactPctP90 float64 `json:"fact_pct_p90"`
 	FactAbsAvg int     `json:"fact_abs_avg"`
+	FactAbsMed int     `json:"fact_abs_median"`
+	FactAbsP10 int     `json:"fact_abs_p10"`
+	FactAbsP90 int     `json:"fact_abs_p90"`
 	PlanPctAvg float64 `json:"plan_pct_avg"`
 	PlanAbsAvg int     `json:"plan_abs_avg"`
 	BonusAvg   int     `json:"bonus_avg"`
@@ -854,6 +894,7 @@ func computeMarkupStats(item string, since time.Time, fallbackPrice int) salesMa
 	var sumFact, sumPlan, sumDur float64
 	var sumAbs, sumPlanAbs, broken int
 	pcts := make([]float64, 0, len(samples))
+	amounts := make([]float64, 0, len(samples))
 	for _, s := range samples {
 		sumFact += s.factPct
 		sumPlan += s.planPct
@@ -864,6 +905,7 @@ func computeMarkupStats(item string, since time.Time, fallbackPrice int) salesMa
 			broken++
 		}
 		pcts = append(pcts, s.factPct)
+		amounts = append(amounts, float64(s.fair-s.paid))
 	}
 	n := float64(len(samples))
 	st.FactPctAvg = sumFact / n
@@ -879,7 +921,11 @@ func computeMarkupStats(item string, since time.Time, fallbackPrice int) salesMa
 	st.FactPctP10 = percentileSorted(pcts, 0.1)
 	st.FactPctP90 = percentileSorted(pcts, 0.9)
 
-	st.Hist = buildHistogram(pcts, 16)
+	sort.Float64s(amounts)
+	st.FactAbsMed = int(math.Round(percentileSorted(amounts, 0.5)))
+	st.FactAbsP10 = int(math.Round(percentileSorted(amounts, 0.1)))
+	st.FactAbsP90 = int(math.Round(percentileSorted(amounts, 0.9)))
+	st.Hist = buildHistogram(amounts, 16)
 	durs := make([]float64, 0, len(samples))
 	for _, s := range samples {
 		durs = append(durs, s.dur*100)
@@ -982,6 +1028,7 @@ func buildDurabilityBands(samples []markupSample) []markupBand {
 			AvgPaid:   a.paid / a.count,
 			AvgFair:   a.fair / a.count,
 			AvgMarkup: a.markup / a.count,
+			AvgPlan:   a.planAb / a.count,
 			AvgPct:    a.pct / c,
 			PlanPct:   a.planPct / c,
 		})
@@ -1007,6 +1054,7 @@ func buildMarkupTimeline(samples []markupSample) []markupTimePoint {
 	type acc struct {
 		count              int
 		fact, plan, durSum float64
+		factAbs, planAbs   int
 	}
 	buckets := make(map[int64]*acc, slots)
 	order := make([]int64, 0, slots)
@@ -1022,6 +1070,8 @@ func buildMarkupTimeline(samples []markupSample) []markupTimePoint {
 		a.count++
 		a.fact += s.factPct
 		a.plan += s.planPct
+		a.factAbs += s.fair - s.paid
+		a.planAbs += s.plan
 		a.durSum += s.dur
 	}
 	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
@@ -1033,6 +1083,8 @@ func buildMarkupTimeline(samples []markupSample) []markupTimePoint {
 		out = append(out, markupTimePoint{
 			TS:      first.Add(time.Duration(k) * step),
 			Count:   a.count,
+			FactAbs: int(math.Round(float64(a.factAbs) / c)),
+			PlanAbs: int(math.Round(float64(a.planAbs) / c)),
 			FactPct: a.fact / c,
 			PlanPct: a.plan / c,
 			AvgDur:  a.durSum / c,

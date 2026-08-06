@@ -147,7 +147,7 @@
     .markbar > i { display: block; height: 100%; border-radius: inherit; }
     .markbar.fact > i { background: var(--accent); }
     .markbar.plan > i { background: var(--plan); }
-    .markval { font-family: var(--mono); width: 52px; text-align: right; }
+    .markval { font-family: var(--mono); width: 92px; text-align: right; }
 
     .detail { min-height: 460px; position: sticky; top: 16px; }
     .detail-body { padding: 16px 18px 22px; max-height: min(80vh, 1000px); overflow: auto; }
@@ -202,7 +202,7 @@
   <div class="wrap">
     <header class="hero">
       <h1 class="brand">4narek <span>Продажи</span></h1>
-      <p class="lede">Что покупаем, за сколько продаём и сколько на этом реально зарабатываем — с поправкой на прочность предметов.</p>
+      <p class="lede">Что покупаем, за сколько продаём и сколько на этом реально зарабатываем — с поправкой на прочность предметов. <a href="/fleet/" style="color:var(--accent)">Баны флота →</a></p>
       <div class="status" id="status"><span class="dot"></span><span id="statusText">подключение…</span></div>
     </header>
 
@@ -345,7 +345,7 @@
       const getters = {
         profit: (i) => i.profit,
         volume: (i) => i.buys + i.sells,
-        markup: (i) => (i.fact_samples ? i.fact_markup_pct : -1e9),
+        markup: (i) => (i.fact_samples ? i.fact_markup : -1e9),
         prices: (i) => i.avg_buy || 0,
         held: (i) => i.held || 0,
         id: (i) => i.id,
@@ -369,11 +369,11 @@
         (overview.top_profit_id ? `<br />больше всех принёс: <b>${escapeHtml(overview.top_profit_id)}</b>` : "");
 
       const mk = $("kpiMarkup");
-      if (overview.fact_markup_pct) {
-        mk.textContent = pct(overview.fact_markup_pct);
-        const diff = overview.fact_markup_pct - overview.plan_markup_pct;
-        $("kpiMarkupSub").innerHTML = `по настройкам должно быть ${pct(overview.plan_markup_pct)} · ` +
-          `<span class="${diff >= 0 ? "pos" : "neg"}">${signPct(diff)} к плану</span><br />уже с поправкой на битые предметы`;
+      if (overview.fact_markup) {
+        mk.textContent = fmt(overview.fact_markup);
+        const diff = overview.fact_markup - overview.plan_markup;
+        $("kpiMarkupSub").innerHTML = `в среднем с одной покупки · план ${fmt(overview.plan_markup)} · ` +
+          `<span class="${diff >= 0 ? "pos" : "neg"}">${diff >= 0 ? "+" : "−"}${fmt(Math.abs(diff))} к плану</span><br />уже с поправкой на битые предметы`;
       } else {
         mk.textContent = "—";
         $("kpiMarkupSub").textContent = "данные копятся с момента обновления сервера";
@@ -396,19 +396,19 @@
 
     function markupCell(i) {
       if (!i.fact_samples) {
-        return `<div class="markcell"><span class="mono">${pct(i.nacenka_pct)}</span>
-          <div class="meta">по плану · факта пока нет</div></div>`;
+        return `<div class="markcell"><span class="mono">план +${fmt(i.nacenka)}</span>
+          <div class="meta">за период не было покупок</div></div>`;
       }
-      const scale = Math.max(i.fact_markup_pct, i.plan_markup_pct, 1) * 1.15;
-      const diff = i.fact_markup_pct - i.plan_markup_pct;
+      const scale = Math.max(Math.abs(i.fact_markup), Math.abs(i.nacenka), 1) * 1.15;
+      const diff = i.fact_markup - i.nacenka;
       return `<div class="markcell">
         <div class="markrow"><span class="tagline">план</span>
-          <span class="markbar plan"><i style="width:${Math.min(100, (i.plan_markup_pct / scale) * 100)}%"></i></span>
-          <span class="markval">${pct(i.plan_markup_pct)}</span></div>
+          <span class="markbar plan"><i style="width:${Math.min(100, (Math.abs(i.nacenka) / scale) * 100)}%"></i></span>
+          <span class="markval">+${fmt(i.nacenka)}</span></div>
         <div class="markrow"><span class="tagline">факт</span>
-          <span class="markbar fact"><i style="width:${Math.min(100, (i.fact_markup_pct / scale) * 100)}%"></i></span>
-          <span class="markval">${pct(i.fact_markup_pct)}</span></div>
-        <div class="meta ${diff >= 0 ? "pos" : "neg"}">${signPct(diff)} к плану · прочность ${Math.round(i.avg_durability * 100)}%</div>
+          <span class="markbar fact"><i style="width:${Math.min(100, (Math.abs(i.fact_markup) / scale) * 100)}%"></i></span>
+          <span class="markval">${i.fact_markup >= 0 ? "+" : "−"}${fmt(Math.abs(i.fact_markup))}</span></div>
+        <div class="meta ${diff >= 0 ? "pos" : "neg"}">${diff >= 0 ? "+" : "−"}${fmt(Math.abs(diff))} к плану · прочность ${Math.round(i.avg_durability * 100)}%</div>
       </div>`;
     }
 
@@ -489,7 +489,7 @@
             <div class="stat"><div class="k">Продаём по</div><div class="v mono">${fmt(i.price)}</div><div class="n">целый предмет, битый — пропорционально дешевле</div></div>
             <div class="stat"><div class="k">Готовы платить</div><div class="v mono">${fmt(i.implied_buy)}</div><div class="n">потолок закупа: цена минус наценка ${fmt(i.nacenka)}</div></div>
             <div class="stat"><div class="k">Заработали ${escapeHtml(data.period_label || "")}</div><div class="v mono ${clsMoney(i.profit)}">${fmt(i.profit)}</div><div class="n">${fmt(i.buys)} закупов на ${fmtShort(i.buy_sum)}, ${fmt(i.sells)} продаж на ${fmtShort(i.sell_sum)}</div></div>
-            <div class="stat"><div class="k">Наценка факт / план</div><div class="v mono">${i.fact_samples ? pct(i.fact_markup_pct) : "—"} <span style="color:var(--faint);font-size:13px">/ ${i.fact_samples ? pct(i.plan_markup_pct) : pct(i.nacenka_pct)}</span></div><div class="n">${i.fact_samples ? `по ${fmt(i.fact_samples)} ${plural(i.fact_samples, "покупке", "покупкам", "покупкам")}` : "нет данных за период"}</div></div>
+            <div class="stat"><div class="k">Наценка факт / план</div><div class="v mono">${i.fact_samples ? fmt(i.fact_markup) : "—"} <span style="color:var(--faint);font-size:13px">/ ${fmt(i.nacenka)}</span></div><div class="n">${i.fact_samples ? `в валюте, в среднем по ${fmt(i.fact_samples)} ${plural(i.fact_samples, "покупке", "покупкам", "покупкам")}` : "за период не было покупок"}</div></div>
           </div>
 
           <div class="section-label">Реальная наценка на закупах</div>
@@ -500,8 +500,8 @@
           </p>
           ${m.samples ? `
             <div class="grid2">
-              <div class="stat"><div class="k">Обычная наценка</div><div class="v mono">${pct(m.fact_pct_median)}</div><div class="n">медиана; половина закупов лучше, половина хуже</div></div>
-              <div class="stat"><div class="k">Разброс</div><div class="v mono">${pct(m.fact_pct_p10, 0)} … ${pct(m.fact_pct_p90, 0)}</div><div class="n">80% закупов попадают в этот коридор</div></div>
+              <div class="stat"><div class="k">Обычная наценка</div><div class="v mono">${fmt(m.fact_abs_median)}</div><div class="n">в валюте; половина закупов лучше, половина хуже</div></div>
+              <div class="stat"><div class="k">Разброс наценки</div><div class="v mono">${fmt(m.fact_abs_p10)} … ${fmt(m.fact_abs_p90)}</div><div class="n">80% закупов попадают в этот коридор</div></div>
               <div class="stat"><div class="k">Сверх плана</div><div class="v mono ${clsMoney(m.bonus_avg)}">${fmt(m.bonus_avg)}</div><div class="n">в среднем с одной покупки: ${fmt(m.fact_abs_avg)} против плановых ${fmt(m.plan_abs_avg)}</div></div>
               <div class="stat"><div class="k">Битых предметов</div><div class="v mono">${pct(m.broken_pct, 0)}</div><div class="n">средняя прочность закупа ${Math.round(m.avg_durability * 100)}%</div></div>
             </div>
@@ -524,7 +524,7 @@
                   <td class="mono">${fmt(b.count)}</td>
                   <td class="mono">${fmt(b.avg_paid)}</td>
                   <td class="mono">${fmt(b.avg_fair)}</td>
-                  <td class="mono">${pct(b.avg_pct)} <span style="color:var(--faint)">/ ${pct(b.plan_pct)}</span></td>
+                  <td class="mono">${fmt(b.avg_markup)} <span style="color:var(--faint)">/ ${fmt(b.avg_plan)} план</span></td>
                 </tr>`).join("")}</tbody>
               </table>
               <div class="section-note">«Продаём» — цена лота уже с учётом износа. Видно, выгоднее ли брать битые.</div>
@@ -622,7 +622,7 @@
       if (!points.length) return;
       const padL = 38, padR = 8, padT = 10, padB = 20;
       const iw = w - padL - padR, ih = h - padT - padB;
-      const vals = points.flatMap((p) => [p.fact_pct, p.plan_pct]);
+      const vals = points.flatMap((p) => [p.fact_abs, p.plan_abs]);
       let lo = Math.min(...vals), hi = Math.max(...vals);
       if (hi - lo < 1) { hi += 1; lo -= 1; }
       const padY = (hi - lo) * 0.15;
@@ -643,7 +643,7 @@
       [lo, (lo + hi) / 2, hi].forEach((v) => {
         const yy = y(v);
         ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(w - padR, yy); ctx.stroke();
-        ctx.fillText(v.toFixed(0) + "%", 4, yy + 3.5);
+        ctx.fillText(fmtShort(v), 4, yy + 3.5);
       });
 
       const line = (key, color, dash) => {
@@ -655,8 +655,8 @@
         ctx.stroke();
         ctx.setLineDash([]);
       };
-      line("plan_pct", "#94a3b8", [4, 4]);
-      line("fact_pct", "#0f766e", []);
+      line("plan_abs", "#94a3b8", [4, 4]);
+      line("fact_abs", "#0f766e", []);
 
       ctx.fillStyle = "#8b94a5";
       const first = new Date(points[0].ts), last = new Date(points[points.length - 1].ts);
@@ -684,10 +684,10 @@
         ctx.fillRect(padL + idx * bw + 1, padT + ih - bh, Math.max(1, bw - 2), bh);
       });
       ctx.fillStyle = "#8b94a5";
-      ctx.fillText(buckets[0].from.toFixed(0) + "%", padL, h - 6);
-      const rightLbl = buckets[buckets.length - 1].to.toFixed(0) + "%";
+      ctx.fillText(fmtShort(buckets[0].from), padL, h - 6);
+      const rightLbl = fmtShort(buckets[buckets.length - 1].to);
       ctx.fillText(rightLbl, w - padR - ctx.measureText(rightLbl).width, h - 6);
-      const mid = ((buckets[0].from + buckets[buckets.length - 1].to) / 2).toFixed(0) + "%";
+      const mid = fmtShort((buckets[0].from + buckets[buckets.length - 1].to) / 2);
       ctx.fillText(mid, padL + iw / 2 - ctx.measureText(mid).width / 2, h - 6);
     }
 

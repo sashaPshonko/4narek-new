@@ -35,7 +35,7 @@ func seedTradeEvents(t *testing.T) {
 		paid int
 		dur  any
 	}{
-		{0, "buy", 800005, 1.0},              // план: 1100005-300000 = 800005
+		{0, "buy", 800005, 1.0},                // план: 1100005-300000 = 800005
 		{10 * time.Minute, "buy", 700005, 1.0}, // взяли дешевле плана
 		{20 * time.Minute, "buy", 250000, 0.6}, // битый: fair ≈ 660005
 		{30 * time.Minute, "sell", 1100005, 1.0},
@@ -168,5 +168,16 @@ func TestMarkupStatsFallsBackToCurrentPrice(t *testing.T) {
 	}
 	if st.Note == "" {
 		t.Error("ожидали пометку о приблизительных данных")
+	}
+
+	facts := queryFactMarkups(time.Now().Add(-24*time.Hour), map[string]int{
+		"shtany-1.21": 1100005,
+	})
+	fact := facts["shtany-1.21"]
+	if fact == nil || fact.Samples != 3 {
+		t.Fatalf("overview fact = %#v, ожидали 3 старые покупки через текущую цену", fact)
+	}
+	if fact.MarkupAbs <= 0 {
+		t.Errorf("overview fact markup = %.0f, ожидали положительную сумму", fact.MarkupAbs)
 	}
 }
