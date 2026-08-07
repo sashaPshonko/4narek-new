@@ -472,6 +472,7 @@ func removeClient(ws *websocket.Conn) {
 	delete(clientFleetTypes, ws)
 	delete(clientBotsPerType, ws)
 	delete(clientBannedBots, ws)
+	delete(clientClanOwners, ws)
 }
 
 func broadcastBroker() {
@@ -1175,6 +1176,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			ActiveTypes   []string        `json:"active_types"`
 			BotsPerType   map[string]int  `json:"bots_per_type"`
 			Banned        []bannedBotView `json:"banned"`
+			ClanOwners    []clanOwnerView `json:"clan_owners"`
 			Price         int             `json:"price"`
 			Enchants      []ItemEffect    `json:"enchants"`
 			Durability    *float64        `json:"durability"`
@@ -1206,6 +1208,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	ActiveTypes   []string        `json:"active_types"`
 	BotsPerType   map[string]int  `json:"bots_per_type"`
 	Banned        []bannedBotView `json:"banned"`
+	ClanOwners    []clanOwnerView `json:"clan_owners"`
 	Price         int             `json:"price"`
 	Enchants      []ItemEffect    `json:"enchants"`
 	Durability    *float64        `json:"durability"`
@@ -1280,6 +1283,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		setClientActiveTypes(ws, msg.ActiveTypes)
 		setClientBotsPerType(ws, msg.BotsPerType)
 		setClientBannedBots(ws, msg.Banned)
+		setClientClanOwners(ws, msg.ClanOwners)
 		updateTypeFleetActivityLocked()
 		mutex.Unlock()
 

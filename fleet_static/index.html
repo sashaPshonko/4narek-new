@@ -17,6 +17,9 @@
       --ban: #b91c1c;
       --ban-bg: rgba(185,28,28,.08);
       --ok: #047857;
+      --ok-bg: rgba(4,120,87,.08);
+      --warn: #b45309;
+      --warn-bg: rgba(180,83,9,.1);
       --surface: #fff;
       --font: "IBM Plex Sans", system-ui, sans-serif;
       --display: "Syne", sans-serif;
@@ -41,7 +44,7 @@
     .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
     .status.err .dot { background: var(--ban); }
     .kpi {
-      display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 18px;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px;
     }
     .card {
       background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
@@ -56,6 +59,9 @@
       padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
     }
     .nav a:hover { color: var(--ink); }
+    .section-title {
+      font-family: var(--display); font-size: 20px; margin: 28px 0 10px; letter-spacing: -.02em;
+    }
     .anarchy {
       background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
       margin-bottom: 12px; overflow: hidden;
@@ -64,8 +70,10 @@
       display: flex; justify-content: space-between; align-items: baseline;
       padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--ban-bg);
     }
+    .anarchy.owners > header { background: #eef2ff; }
     .anarchy > header h2 { margin: 0; font-size: 16px; font-family: var(--display); }
     .anarchy > header .cnt { font-family: var(--mono); color: var(--ban); font-weight: 600; }
+    .anarchy.owners > header .cnt { color: var(--ink); }
     table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
     th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
@@ -75,13 +83,21 @@
     .mono { font-family: var(--mono); }
     .empty { text-align: center; padding: 40px 16px; color: var(--muted); }
     .reason { max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
-    @media (max-width: 560px) { .kpi { grid-template-columns: 1fr; } }
+    .pill {
+      display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 600;
+      padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em;
+    }
+    .pill.ok { background: var(--ok-bg); color: var(--ok); }
+    .pill.banned { background: var(--ban-bg); color: var(--ban); }
+    .pill.pending { background: #e8edf5; color: var(--muted); }
+    .pill.error { background: var(--warn-bg); color: var(--warn); }
+    @media (max-width: 640px) { .kpi { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>4narek <span>Баны</span></h1>
-    <p class="lede">Какие аккаунты помечены забаненными и на каких анархиях. Бай-боты и владельцы кланов (периодический логин). Данные с оркестраторов через presence.</p>
+    <p class="lede">Баны бай-ботов и статусы владельцев кланов (периодический логин). Данные с оркестраторов через presence.</p>
     <div class="nav">
       <a href="/sales/">Продажи</a>
       <a href="/funauth/">FunAuth</a>
@@ -91,7 +107,11 @@
     <div class="kpi">
       <div class="card"><div class="k">Забанено сейчас</div><div class="v ban mono" id="kpiTotal">—</div></div>
       <div class="card"><div class="k">Анархии с банами</div><div class="v mono" id="kpiAn">—</div></div>
+      <div class="card"><div class="k">Владельцы кланов</div><div class="v mono" id="kpiOwners">—</div></div>
     </div>
+    <h2 class="section-title">Владельцы кланов</h2>
+    <div id="owners"></div>
+    <h2 class="section-title">Баны ботов</h2>
     <div id="list"></div>
   </div>
   <script>
@@ -103,6 +123,12 @@
       if (Number.isNaN(d.getTime())) return escapeHtml(iso);
       return d.toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     };
+    const statusLabel = (s) => ({
+      ok: "ок",
+      banned: "бан",
+      pending: "ждём пинг",
+      error: "ошибка",
+    })[s] || s || "?";
 
     async function load() {
       try {
@@ -111,13 +137,39 @@
         const data = await res.json();
         $("status").classList.remove("err");
         const t = new Date(data.updated_at);
-        $("statusText").textContent = `обновлено ${t.toLocaleTimeString("ru-RU")} · ${data.total_banned} бан(ов)`;
+        const owners = data.clan_owners || [];
+        const ownersBanned = owners.filter((o) => o.banned || o.status === "banned").length;
+        $("statusText").textContent = `обновлено ${t.toLocaleTimeString("ru-RU")} · ${data.total_banned} бан(ов) · владельцев ${owners.length}`;
         $("kpiTotal").textContent = data.total_banned;
         $("kpiAn").textContent = (data.anarchies || []).filter((a) => a.count > 0).length;
+        $("kpiOwners").textContent = owners.length ? `${ownersBanned}/${owners.length}` : "—";
+
+        const ownersEl = $("owners");
+        if (!owners.length) {
+          ownersEl.innerHTML = `<div class="anarchy owners"><div class="empty">Владельцы ещё не пришли в presence.<br/>Рестартни оркестраторы после pull — через ~5с появятся.</div></div>`;
+        } else {
+          const rows = owners.map((o) => `
+            <tr>
+              <td>
+                <div class="nick">${escapeHtml(o.username)}</div>
+                <div class="meta">an${escapeHtml(o.anarchy ?? "?")} · владелец клана</div>
+              </td>
+              <td><span class="pill ${escapeHtml(o.status || "pending")}">${escapeHtml(statusLabel(o.status))}</span></td>
+              <td class="mono">${fmtWhen(o.checked_at || o.banned_at)}</td>
+              <td><div class="reason" title="${escapeHtml(o.reason || "")}">${escapeHtml(o.reason || "—")}</div></td>
+            </tr>`).join("");
+          ownersEl.innerHTML = `<section class="anarchy owners">
+            <header><h2>Все анки</h2><span class="cnt">${owners.length}</span></header>
+            <table>
+              <thead><tr><th>Ник</th><th>Статус</th><th>Проверка</th><th>Детали</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </section>`;
+        }
 
         const list = $("list");
         if (!data.total_banned) {
-          list.innerHTML = `<div class="anarchy"><div class="empty">Сейчас никто не помечен забаненным.<br/>Как только оркестратор поймает бан — появится здесь.</div></div>`;
+          list.innerHTML = `<div class="anarchy"><div class="empty">Сейчас никто из бай-ботов не помечен забаненным.</div></div>`;
           return;
         }
         list.innerHTML = (data.anarchies || []).map((a) => {

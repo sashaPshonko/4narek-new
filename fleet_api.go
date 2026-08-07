@@ -23,6 +23,17 @@ type bannedBotView struct {
 	Source   string `json:"source,omitempty"` // оркестратор / анархия-группа
 }
 
+type clanOwnerView struct {
+	Username  string `json:"username"`
+	Anarchy   any    `json:"anarchy"`
+	Role      string `json:"role,omitempty"`
+	Status    string `json:"status"` // pending|ok|banned|error
+	Banned    bool   `json:"banned"`
+	BannedAt  string `json:"banned_at,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	CheckedAt string `json:"checked_at,omitempty"`
+}
+
 type fleetAnarchyView struct {
 	Anarchy int             `json:"anarchy"`
 	Banned  []bannedBotView `json:"banned"`
@@ -30,15 +41,19 @@ type fleetAnarchyView struct {
 }
 
 type fleetOverview struct {
-	OK        bool               `json:"ok"`
-	UpdatedAt time.Time          `json:"updated_at"`
-	Total     int                `json:"total_banned"`
-	Anarchies []fleetAnarchyView `json:"anarchies"`
-	Banned    []bannedBotView    `json:"banned"`
+	OK         bool               `json:"ok"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+	Total      int                `json:"total_banned"`
+	Anarchies  []fleetAnarchyView `json:"anarchies"`
+	Banned     []bannedBotView    `json:"banned"`
+	ClanOwners []clanOwnerView    `json:"clan_owners"`
 }
 
 // clientBannedBots — снимок забаненных с каждого WS-оркестратора.
 var clientBannedBots = make(map[*websocket.Conn][]bannedBotView)
+
+// clientClanOwners — статусы владельцев кланов с каждого WS-оркестратора.
+var clientClanOwners = make(map[*websocket.Conn][]clanOwnerView)
 
 func registerFleetHTTP(mux *http.ServeMux) {
 	mux.HandleFunc("/fleet", recoverHTTP(func(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +122,39 @@ func setClientBannedBots(ws *websocket.Conn, raw []bannedBotView) {
 		out = append(out, b)
 	}
 	clientBannedBots[ws] = out
+}
+
+func setClientClanOwners(ws *websocket.Conn, raw []clanOwnerView) {
+	if len(raw) == 0 {
+		clientClanOwners[ws] = nil
+		return
+	}
+	out := make([]clanOwnerView, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+	for _, b := range raw {
+		u := strings.TrimSpace(b.Username)
+		if u == "" {
+			continue
+		}
+		key := strings.ToLower(u)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		b.Username = u
+		if b.Role == "" {
+			b.Role = "clan_owner"
+		}
+		if b.Status == "" {
+			if b.Banned {
+				b.Status = "banned"
+			} else {
+				b.Status = "pending"
+			}
+		}
+		out = append(out, b)
+	}
+	clientClanOwners[ws] = out
 }
 
 func anarchyInt(v any) int {
@@ -182,10 +230,42 @@ func buildFleetOverview() fleetOverview {
 	}
 
 	return fleetOverview{
-		OK:        true,
-		UpdatedAt: now,
-		Total:     len(all),
-		Anarchies: anarchies,
-		Banned:    all,
+		OK:         true,
+		UpdatedAt:  now,
+		Total:      len(all),
+		Anarchies:  anarchies,
+		Banned:     all,
+		ClanOwners: collectClanOwnersLocked(),
 	}
+}
+
+func collectClanOwnersLocked() []clanOwnerView {
+	byUser := make(map[string]clanOwnerView)
+	for _, list := range clientClanOwners {
+		for _, b := range list {
+			key := strings.ToLower(b.Username)
+			if prev, ok := byUser[key]; ok {
+				// свежая проверка побеждает
+				if b.CheckedAt != "" && (prev.CheckedAt == "" || b.CheckedAt > prev.CheckedAt) {
+					byUser[key] = b
+				} else if prev.CheckedAt == "" && b.Status != "" && b.Status != "pending" {
+					byUser[key] = b
+				}
+				continue
+			}
+			byUser[key] = b
+		}
+	}
+	out := make([]clanOwnerView, 0, len(byUser))
+	for _, b := range byUser {
+		out = append(out, b)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		ai, aj := anarchyInt(out[i].Anarchy), anarchyInt(out[j].Anarchy)
+		if ai != aj {
+			return ai < aj
+		}
+		return out[i].Username < out[j].Username
+	})
+	return out
 }

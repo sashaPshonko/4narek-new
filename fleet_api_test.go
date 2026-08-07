@@ -11,8 +11,13 @@ import (
 
 func TestFleetOverviewGroupsByAnarchy(t *testing.T) {
 	old := clientBannedBots
+	oldOwners := clientClanOwners
 	clientBannedBots = make(map[*websocket.Conn][]bannedBotView)
-	t.Cleanup(func() { clientBannedBots = old })
+	clientClanOwners = make(map[*websocket.Conn][]clanOwnerView)
+	t.Cleanup(func() {
+		clientBannedBots = old
+		clientClanOwners = oldOwners
+	})
 
 	wsA := &websocket.Conn{}
 	wsB := &websocket.Conn{}
@@ -23,6 +28,9 @@ func TestFleetOverviewGroupsByAnarchy(t *testing.T) {
 	setClientBannedBots(wsB, []bannedBotView{
 		{Username: "botC", Anarchy: 510},
 		{Username: "botA", Anarchy: 503, BannedAt: "2026-08-06T12:00:00Z", Reason: "newer"},
+	})
+	setClientClanOwners(wsA, []clanOwnerView{
+		{Username: "owner503", Anarchy: 503, Status: "ok", CheckedAt: "2026-08-07T12:00:00Z"},
 	})
 
 	out := buildFleetOverview()
@@ -46,6 +54,9 @@ func TestFleetOverviewGroupsByAnarchy(t *testing.T) {
 	}
 	if botA.Reason != "newer" || botA.BannedAt != "2026-08-06T12:00:00Z" {
 		t.Fatalf("dedupe prefer newer: %+v", botA)
+	}
+	if len(out.ClanOwners) != 1 || out.ClanOwners[0].Username != "owner503" || out.ClanOwners[0].Status != "ok" {
+		t.Fatalf("clan_owners=%+v", out.ClanOwners)
 	}
 }
 
