@@ -81,7 +81,7 @@
 <body>
   <div class="wrap">
     <h1>4narek <span>Баны</span></h1>
-    <p class="lede">Какие аккаунты помечены забаненными и на каких анархиях. Данные с оркестраторов через presence.</p>
+    <p class="lede">Какие аккаунты помечены забаненными и на каких анархиях. Бай-боты и владельцы кланов (периодический логин). Данные с оркестраторов через presence.</p>
     <div class="nav">
       <a href="/sales/">Продажи</a>
       <a href="/funauth/">FunAuth</a>
@@ -122,15 +122,19 @@
         }
         list.innerHTML = (data.anarchies || []).map((a) => {
           const title = a.anarchy ? `Анархия ${a.anarchy}` : "Без анархии";
-          const rows = (a.banned || []).map((b) => `
+          const rows = (a.banned || []).map((b) => {
+            const role = b.role === "clan_owner" ? "владелец клана" : (b.role || "—");
+            const type = b.role === "clan_owner" ? "clan" : (b.go_type || "—");
+            return `
             <tr>
               <td>
                 <div class="nick">${escapeHtml(b.username)}</div>
-                <div class="meta">${escapeHtml(b.role || "—")} · ${escapeHtml(b.go_type || "—")}</div>
+                <div class="meta">${escapeHtml(role)} · ${escapeHtml(type)}</div>
               </td>
               <td class="mono">${fmtWhen(b.banned_at)}</td>
               <td><div class="reason" title="${escapeHtml(b.reason || "")}">${escapeHtml(b.reason || "—")}</div></td>
-            </tr>`).join("");
+            </tr>`;
+          }).join("");
           return `<section class="anarchy">
             <header><h2>${title}</h2><span class="cnt">${a.count}</span></header>
             <table>
