@@ -75,6 +75,22 @@ func registerFunauthHTTP(mux *http.ServeMux) {
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"ok":true,"queued":true}`))
 	}))
+
+	mux.HandleFunc("/api/funauth/2fa", recoverHTTP(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		var body funauthBindReq
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+			http.Error(w, "bad json", http.StatusBadRequest)
+			return
+		}
+		handleFunauthTwoFAWS(body.Nick)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"ok":true,"queued":true}`))
+	}))
 }
 
 func recoverHTTPHandler(next http.Handler) http.Handler {
@@ -140,6 +156,16 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handleFunauthBindWS(body.Nick, body.Password)
+		funauthJSON(w, http.StatusAccepted, map[string]any{"ok": true, "queued": true})
+		return
+
+	case path == "/2fa" && r.Method == http.MethodPost:
+		var body funauthBindReq
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+			funauthJSONErr(w, http.StatusBadRequest, "bad json")
+			return
+		}
+		handleFunauthTwoFAWS(body.Nick)
 		funauthJSON(w, http.StatusAccepted, map[string]any{"ok": true, "queued": true})
 		return
 
@@ -379,6 +405,79 @@ func handleFunauthBindWS(nick, password string) {
 			"nick":    nick,
 			"tgPhone": result.TgPhone,
 			"error":   result.Error,
+		})
+	})
+}
+
+// handleFunauthTwoFAWS — только `/2fa nick` с TG-акка, к которому ник уже привязан.
+func handleFunauthTwoFAWS(nick string) {
+	initFunauth()
+	nick = strings.TrimSpace(nick)
+	if nick == "" {
+		log.Printf("[funauth] 2fa skip empty nick")
+		return
+	}
+	if ok, why := funauthMayStartBind(nick); !ok {
+		log.Printf("[funauth] 2fa skip %s (%s)", nick, why)
+		return
+	}
+
+	goSafe("funauth:2fa:"+nick, func() {
+		log.Printf("[funauth] 2fa start %s", nick)
+
+		if funauthPoolInst == nil || !funauthPoolInst.configured() {
+			log.Printf("[funauth] not ready for 2fa %s", nick)
+			funauthSetNickState(nick, "no_accounts")
+			broadcastFunauthResult(map[string]interface{}{
+				"action": "funauth_result",
+				"ok":     false,
+				"nick":   nick,
+				"error":  "funauth_not_configured",
+				"mode":   "twofa",
+			})
+			return
+		}
+
+		result := funauthBinderInst.TwoFA(nick)
+
+		if result.Error == "no_accounts" || result.Error == "no_bound_account" {
+			funauthSetNickState(nick, "no_accounts")
+			enqueueTelegramMessage(
+				fmt.Sprintf("🚨 FunAuth 2FA: нет TG-акка для `%s` (нужен тот, с которого биндили)", nick),
+				"Markdown",
+			)
+			broadcastFunauthResult(map[string]interface{}{
+				"action": "funauth_no_accounts",
+				"ok":     false,
+				"nick":   nick,
+				"error":  result.Error,
+				"mode":   "twofa",
+			})
+			return
+		}
+
+		if result.OK {
+			funauthSetNickState(nick, "ok")
+			log.Printf("[funauth] 2fa ok %s via %s", nick, result.TgPhone)
+			enqueueTelegramMessage(
+				fmt.Sprintf("✅ FunAuth 2FA: `%s` выкл (tg %s)", nick, result.TgPhone),
+				"Markdown",
+			)
+		} else {
+			funauthSetNickState(nick, "fail:"+result.Error)
+			log.Printf("[funauth] 2fa fail %s: %s", nick, result.Error)
+			enqueueTelegramMessage(
+				fmt.Sprintf("❌ FunAuth 2FA fail `%s`: %s", nick, result.Error),
+				"Markdown",
+			)
+		}
+		broadcastFunauthResult(map[string]interface{}{
+			"action":  "funauth_result",
+			"ok":      result.OK,
+			"nick":    nick,
+			"tgPhone": result.TgPhone,
+			"error":   result.Error,
+			"mode":    "twofa",
 		})
 	})
 }

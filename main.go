@@ -1367,6 +1367,14 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		password, _ := rawJSONField(rawMsg, "password")
 		handleFunauthBindWS(nick, password)
 
+	case "funauth_2fa":
+		mutex.Unlock()
+		nick, _ := rawJSONField(rawMsg, "nick")
+		if nick == "" {
+			nick, _ = rawJSONField(rawMsg, "username")
+		}
+		handleFunauthTwoFAWS(nick)
+
 	default:
 		mutex.Unlock()
 	}

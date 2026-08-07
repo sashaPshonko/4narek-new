@@ -36,6 +36,7 @@ type funauthBindResult struct {
 type funauthBindJob struct {
 	nick       string
 	password   string
+	mode       string // "bind" | "twofa"
 	enqueuedAt time.Time
 	result     chan funauthBindResult
 	cancelled  bool
@@ -94,9 +95,21 @@ func (b *funauthBinder) queueLen() int {
 
 // Bind enqueues a job and waits up to ~120s for the result.
 func (b *funauthBinder) Bind(nick, password string) funauthBindResult {
+	return b.enqueue(nick, password, "bind")
+}
+
+// TwoFA sends only `/2fa nick` from the TG account that already bound this nick
+// (fallback: try all ready accounts until FunAuthBot accepts).
+func (b *funauthBinder) TwoFA(nick string) funauthBindResult {
+	return b.enqueue(nick, "", "twofa")
+}
+
+func (b *funauthBinder) enqueue(nick, password, mode string) funauthBindResult {
 	n := strings.TrimSpace(nick)
-	p := password
-	if n == "" || strings.TrimSpace(p) == "" {
+	if n == "" {
+		return funauthBindResult{OK: false, Nick: n, Error: "nick_required"}
+	}
+	if mode == "bind" && strings.TrimSpace(password) == "" {
 		return funauthBindResult{OK: false, Nick: n, Error: "nick_password_required"}
 	}
 	if b.pool == nil || !b.pool.configured() {
@@ -105,7 +118,8 @@ func (b *funauthBinder) Bind(nick, password string) funauthBindResult {
 
 	job := &funauthBindJob{
 		nick:       n,
-		password:   p,
+		password:   password,
+		mode:       mode,
 		enqueuedAt: time.Now(),
 		result:     make(chan funauthBindResult, 1),
 	}
@@ -184,6 +198,9 @@ func (b *funauthBinder) pump() {
 }
 
 func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
+	if job.mode == "twofa" {
+		return b.processTwoFA(job)
+	}
 	tried := make(map[string]struct{})
 
 	for {
@@ -208,7 +225,91 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 			log.Printf("[funauth] account %s full, trying next", phone)
 			continue
 		}
+		if result.OK {
+			b.pool.rememberNick(job.nick, acc.meta.ID)
+		}
 		return result
+	}
+}
+
+func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
+	tried := make(map[string]struct{})
+
+	// сначала тот TG, с которого ник уже биндили
+	if preferred := b.pool.accountForNick(job.nick); preferred != nil {
+		tried[preferred.meta.ID] = struct{}{}
+		log.Printf("[funauth] 2fa %s via mapped tg %s", job.nick, preferred.meta.Phone)
+		ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
+		res := b.runTwoFAOnAccount(ctx, preferred, job.nick)
+		cancel()
+		if res.OK {
+			return res
+		}
+		log.Printf("[funauth] 2fa mapped fail %s: %s — пробуем другие", job.nick, res.Error)
+	} else {
+		log.Printf("[funauth] 2fa %s: нет nick→tg map, перебираем акки", job.nick)
+	}
+
+	for {
+		job.mu.Lock()
+		cancelled := job.cancelled
+		job.mu.Unlock()
+		if cancelled {
+			return funauthBindResult{OK: false, Nick: job.nick, Error: "timeout"}
+		}
+		acc := b.pool.pickReady(tried)
+		if acc == nil {
+			return funauthBindResult{OK: false, Nick: job.nick, Error: "no_bound_account"}
+		}
+		tried[acc.meta.ID] = struct{}{}
+		ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
+		res := b.runTwoFAOnAccount(ctx, acc, job.nick)
+		cancel()
+		if res.OK {
+			b.pool.rememberNick(job.nick, acc.meta.ID)
+			return res
+		}
+		log.Printf("[funauth] 2fa skip %s on %s: %s", job.nick, acc.meta.Phone, res.Error)
+	}
+}
+
+func (b *funauthBinder) runTwoFAOnAccount(ctx context.Context, acc *funauthAccount, nick string) funauthBindResult {
+	api := acc.api
+	if api == nil {
+		return funauthBindResult{OK: false, Nick: nick, TgPhone: acc.meta.Phone, Error: "account_offline"}
+	}
+	if acc.botID == 0 {
+		if id, err := resolveFunauthBotID(ctx, api); err == nil {
+			acc.botID = id
+		}
+	}
+	sender := message.NewSender(api)
+	if err := funauthEnsureChannel(ctx, sender); err != nil {
+		log.Printf("[funauth] join @%s: %v", funauthChannel, err)
+	}
+	if !acc.meta.Started {
+		if _, err := sender.Resolve(funauthBotUser).Text(ctx, "/start"); err != nil {
+			return funauthBindResult{OK: false, Nick: nick, TgPhone: acc.meta.Phone, Error: err.Error()}
+		}
+		b.pool.markStarted(acc.meta.ID)
+		time.Sleep(800 * time.Millisecond)
+	}
+
+	// любое ответное сообщение бота — чтобы быстро отсеять чужой акк
+	reply, err := funauthSendAndWait(ctx, sender, acc, "/2fa "+nick, func(text string) bool {
+		return strings.TrimSpace(text) != ""
+	})
+	if err != nil {
+		return funauthBindResult{OK: false, Nick: nick, TgPhone: acc.meta.Phone, Error: err.Error()}
+	}
+	if !funauthTwofaOK.MatchString(reply) {
+		return funauthBindResult{
+			OK: false, Nick: nick, TgPhone: acc.meta.Phone,
+			Error: "twofa_not_accepted", Reply: truncateRunes(reply, 200),
+		}
+	}
+	return funauthBindResult{
+		OK: true, Nick: nick, TgPhone: acc.meta.Phone, Reply: truncateRunes(reply, 200),
 	}
 }
 

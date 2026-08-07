@@ -29,6 +29,7 @@ const (
 	funauthSessionsDir = "funauth_sessions"
 	funauthBotUser     = "FunAuthBot"
 	funauthChannel     = "funtime"
+	funauthNicksFile   = "nicks.json"
 	// Как у Telegram Desktop (как в tg-export) — без .env / my.telegram.org
 	funauthDesktopAPIID   = 2040
 	funauthDesktopAPIHash = "b18441a1ff607e10a989891a5462e627"
@@ -139,6 +140,7 @@ type funauthPool struct {
 
 	accounts map[string]*funauthAccount
 	pending  map[string]*funauthPendingLogin
+	nicks    map[string]string // nick(lower) → account id
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -152,6 +154,7 @@ func newFunauthPool() *funauthPool {
 		dir:      funauthSessionsDir,
 		accounts: make(map[string]*funauthAccount),
 		pending:  make(map[string]*funauthPendingLogin),
+		nicks:    make(map[string]string),
 		ctx:      ctx,
 		cancel:   cancel,
 	}
@@ -172,6 +175,7 @@ func (p *funauthPool) init() {
 	} else {
 		log.Printf("[funauth] MTProto без прокси (TELEGRAM_PROXY=off)")
 	}
+	p.loadNicks()
 	entries, err := os.ReadDir(p.dir)
 	if err != nil {
 		log.Printf("[funauth] read sessions: %v", err)
@@ -180,6 +184,9 @@ func (p *funauthPool) init() {
 	n := 0
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		if e.Name() == funauthNicksFile {
 			continue
 		}
 		path := filepath.Join(p.dir, e.Name())
@@ -220,6 +227,72 @@ func (p *funauthPool) saveMeta(meta funauthAccountMeta) error {
 		return err
 	}
 	return os.WriteFile(p.metaPath(meta.ID), raw, 0o600)
+}
+
+func (p *funauthPool) nicksPath() string {
+	return filepath.Join(p.dir, funauthNicksFile)
+}
+
+func (p *funauthPool) loadNicks() {
+	raw, err := os.ReadFile(p.nicksPath())
+	if err != nil {
+		return
+	}
+	var m map[string]string
+	if err := json.Unmarshal(raw, &m); err != nil {
+		log.Printf("[funauth] bad %s: %v", funauthNicksFile, err)
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for k, v := range m {
+		key := strings.ToLower(strings.TrimSpace(k))
+		if key == "" || v == "" {
+			continue
+		}
+		p.nicks[key] = v
+	}
+	log.Printf("[funauth] nick map: %d", len(p.nicks))
+}
+
+func (p *funauthPool) rememberNick(nick, accountID string) {
+	key := strings.ToLower(strings.TrimSpace(nick))
+	id := strings.TrimSpace(accountID)
+	if key == "" || id == "" {
+		return
+	}
+	p.mu.Lock()
+	p.nicks[key] = id
+	snapshot := make(map[string]string, len(p.nicks))
+	for k, v := range p.nicks {
+		snapshot[k] = v
+	}
+	p.mu.Unlock()
+	raw, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return
+	}
+	if err := os.WriteFile(p.nicksPath(), raw, 0o600); err != nil {
+		log.Printf("[funauth] save nicks: %v", err)
+	}
+}
+
+func (p *funauthPool) accountByID(id string) *funauthAccount {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.accounts[id]
+}
+
+func (p *funauthPool) accountForNick(nick string) *funauthAccount {
+	key := strings.ToLower(strings.TrimSpace(nick))
+	p.mu.Lock()
+	id := p.nicks[key]
+	acc := p.accounts[id]
+	p.mu.Unlock()
+	if acc == nil || !acc.ready || acc.api == nil {
+		return nil
+	}
+	return acc
 }
 
 func normalizeFunauthPhone(phone string) string {
