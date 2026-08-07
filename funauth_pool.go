@@ -295,6 +295,18 @@ func (p *funauthPool) accountForNick(nick string) *funauthAccount {
 	return acc
 }
 
+func (p *funauthPool) listReadyAccounts() []*funauthAccount {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]*funauthAccount, 0, len(p.accounts))
+	for _, a := range p.accounts {
+		if a.ready && !a.meta.Full && a.api != nil {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 func normalizeFunauthPhone(phone string) string {
 	var b strings.Builder
 	for _, r := range phone {

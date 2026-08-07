@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/gotd/td/telegram/message"
+	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 )
 
 const (
 	funauthBindReplyTimeout = 45 * time.Second
 	funauthJobTimeout       = 120 * time.Second
+	funauthHistoryLimit     = 120
 )
 
 var (
@@ -23,6 +25,7 @@ var (
 	// «[Бот] У Вас уже много привязанных аккаунтов»
 	funauthBindFull = regexp.MustCompile(`(?i)у вас уже много привязанных|уже много привязанных|много привязанных аккаунт`)
 	funauthTwofaOK = regexp.MustCompile(`(?i)выключено|Подтверждение входа`)
+	funauthHistoryBindHint = regexp.MustCompile(`(?i)(/bind\s+|был привязан|/2fa\s+|подтверждение входа|привязан)`)
 )
 
 type funauthBindResult struct {
@@ -234,22 +237,45 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 
 func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
 	tried := make(map[string]struct{})
-
-	// сначала тот TG, с которого ник уже биндили
-	if preferred := b.pool.accountForNick(job.nick); preferred != nil {
-		tried[preferred.meta.ID] = struct{}{}
-		log.Printf("[funauth] 2fa %s via mapped tg %s", job.nick, preferred.meta.Phone)
+	tryAcc := func(acc *funauthAccount, why string) *funauthBindResult {
+		if acc == nil {
+			return nil
+		}
+		if _, seen := tried[acc.meta.ID]; seen {
+			return nil
+		}
+		tried[acc.meta.ID] = struct{}{}
+		log.Printf("[funauth] 2fa %s via %s (%s)", job.nick, acc.meta.Phone, why)
 		ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
-		res := b.runTwoFAOnAccount(ctx, preferred, job.nick)
+		res := b.runTwoFAOnAccount(ctx, acc, job.nick)
 		cancel()
 		if res.OK {
-			return res
+			b.pool.rememberNick(job.nick, acc.meta.ID)
+			return &res
 		}
-		log.Printf("[funauth] 2fa mapped fail %s: %s — пробуем другие", job.nick, res.Error)
-	} else {
-		log.Printf("[funauth] 2fa %s: нет nick→tg map, перебираем акки", job.nick)
+		log.Printf("[funauth] 2fa skip %s on %s: %s", job.nick, acc.meta.Phone, res.Error)
+		return nil
 	}
 
+	// 1) карта nick→tg
+	if preferred := b.pool.accountForNick(job.nick); preferred != nil {
+		if res := tryAcc(preferred, "nicks.json"); res != nil {
+			return *res
+		}
+	}
+
+	// 2) история чата с FunAuthBot (старые бинды без карты)
+	histCtx, histCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	fromHistory := b.findAccountsByBotHistory(histCtx, job.nick)
+	histCancel()
+	for _, acc := range fromHistory {
+		if res := tryAcc(acc, "history"); res != nil {
+			return *res
+		}
+	}
+
+	// 3) остальные готовые
+	log.Printf("[funauth] 2fa %s: map/history пусто — перебор остальных", job.nick)
 	for {
 		job.mu.Lock()
 		cancelled := job.cancelled
@@ -261,16 +287,118 @@ func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
 		if acc == nil {
 			return funauthBindResult{OK: false, Nick: job.nick, Error: "no_bound_account"}
 		}
-		tried[acc.meta.ID] = struct{}{}
-		ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
-		res := b.runTwoFAOnAccount(ctx, acc, job.nick)
-		cancel()
-		if res.OK {
-			b.pool.rememberNick(job.nick, acc.meta.ID)
-			return res
+		if res := tryAcc(acc, "fallback"); res != nil {
+			return *res
 		}
-		log.Printf("[funauth] 2fa skip %s on %s: %s", job.nick, acc.meta.Phone, res.Error)
 	}
+}
+
+// findAccountsByBotHistory — у кого в диалоге с FunAuthBot есть этот ник + bind/2fa след.
+func (b *funauthBinder) findAccountsByBotHistory(ctx context.Context, nick string) []*funauthAccount {
+	needle := strings.ToLower(strings.TrimSpace(nick))
+	if needle == "" {
+		return nil
+	}
+	var hits []*funauthAccount
+	for _, acc := range b.pool.listReadyAccounts() {
+		ok, err := funauthHistoryHasNick(ctx, acc, needle)
+		if err != nil {
+			log.Printf("[funauth] history %s: %v", acc.meta.Phone, err)
+			continue
+		}
+		if ok {
+			log.Printf("[funauth] history hit: nick=%s tg=%s", nick, acc.meta.Phone)
+			hits = append(hits, acc)
+		}
+	}
+	return hits
+}
+
+func funauthHistoryHasNick(ctx context.Context, acc *funauthAccount, nickLower string) (bool, error) {
+	api := acc.api
+	if api == nil {
+		return false, errors.New("account_offline")
+	}
+	peer, err := resolveFunauthBotPeer(ctx, api)
+	if err != nil {
+		return false, err
+	}
+	if peer != nil && acc.botID == 0 {
+		acc.botID = peer.UserID
+	}
+
+	hist, err := api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
+		Peer:  peer,
+		Limit: funauthHistoryLimit,
+	})
+	if err != nil {
+		return false, err
+	}
+
+	msgs := funauthExtractMessages(hist)
+	for _, m := range msgs {
+		text := strings.ToLower(strings.TrimSpace(m))
+		if text == "" {
+			continue
+		}
+		if !strings.Contains(text, nickLower) {
+			continue
+		}
+		// ник в диалоге + намёк на bind/2fa (или просто /bind|/2fa с ником)
+		if funauthHistoryBindHint.MatchString(text) ||
+			strings.Contains(text, "/bind") ||
+			strings.Contains(text, "/2fa") {
+			return true, nil
+		}
+		// исходящий `/bind nick …` / ответ бота с ником — тоже ок
+		return true, nil
+	}
+	return false, nil
+}
+
+func resolveFunauthBotPeer(ctx context.Context, api *tg.Client) (*tg.InputPeerUser, error) {
+	res, err := api.ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
+		Username: funauthBotUser,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, u := range res.Users {
+		user, ok := u.(*tg.User)
+		if ok && strings.EqualFold(user.Username, funauthBotUser) {
+			return &tg.InputPeerUser{
+				UserID:     user.ID,
+				AccessHash: user.AccessHash,
+			}, nil
+		}
+	}
+	return nil, errors.New("funauth bot not resolved")
+}
+
+func funauthExtractMessages(hist tg.MessagesMessagesClass) []string {
+	var out []string
+	add := func(list []tg.MessageClass) {
+		for _, mc := range list {
+			msg, ok := mc.(*tg.Message)
+			if !ok || msg == nil {
+				continue
+			}
+			if s := strings.TrimSpace(msg.Message); s != "" {
+				out = append(out, s)
+			}
+		}
+	}
+	switch h := hist.(type) {
+	case *tg.MessagesMessages:
+		add(h.Messages)
+	case *tg.MessagesMessagesSlice:
+		add(h.Messages)
+	case *tg.MessagesChannelMessages:
+		add(h.Messages)
+	case *tg.MessagesMessagesNotModified:
+		// nothing
+	}
+	return out
 }
 
 func (b *funauthBinder) runTwoFAOnAccount(ctx context.Context, acc *funauthAccount, nick string) funauthBindResult {
