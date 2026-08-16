@@ -70,7 +70,7 @@ func registerFunauthHTTP(mux *http.ServeMux) {
 			http.Error(w, "bad json", http.StatusBadRequest)
 			return
 		}
-		handleFunauthBindWS(body.Nick, body.Password)
+		handleFunauthBindWS(body.Nick, body.Password, body.Anarchy)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"ok":true,"queued":true}`))
@@ -86,7 +86,7 @@ func registerFunauthHTTP(mux *http.ServeMux) {
 			http.Error(w, "bad json", http.StatusBadRequest)
 			return
 		}
-		handleFunauthTwoFAWS(body.Nick)
+		handleFunauthTwoFAWS(body.Nick, body.Anarchy)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"ok":true,"queued":true}`))
@@ -155,7 +155,7 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 			funauthJSONErr(w, http.StatusBadRequest, "bad json")
 			return
 		}
-		handleFunauthBindWS(body.Nick, body.Password)
+		handleFunauthBindWS(body.Nick, body.Password, body.Anarchy)
 		funauthJSON(w, http.StatusAccepted, map[string]any{"ok": true, "queued": true})
 		return
 
@@ -165,7 +165,7 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 			funauthJSONErr(w, http.StatusBadRequest, "bad json")
 			return
 		}
-		handleFunauthTwoFAWS(body.Nick)
+		handleFunauthTwoFAWS(body.Nick, body.Anarchy)
 		funauthJSON(w, http.StatusAccepted, map[string]any{"ok": true, "queued": true})
 		return
 
@@ -300,6 +300,7 @@ func funauthWritePoolErr(w http.ResponseWriter, err error) {
 type funauthBindReq struct {
 	Nick     string `json:"nick"`
 	Password string `json:"password"`
+	Anarchy  int    `json:"anarchy"`
 }
 
 func funauthNickKey(nick string) string {
@@ -331,9 +332,8 @@ func funauthSetNickState(nick, state string) {
 	funauthNickStateMu.Unlock()
 }
 
-// handleFunauthBindWS — очередь bind; дубликаты nick режем, пока binder занят.
-// Если очередь пуста — принимаем снова (уже привязан → ошибка от бота, ок).
-func handleFunauthBindWS(nick, password string) {
+// handleFunauthBindWS — очередь bind; 1 TG-аккаунт на анархию (owner+bots).
+func handleFunauthBindWS(nick, password string, anarchy int) {
 	initFunauth()
 	nick = strings.TrimSpace(nick)
 	password = strings.TrimSpace(password)
@@ -365,7 +365,7 @@ func handleFunauthBindWS(nick, password string) {
 			return
 		}
 
-		result := funauthBinderInst.Bind(nick, password)
+		result := funauthBinderInst.Bind(nick, password, anarchy)
 
 		if result.Error == "no_accounts" {
 			funauthSetNickState(nick, "no_accounts")
@@ -410,7 +410,7 @@ func handleFunauthBindWS(nick, password string) {
 }
 
 // handleFunauthTwoFAWS — только `/2fa nick` с TG-акка, к которому ник уже привязан.
-func handleFunauthTwoFAWS(nick string) {
+func handleFunauthTwoFAWS(nick string, anarchy int) {
 	initFunauth()
 	nick = strings.TrimSpace(nick)
 	if nick == "" {
@@ -438,7 +438,7 @@ func handleFunauthTwoFAWS(nick string) {
 			return
 		}
 
-		result := funauthBinderInst.TwoFA(nick)
+		result := funauthBinderInst.TwoFA(nick, anarchy)
 
 		if result.Error == "no_accounts" || result.Error == "no_bound_account" {
 			funauthSetNickState(nick, "no_accounts")

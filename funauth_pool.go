@@ -43,6 +43,7 @@ type funauthAccountMeta struct {
 	Username string `json:"username,omitempty"`
 	Full     bool   `json:"full"`
 	Started  bool   `json:"started"`
+	Anarchy  int    `json:"anarchy,omitempty"`
 }
 
 type funauthAccountView struct {
@@ -52,6 +53,7 @@ type funauthAccountView struct {
 	Ready    bool   `json:"ready"`
 	Full     bool   `json:"full"`
 	Started  bool   `json:"started"`
+	Anarchy  int    `json:"anarchy,omitempty"`
 }
 
 type funauthAccount struct {
@@ -141,6 +143,7 @@ type funauthPool struct {
 	accounts map[string]*funauthAccount
 	pending  map[string]*funauthPendingLogin
 	nicks    map[string]string // nick(lower) → account id
+	roster   funauthRoster
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -176,6 +179,8 @@ func (p *funauthPool) init() {
 		log.Printf("[funauth] MTProto без прокси (TELEGRAM_PROXY=off)")
 	}
 	p.loadNicks()
+	p.roster = loadFunauthRoster()
+	p.reconcileAccountAnarchy()
 	entries, err := os.ReadDir(p.dir)
 	if err != nil {
 		log.Printf("[funauth] read sessions: %v", err)
@@ -186,7 +191,7 @@ func (p *funauthPool) init() {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		if e.Name() == funauthNicksFile {
+		if e.Name() == funauthNicksFile || e.Name() == funauthRosterFile {
 			continue
 		}
 		path := filepath.Join(p.dir, e.Name())
@@ -335,6 +340,7 @@ func (a *funauthAccount) view() funauthAccountView {
 		Ready:    a.ready,
 		Full:     a.meta.Full,
 		Started:  a.meta.Started,
+		Anarchy:  a.meta.Anarchy,
 	}
 }
 
@@ -351,17 +357,135 @@ func (p *funauthPool) readyCount() int {
 }
 
 func (p *funauthPool) pickReady(exclude map[string]struct{}) *funauthAccount {
+	return p.pickForAnarchyBind("", 0, exclude)
+}
+
+func (p *funauthPool) pickForAnarchyBind(nick string, anarchy int, exclude map[string]struct{}) *funauthAccount {
+	key := strings.ToLower(strings.TrimSpace(nick))
+	if anarchy <= 0 && key != "" {
+		anarchy = p.roster.anarchyForNick(key)
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	for _, a := range p.accounts {
-		if _, skip := exclude[a.meta.ID]; skip {
-			continue
-		}
-		if a.ready && !a.meta.Full && a.api != nil {
-			return a
+
+	if key != "" {
+		if id := p.nicks[key]; id != "" {
+			if acc := p.accounts[id]; acc != nil && acc.ready && !acc.meta.Full && acc.api != nil {
+				if _, skip := exclude[id]; !skip {
+					return acc
+				}
+			}
 		}
 	}
+
+	if anarchy > 0 {
+		for _, acc := range p.accounts {
+			if acc.meta.Anarchy != anarchy {
+				continue
+			}
+			if !acc.ready || acc.meta.Full || acc.api == nil {
+				continue
+			}
+			if _, skip := exclude[acc.meta.ID]; skip {
+				continue
+			}
+			return acc
+		}
+	}
+
+	for _, acc := range p.accounts {
+		if acc.meta.Anarchy != 0 {
+			continue
+		}
+		if !acc.ready || acc.meta.Full || acc.api == nil {
+			continue
+		}
+		if _, skip := exclude[acc.meta.ID]; skip {
+			continue
+		}
+		return acc
+	}
 	return nil
+}
+
+func (p *funauthPool) assignAnarchy(accountID string, anarchy int) {
+	if anarchy <= 0 || accountID == "" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	acc := p.accounts[accountID]
+	if acc == nil {
+		return
+	}
+	if acc.meta.Anarchy == 0 {
+		acc.meta.Anarchy = anarchy
+		if err := p.saveMeta(acc.meta); err != nil {
+			log.Printf("[funauth] save meta %s: %v", accountID, err)
+		}
+		log.Printf("[funauth] TG %s → anarchy %d", acc.meta.Phone, anarchy)
+	} else if acc.meta.Anarchy != anarchy {
+		log.Printf("[funauth] WARN TG %s anarchy %d, bind for %d", acc.meta.Phone, acc.meta.Anarchy, anarchy)
+	}
+}
+
+func (p *funauthPool) afterBindSuccess(nick, accountID string, anarchy int) {
+	nickKey := strings.ToLower(strings.TrimSpace(nick))
+	if anarchy <= 0 && nickKey != "" {
+		anarchy = p.roster.anarchyForNick(nickKey)
+	}
+	p.rememberNick(nick, accountID)
+	p.assignAnarchy(accountID, anarchy)
+
+	p.mu.Lock()
+	nicksSnap := make(map[string]string, len(p.nicks))
+	for k, v := range p.nicks {
+		nicksSnap[k] = v
+	}
+	acc := p.accounts[accountID]
+	an := anarchy
+	if acc != nil && acc.meta.Anarchy > 0 {
+		an = acc.meta.Anarchy
+	}
+	roster := p.roster
+	p.mu.Unlock()
+
+	if an > 0 && roster.complete(an, nicksSnap, accountID) {
+		p.markFull(accountID)
+		log.Printf("[funauth] anarchy %d complete on %s → full (%d nicks)", an, accountID, roster.size(an))
+	}
+}
+
+func (p *funauthPool) reconcileAccountAnarchy() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for id, acc := range p.accounts {
+		if acc.meta.Anarchy > 0 {
+			if p.roster.complete(acc.meta.Anarchy, p.nicks, id) && !acc.meta.Full {
+				acc.meta.Full = true
+				_ = p.saveMeta(acc.meta)
+				log.Printf("[funauth] reconcile: anarchy %d complete on %s → full", acc.meta.Anarchy, id)
+			}
+			continue
+		}
+		for nickLower, accID := range p.nicks {
+			if accID != id {
+				continue
+			}
+			if an := p.roster.anarchyForNick(nickLower); an > 0 {
+				acc.meta.Anarchy = an
+				_ = p.saveMeta(acc.meta)
+				log.Printf("[funauth] reconcile: TG %s → anarchy %d (from %s)", acc.meta.Phone, an, nickLower)
+				if p.roster.complete(an, p.nicks, id) {
+					acc.meta.Full = true
+					_ = p.saveMeta(acc.meta)
+					log.Printf("[funauth] reconcile: anarchy %d complete on %s → full", an, id)
+				}
+				break
+			}
+		}
+	}
 }
 
 func (p *funauthPool) markFull(id string) {

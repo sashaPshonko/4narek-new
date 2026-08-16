@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1366,7 +1367,8 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			nick, _ = rawJSONField(rawMsg, "username")
 		}
 		password, _ := rawJSONField(rawMsg, "password")
-		handleFunauthBindWS(nick, password)
+		anarchy := rawJSONIntField(rawMsg, "anarchy")
+		handleFunauthBindWS(nick, password, anarchy)
 
 	case "funauth_2fa":
 		mutex.Unlock()
@@ -1374,7 +1376,8 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		if nick == "" {
 			nick, _ = rawJSONField(rawMsg, "username")
 		}
-		handleFunauthTwoFAWS(nick)
+		anarchy := rawJSONIntField(rawMsg, "anarchy")
+		handleFunauthTwoFAWS(nick, anarchy)
 
 	default:
 		mutex.Unlock()
@@ -1392,6 +1395,30 @@ func rawJSONField(data []byte, field string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func rawJSONIntField(data []byte, field string) int {
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return 0
+	}
+	val, ok := m[field]
+	if !ok || val == nil {
+		return 0
+	}
+	switch t := val.(type) {
+	case float64:
+		return int(t)
+	case int:
+		return t
+	case int64:
+		return int(t)
+	case string:
+		n, _ := strconv.Atoi(strings.TrimSpace(t))
+		return n
+	default:
+		return 0
+	}
 }
 
 func copyMap(m map[string]int) map[string]int {

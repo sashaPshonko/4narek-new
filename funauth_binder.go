@@ -39,6 +39,7 @@ type funauthBindResult struct {
 type funauthBindJob struct {
 	nick       string
 	password   string
+	anarchy    int
 	mode       string // "bind" | "twofa"
 	enqueuedAt time.Time
 	result     chan funauthBindResult
@@ -97,17 +98,16 @@ func (b *funauthBinder) queueLen() int {
 }
 
 // Bind enqueues a job and waits up to ~120s for the result.
-func (b *funauthBinder) Bind(nick, password string) funauthBindResult {
-	return b.enqueue(nick, password, "bind")
+func (b *funauthBinder) Bind(nick, password string, anarchy int) funauthBindResult {
+	return b.enqueue(nick, password, anarchy, "bind")
 }
 
-// TwoFA sends only `/2fa nick` from the TG account that already bound this nick
-// (fallback: try all ready accounts until FunAuthBot accepts).
-func (b *funauthBinder) TwoFA(nick string) funauthBindResult {
-	return b.enqueue(nick, "", "twofa")
+// TwoFA sends only `/2fa nick` from the TG account that already bound this nick.
+func (b *funauthBinder) TwoFA(nick string, anarchy int) funauthBindResult {
+	return b.enqueue(nick, "", anarchy, "twofa")
 }
 
-func (b *funauthBinder) enqueue(nick, password, mode string) funauthBindResult {
+func (b *funauthBinder) enqueue(nick, password string, anarchy int, mode string) funauthBindResult {
 	n := strings.TrimSpace(nick)
 	if n == "" {
 		return funauthBindResult{OK: false, Nick: n, Error: "nick_required"}
@@ -122,6 +122,7 @@ func (b *funauthBinder) enqueue(nick, password, mode string) funauthBindResult {
 	job := &funauthBindJob{
 		nick:       n,
 		password:   password,
+		anarchy:    anarchy,
 		mode:       mode,
 		enqueuedAt: time.Now(),
 		result:     make(chan funauthBindResult, 1),
@@ -214,7 +215,7 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 			return funauthBindResult{OK: false, Nick: job.nick, Error: "timeout"}
 		}
 
-		acc := b.pool.pickReady(tried)
+		acc := b.pool.pickForAnarchyBind(job.nick, job.anarchy, tried)
 		if acc == nil {
 			return funauthBindResult{OK: false, Nick: job.nick, Error: "no_accounts"}
 		}
@@ -229,7 +230,7 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 			continue
 		}
 		if result.OK {
-			b.pool.rememberNick(job.nick, acc.meta.ID)
+			b.pool.afterBindSuccess(job.nick, acc.meta.ID, job.anarchy)
 		}
 		return result
 	}
@@ -283,7 +284,7 @@ func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
 		if cancelled {
 			return funauthBindResult{OK: false, Nick: job.nick, Error: "timeout"}
 		}
-		acc := b.pool.pickReady(tried)
+		acc := b.pool.pickForAnarchyBind(job.nick, job.anarchy, tried)
 		if acc == nil {
 			return funauthBindResult{OK: false, Nick: job.nick, Error: "no_bound_account"}
 		}
