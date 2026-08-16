@@ -215,9 +215,17 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 			return funauthBindResult{OK: false, Nick: job.nick, Error: "timeout"}
 		}
 
-		acc := b.pool.pickForAnarchyBind(job.nick, job.anarchy, tried)
+		acc, diag := b.pool.pickForAnarchyBindDiag(job.nick, job.anarchy, tried)
 		if acc == nil {
-			return funauthBindResult{OK: false, Nick: job.nick, Error: "no_accounts"}
+			errCode := "no_accounts"
+			if diag.OtherAn > 0 && diag.Offline == 0 && diag.Full == 0 {
+				errCode = "all_on_other_anarchies"
+			}
+			log.Printf(
+				"[funauth] pick fail %s an%d: err=%s offline=%d full=%d other_an=%d excluded=%d",
+				job.nick, job.anarchy, errCode, diag.Offline, diag.Full, diag.OtherAn, diag.Excluded,
+			)
+			return funauthBindResult{OK: false, Nick: job.nick, Error: errCode}
 		}
 		tried[acc.meta.ID] = struct{}{}
 
@@ -226,7 +234,7 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		result, retry := b.runOnAccount(ctx, acc, job)
 		cancel()
 		if retry {
-			log.Printf("[funauth] account %s full, trying next", phone)
+			log.Printf("[funauth] account %s saturated, trying next", phone)
 			continue
 		}
 		if result.OK {
@@ -485,8 +493,11 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 	}
 
 	if funauthBindFull.MatchString(bindReply) {
-		b.pool.markFull(acc.meta.ID)
-		return funauthBindResult{}, true
+		b.pool.syncAccountRosterFull(acc.meta.ID)
+		return funauthBindResult{
+			OK: false, Nick: job.nick, TgPhone: acc.meta.Phone,
+			Error: "tg_bind_limit", Reply: truncateRunes(bindReply, 200),
+		}, false
 	}
 	if !funauthBindOK.MatchString(bindReply) {
 		return funauthBindResult{

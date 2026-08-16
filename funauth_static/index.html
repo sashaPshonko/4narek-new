@@ -387,6 +387,8 @@
                 <tr>
                   <th>Телефон</th>
                   <th>Username</th>
+                  <th>Анка</th>
+                  <th>Roster</th>
                   <th>Статус</th>
                   <th>Start</th>
                   <th></th>
@@ -397,6 +399,8 @@
                   <tr>
                     <td>${esc(a.phone)}</td>
                     <td>${esc(a.username ? '@' + a.username : '—')}</td>
+                    <td>${a.anarchy ? 'an' + a.anarchy : '—'}</td>
+                    <td>${a.rosterTotal ? (a.rosterBound + '/' + a.rosterTotal) : '—'}</td>
                     <td>${badge(a)}</td>
                     <td>${a.started ? 'да' : 'нет'}</td>
                     <td><button class="danger" data-del="${esc(a.id)}" type="button">Удалить</button></td>

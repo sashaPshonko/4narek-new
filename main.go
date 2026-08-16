@@ -1379,6 +1379,15 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		anarchy := rawJSONIntField(rawMsg, "anarchy")
 		handleFunauthTwoFAWS(nick, anarchy)
 
+	case "funauth_verified":
+		mutex.Unlock()
+		nick, _ := rawJSONField(rawMsg, "nick")
+		if nick == "" {
+			nick, _ = rawJSONField(rawMsg, "username")
+		}
+		anarchy := rawJSONIntField(rawMsg, "anarchy")
+		handleFunauthVerifiedWS(nick, anarchy)
+
 	default:
 		mutex.Unlock()
 	}

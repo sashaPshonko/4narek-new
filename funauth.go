@@ -91,6 +91,22 @@ func registerFunauthHTTP(mux *http.ServeMux) {
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"ok":true,"queued":true}`))
 	}))
+
+	mux.HandleFunc("/api/funauth/verified", recoverHTTP(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		var body funauthBindReq
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+			http.Error(w, "bad json", http.StatusBadRequest)
+			return
+		}
+		handleFunauthVerifiedWS(body.Nick, body.Anarchy)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"ok":true,"verified":true}`))
+	}))
 }
 
 func recoverHTTPHandler(next http.Handler) http.Handler {
@@ -167,6 +183,16 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		handleFunauthTwoFAWS(body.Nick, body.Anarchy)
 		funauthJSON(w, http.StatusAccepted, map[string]any{"ok": true, "queued": true})
+		return
+
+	case path == "/verified" && r.Method == http.MethodPost:
+		var body funauthBindReq
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+			funauthJSONErr(w, http.StatusBadRequest, "bad json")
+			return
+		}
+		handleFunauthVerifiedWS(body.Nick, body.Anarchy)
+		funauthJSON(w, http.StatusAccepted, map[string]any{"ok": true, "verified": true})
 		return
 
 	case strings.HasPrefix(path, "/accounts/") && r.Method == http.MethodDelete:
@@ -307,22 +333,25 @@ func funauthNickKey(nick string) string {
 	return strings.ToLower(strings.TrimSpace(nick))
 }
 
-// Повтор: всегда если очередь binder пуста; иначе — только новый nick / после no_accounts.
-// Пока этот nick уже pending и очередь не пуста — не дублируем.
+// Разрешить bind, если ник ещё не в nicks.json и не game-verified.
 func funauthMayStartBind(nick string) (ok bool, reason string) {
-	idle := funauthBinderInst != nil && funauthBinderInst.queueLen() == 0
+	initFunauth()
 	key := funauthNickKey(nick)
+	if funauthPoolInst != nil && funauthPoolInst.nickBound(nick) {
+		return false, "already_bound"
+	}
+	if funauthPoolInst != nil && funauthPoolInst.nickVerified(nick) {
+		return false, "already_verified"
+	}
+	idle := funauthBinderInst != nil && funauthBinderInst.queueLen() == 0
 	funauthNickStateMu.Lock()
 	defer funauthNickStateMu.Unlock()
-	st, exists := funauthNickState[key]
+	st, _ := funauthNickState[key]
 	if st == "pending" && !idle {
 		return false, "already_pending"
 	}
-	if idle || !exists || st == "no_accounts" {
-		funauthNickState[key] = "pending"
-		return true, ""
-	}
-	return false, "skip:" + st
+	funauthNickState[key] = "pending"
+	return true, ""
 }
 
 func funauthSetNickState(nick, state string) {
@@ -343,6 +372,14 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 	}
 	if ok, why := funauthMayStartBind(nick); !ok {
 		log.Printf("[funauth] skip %s (%s)", nick, why)
+		if why == "already_bound" {
+			broadcastFunauthResult(map[string]interface{}{
+				"action": "funauth_result",
+				"ok":     true,
+				"nick":   nick,
+				"note":   "already_bound",
+			})
+		}
 		return
 	}
 
@@ -383,6 +420,27 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 			return
 		}
 
+		if result.Error == "all_on_other_anarchies" {
+			funauthSetNickState(nick, "no_accounts")
+			an := anarchy
+			if an <= 0 {
+				an = funauthPoolInst.roster.anarchyForNick(nick)
+			}
+			msg := fmt.Sprintf(
+				"🚨 FunAuth: все TG заняты другими анками — `%s` (an%d)\nНужен ещё TG или /funauth/ → смотри колонку «Анка»",
+				nick, an,
+			)
+			enqueueTelegramMessage(msg, "Markdown")
+			broadcastFunauthResult(map[string]interface{}{
+				"action":  "funauth_no_accounts",
+				"ok":      false,
+				"nick":    nick,
+				"error":   "all_on_other_anarchies",
+				"anarchy": an,
+			})
+			return
+		}
+
 		if result.OK {
 			funauthSetNickState(nick, "ok")
 			log.Printf("[funauth] ok %s via %s", nick, result.TgPhone)
@@ -407,6 +465,30 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 			"error":   result.Error,
 		})
 	})
+}
+
+// handleFunauthVerifiedWS — 5с на анке без «чтобы двигаться» → уже привязан в игре, TG bind не нужен.
+func handleFunauthVerifiedWS(nick string, anarchy int) {
+	initFunauth()
+	nick = strings.TrimSpace(nick)
+	if nick == "" {
+		log.Printf("[funauth] verified skip empty nick")
+		return
+	}
+	if funauthPoolInst == nil {
+		return
+	}
+	if funauthPoolInst.nickBound(nick) {
+		log.Printf("[funauth] verified skip %s (nicks.json)", nick)
+		return
+	}
+	if funauthPoolInst.nickVerified(nick) {
+		return
+	}
+	if anarchy <= 0 {
+		anarchy = funauthPoolInst.roster.anarchyForNick(nick)
+	}
+	funauthPoolInst.rememberVerified(nick, anarchy)
 }
 
 // handleFunauthTwoFAWS — только `/2fa nick` с TG-акка, к которому ник уже привязан.

@@ -29,7 +29,8 @@ const (
 	funauthSessionsDir = "funauth_sessions"
 	funauthBotUser     = "FunAuthBot"
 	funauthChannel     = "funtime"
-	funauthNicksFile   = "nicks.json"
+	funauthNicksFile     = "nicks.json"
+	funauthVerifiedFile  = "verified.json"
 	// Как у Telegram Desktop (как в tg-export) — без .env / my.telegram.org
 	funauthDesktopAPIID   = 2040
 	funauthDesktopAPIHash = "b18441a1ff607e10a989891a5462e627"
@@ -47,13 +48,15 @@ type funauthAccountMeta struct {
 }
 
 type funauthAccountView struct {
-	ID       string `json:"id"`
-	Phone    string `json:"phone"`
-	Username string `json:"username"`
-	Ready    bool   `json:"ready"`
-	Full     bool   `json:"full"`
-	Started  bool   `json:"started"`
-	Anarchy  int    `json:"anarchy,omitempty"`
+	ID          string `json:"id"`
+	Phone       string `json:"phone"`
+	Username    string `json:"username"`
+	Ready       bool   `json:"ready"`
+	Full        bool   `json:"full"`
+	Started     bool   `json:"started"`
+	Anarchy     int    `json:"anarchy,omitempty"`
+	RosterBound int    `json:"rosterBound,omitempty"`
+	RosterTotal int    `json:"rosterTotal,omitempty"`
 }
 
 type funauthAccount struct {
@@ -143,6 +146,7 @@ type funauthPool struct {
 	accounts map[string]*funauthAccount
 	pending  map[string]*funauthPendingLogin
 	nicks    map[string]string // nick(lower) → account id
+	verified map[string]bool   // nick(lower) → game verified (5s on anarchy без «чтобы двигаться»)
 	roster   funauthRoster
 
 	ctx    context.Context
@@ -158,6 +162,7 @@ func newFunauthPool() *funauthPool {
 		accounts: make(map[string]*funauthAccount),
 		pending:  make(map[string]*funauthPendingLogin),
 		nicks:    make(map[string]string),
+		verified: make(map[string]bool),
 		ctx:      ctx,
 		cancel:   cancel,
 	}
@@ -179,8 +184,10 @@ func (p *funauthPool) init() {
 		log.Printf("[funauth] MTProto без прокси (TELEGRAM_PROXY=off)")
 	}
 	p.loadNicks()
+	p.loadVerified()
 	p.roster = loadFunauthRoster()
-	p.reconcileAccountAnarchy()
+	p.cleanupOrphanAnarchies()
+	p.syncAllRosterFull()
 	entries, err := os.ReadDir(p.dir)
 	if err != nil {
 		log.Printf("[funauth] read sessions: %v", err)
@@ -191,7 +198,7 @@ func (p *funauthPool) init() {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		if e.Name() == funauthNicksFile || e.Name() == funauthRosterFile {
+		if e.Name() == funauthNicksFile || e.Name() == funauthVerifiedFile || e.Name() == funauthRosterFile {
 			continue
 		}
 		path := filepath.Join(p.dir, e.Name())
@@ -238,6 +245,32 @@ func (p *funauthPool) nicksPath() string {
 	return filepath.Join(p.dir, funauthNicksFile)
 }
 
+func (p *funauthPool) verifiedPath() string {
+	return filepath.Join(p.dir, funauthVerifiedFile)
+}
+
+func (p *funauthPool) loadVerified() {
+	raw, err := os.ReadFile(p.verifiedPath())
+	if err != nil {
+		return
+	}
+	var m map[string]bool
+	if err := json.Unmarshal(raw, &m); err != nil {
+		log.Printf("[funauth] bad %s: %v", funauthVerifiedFile, err)
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for k, v := range m {
+		key := strings.ToLower(strings.TrimSpace(k))
+		if key == "" || !v {
+			continue
+		}
+		p.verified[key] = true
+	}
+	log.Printf("[funauth] verified map: %d", len(p.verified))
+}
+
 func (p *funauthPool) loadNicks() {
 	raw, err := os.ReadFile(p.nicksPath())
 	if err != nil {
@@ -280,6 +313,7 @@ func (p *funauthPool) rememberNick(nick, accountID string) {
 	if err := os.WriteFile(p.nicksPath(), raw, 0o600); err != nil {
 		log.Printf("[funauth] save nicks: %v", err)
 	}
+	p.syncAccountRosterFull(id)
 }
 
 func (p *funauthPool) accountByID(id string) *funauthAccount {
@@ -298,6 +332,134 @@ func (p *funauthPool) accountForNick(nick string) *funauthAccount {
 		return nil
 	}
 	return acc
+}
+
+func (p *funauthPool) nickBound(nick string) bool {
+	key := strings.ToLower(strings.TrimSpace(nick))
+	if key == "" {
+		return false
+	}
+	p.mu.Lock()
+	_, ok := p.nicks[key]
+	p.mu.Unlock()
+	return ok
+}
+
+func (p *funauthPool) nickVerified(nick string) bool {
+	key := strings.ToLower(strings.TrimSpace(nick))
+	if key == "" {
+		return false
+	}
+	p.mu.Lock()
+	ok := p.verified[key]
+	p.mu.Unlock()
+	return ok
+}
+
+func (p *funauthPool) rememberVerified(nick string, anarchy int) bool {
+	key := strings.ToLower(strings.TrimSpace(nick))
+	if key == "" {
+		return false
+	}
+	if anarchy <= 0 {
+		anarchy = p.roster.anarchyForNick(key)
+	}
+	p.mu.Lock()
+	if p.verified[key] {
+		p.mu.Unlock()
+		return false
+	}
+	p.verified[key] = true
+	snapshot := make(map[string]bool, len(p.verified))
+	for k, v := range p.verified {
+		if v {
+			snapshot[k] = true
+		}
+	}
+	p.mu.Unlock()
+	raw, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return true
+	}
+	if err := os.WriteFile(p.verifiedPath(), raw, 0o600); err != nil {
+		log.Printf("[funauth] save verified: %v", err)
+	}
+	log.Printf("[funauth] game verified %s an%d", nick, anarchy)
+	p.syncAnarchyRosterFull(anarchy)
+	return true
+}
+
+func (p *funauthPool) syncAnarchyRosterFull(anarchy int) {
+	if anarchy <= 0 {
+		return
+	}
+	p.mu.Lock()
+	idSet := make(map[string]struct{})
+	for id, acc := range p.accounts {
+		if acc.meta.Anarchy == anarchy {
+			idSet[id] = struct{}{}
+		}
+	}
+	for nick, id := range p.nicks {
+		if p.roster.anarchyForNick(nick) == anarchy {
+			idSet[id] = struct{}{}
+		}
+	}
+	p.mu.Unlock()
+	for id := range idSet {
+		p.syncAccountRosterFull(id)
+	}
+}
+
+// syncAccountRosterFull — full только если ВСЕ ники анки из roster на этом TG.
+// Если roster неполный — снимаем full (чинит старые ошибочные пометки).
+func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	acc := p.accounts[accountID]
+	if acc == nil {
+		return false
+	}
+	an := acc.meta.Anarchy
+	if an <= 0 {
+		for nick, id := range p.nicks {
+			if id != accountID {
+				continue
+			}
+			if a := p.roster.anarchyForNick(nick); a > 0 {
+				an = a
+				acc.meta.Anarchy = an
+				break
+			}
+		}
+	}
+	complete := an > 0 && p.roster.completeWithVerified(an, p.nicks, p.verified, accountID, acc.meta.Anarchy)
+	if acc.meta.Full != complete {
+		was := acc.meta.Full
+		acc.meta.Full = complete
+		if err := p.saveMeta(acc.meta); err != nil {
+			log.Printf("[funauth] save meta %s: %v", accountID, err)
+		}
+		bound, total := p.roster.progressWithVerified(an, p.nicks, p.verified, accountID)
+		if complete {
+			log.Printf("[funauth] anarchy %d complete on %s → full (%d/%d)", an, accountID, bound, total)
+		} else if was {
+			log.Printf("[funauth] anarchy %d incomplete on %s → not full (%d/%d)", an, accountID, bound, total)
+		}
+	}
+	return complete
+}
+
+func (p *funauthPool) syncAllRosterFull() {
+	p.mu.Lock()
+	ids := make([]string, 0, len(p.accounts))
+	for id := range p.accounts {
+		ids = append(ids, id)
+	}
+	p.mu.Unlock()
+	for _, id := range ids {
+		p.syncAccountRosterFull(id)
+	}
 }
 
 func (p *funauthPool) listReadyAccounts() []*funauthAccount {
@@ -327,7 +489,14 @@ func (p *funauthPool) list() []funauthAccountView {
 	defer p.mu.Unlock()
 	out := make([]funauthAccountView, 0, len(p.accounts))
 	for _, a := range p.accounts {
-		out = append(out, a.view())
+		v := a.view()
+		an := a.meta.Anarchy
+		if an > 0 {
+			bound, total := p.roster.progressWithVerified(an, p.nicks, p.verified, a.meta.ID)
+			v.RosterBound = bound
+			v.RosterTotal = total
+		}
+		out = append(out, v)
 	}
 	return out
 }
@@ -360,7 +529,63 @@ func (p *funauthPool) pickReady(exclude map[string]struct{}) *funauthAccount {
 	return p.pickForAnarchyBind("", 0, exclude)
 }
 
+func (p *funauthPool) accountBoundCountLocked(accountID string) int {
+	n := 0
+	for _, id := range p.nicks {
+		if id == accountID {
+			n++
+		}
+	}
+	return n
+}
+
+func (p *funauthPool) effectiveAnarchyLocked(acc *funauthAccount) int {
+	if acc == nil {
+		return 0
+	}
+	an := acc.meta.Anarchy
+	if an > 0 && p.accountBoundCountLocked(acc.meta.ID) == 0 {
+		return 0
+	}
+	return an
+}
+
+func (p *funauthPool) cleanupOrphanAnarchies() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for id, acc := range p.accounts {
+		if acc.meta.Anarchy == 0 {
+			continue
+		}
+		if p.accountBoundCountLocked(id) > 0 {
+			continue
+		}
+		log.Printf("[funauth] clear orphan anarchy %d on %s (0 binds)", acc.meta.Anarchy, acc.meta.Phone)
+		acc.meta.Anarchy = 0
+		acc.meta.Full = false
+		if err := p.saveMeta(acc.meta); err != nil {
+			log.Printf("[funauth] save meta %s: %v", id, err)
+		}
+	}
+}
+
+type funauthPickDiag struct {
+	Offline  int
+	Full     int
+	OtherAn  int
+	Excluded int
+}
+
 func (p *funauthPool) pickForAnarchyBind(nick string, anarchy int, exclude map[string]struct{}) *funauthAccount {
+	acc, _ := p.pickForAnarchyBindDiag(nick, anarchy, exclude)
+	return acc
+}
+
+func (p *funauthPool) pickForAnarchyBindDiag(
+	nick string,
+	anarchy int,
+	exclude map[string]struct{},
+) (*funauthAccount, funauthPickDiag) {
 	key := strings.ToLower(strings.TrimSpace(nick))
 	if anarchy <= 0 && key != "" {
 		anarchy = p.roster.anarchyForNick(key)
@@ -369,44 +594,44 @@ func (p *funauthPool) pickForAnarchyBind(nick string, anarchy int, exclude map[s
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if key != "" {
-		if id := p.nicks[key]; id != "" {
-			if acc := p.accounts[id]; acc != nil && acc.ready && !acc.meta.Full && acc.api != nil {
-				if _, skip := exclude[id]; !skip {
-					return acc
-				}
-			}
+	var diag funauthPickDiag
+	var candidates []*funauthAccount
+
+	for _, acc := range p.accounts {
+		if _, skip := exclude[acc.meta.ID]; skip {
+			diag.Excluded++
+			continue
 		}
+		if !acc.ready || acc.api == nil {
+			diag.Offline++
+			continue
+		}
+		if acc.meta.Full {
+			diag.Full++
+			continue
+		}
+		if key != "" && p.nicks[key] == acc.meta.ID {
+			return acc, diag
+		}
+		candidates = append(candidates, acc)
 	}
 
 	if anarchy > 0 {
-		for _, acc := range p.accounts {
-			if acc.meta.Anarchy != anarchy {
-				continue
+		for _, acc := range candidates {
+			if p.effectiveAnarchyLocked(acc) == anarchy {
+				return acc, diag
 			}
-			if !acc.ready || acc.meta.Full || acc.api == nil {
-				continue
-			}
-			if _, skip := exclude[acc.meta.ID]; skip {
-				continue
-			}
-			return acc
 		}
 	}
 
-	for _, acc := range p.accounts {
-		if acc.meta.Anarchy != 0 {
-			continue
+	for _, acc := range candidates {
+		if p.effectiveAnarchyLocked(acc) == 0 {
+			return acc, diag
 		}
-		if !acc.ready || acc.meta.Full || acc.api == nil {
-			continue
-		}
-		if _, skip := exclude[acc.meta.ID]; skip {
-			continue
-		}
-		return acc
 	}
-	return nil
+
+	diag.OtherAn = len(candidates)
+	return nil, diag
 }
 
 func (p *funauthPool) assignAnarchy(accountID string, anarchy int) {
@@ -435,69 +660,18 @@ func (p *funauthPool) afterBindSuccess(nick, accountID string, anarchy int) {
 	if anarchy <= 0 && nickKey != "" {
 		anarchy = p.roster.anarchyForNick(nickKey)
 	}
-	p.rememberNick(nick, accountID)
 	p.assignAnarchy(accountID, anarchy)
+	p.rememberNick(nick, accountID)
 
 	p.mu.Lock()
-	nicksSnap := make(map[string]string, len(p.nicks))
-	for k, v := range p.nicks {
-		nicksSnap[k] = v
-	}
-	acc := p.accounts[accountID]
 	an := anarchy
-	if acc != nil && acc.meta.Anarchy > 0 {
+	if acc := p.accounts[accountID]; acc != nil && acc.meta.Anarchy > 0 {
 		an = acc.meta.Anarchy
 	}
-	roster := p.roster
+	bound, total := p.roster.progressWithVerified(an, p.nicks, p.verified, accountID)
 	p.mu.Unlock()
-
-	if an > 0 && roster.complete(an, nicksSnap, accountID) {
-		p.markFull(accountID)
-		log.Printf("[funauth] anarchy %d complete on %s → full (%d nicks)", an, accountID, roster.size(an))
-	}
-}
-
-func (p *funauthPool) reconcileAccountAnarchy() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for id, acc := range p.accounts {
-		if acc.meta.Anarchy > 0 {
-			if p.roster.complete(acc.meta.Anarchy, p.nicks, id) && !acc.meta.Full {
-				acc.meta.Full = true
-				_ = p.saveMeta(acc.meta)
-				log.Printf("[funauth] reconcile: anarchy %d complete on %s → full", acc.meta.Anarchy, id)
-			}
-			continue
-		}
-		for nickLower, accID := range p.nicks {
-			if accID != id {
-				continue
-			}
-			if an := p.roster.anarchyForNick(nickLower); an > 0 {
-				acc.meta.Anarchy = an
-				_ = p.saveMeta(acc.meta)
-				log.Printf("[funauth] reconcile: TG %s → anarchy %d (from %s)", acc.meta.Phone, an, nickLower)
-				if p.roster.complete(an, p.nicks, id) {
-					acc.meta.Full = true
-					_ = p.saveMeta(acc.meta)
-					log.Printf("[funauth] reconcile: anarchy %d complete on %s → full", an, id)
-				}
-				break
-			}
-		}
-	}
-}
-
-func (p *funauthPool) markFull(id string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	a := p.accounts[id]
-	if a == nil {
-		return
-	}
-	a.meta.Full = true
-	if err := p.saveMeta(a.meta); err != nil {
-		log.Printf("[funauth] save meta %s: %v", id, err)
+	if an > 0 && total > 0 {
+		log.Printf("[funauth] anarchy %d bind %s → %d/%d on %s", an, nick, bound, total, accountID)
 	}
 }
 

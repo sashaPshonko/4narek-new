@@ -67,14 +67,56 @@ func (r funauthRoster) size(anarchy int) int {
 }
 
 func (r funauthRoster) complete(anarchy int, nickToAccount map[string]string, accountID string) bool {
+	return r.completeWithVerified(anarchy, nickToAccount, nil, accountID, anarchy)
+}
+
+func (r funauthRoster) completeWithVerified(
+	anarchy int,
+	nickToAccount map[string]string,
+	verified map[string]bool,
+	accountID string,
+	accountAnarchy int,
+) bool {
 	need := r[anarchy]
-	if len(need) == 0 || accountID == "" {
+	if len(need) == 0 || accountID == "" || anarchy <= 0 {
+		return false
+	}
+	if accountAnarchy != anarchy {
 		return false
 	}
 	for nick := range need {
-		if nickToAccount[nick] != accountID {
-			return false
+		if nickToAccount[nick] == accountID {
+			continue
 		}
+		if verified != nil && verified[nick] {
+			continue
+		}
+		return false
 	}
 	return true
+}
+
+func (r funauthRoster) progress(anarchy int, nickToAccount map[string]string, accountID string) (bound, total int) {
+	return r.progressWithVerified(anarchy, nickToAccount, nil, accountID)
+}
+
+func (r funauthRoster) progressWithVerified(
+	anarchy int,
+	nickToAccount map[string]string,
+	verified map[string]bool,
+	accountID string,
+) (bound, total int) {
+	need := r[anarchy]
+	total = len(need)
+	if total == 0 || accountID == "" {
+		return 0, total
+	}
+	for nick := range need {
+		if nickToAccount[nick] == accountID {
+			bound++
+		} else if verified != nil && verified[nick] {
+			bound++
+		}
+	}
+	return bound, total
 }
