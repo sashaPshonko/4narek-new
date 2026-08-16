@@ -57,6 +57,14 @@
       font-weight: 400;
       max-width: 36em;
     }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 4px; }
+    .nav a {
+      color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600;
+      padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+      background: var(--surface-solid); box-shadow: var(--shadow);
+    }
+    .nav a:hover { color: var(--text); }
+    .nav a.active { color: var(--text); border-color: rgba(0,113,227,.35); background: rgba(0,113,227,.08); }
     #health {
       display: inline-flex;
       gap: 10px;
@@ -250,6 +258,11 @@
   <div class="wrap">
     <header>
       <h1>FunAuth</h1>
+      <nav class="nav" aria-label="Разделы">
+        <a href="/sales/" data-nav="sales">Продажи</a>
+        <a href="/funauth/" data-nav="funauth">FunAuth</a>
+        <a href="/fleet/" data-nav="fleet">Баны</a>
+      </nav>
       <p>Пул Telegram-аккаунтов для привязки Minecraft через @FunAuthBot. Трафик идёт через Reality SOCKS на :1080.</p>
       <div id="health">Загрузка…</div>
     </header>
@@ -320,6 +333,9 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
+    document.querySelectorAll(".nav a").forEach((a) => {
+      if (location.pathname.startsWith("/" + a.dataset.nav)) a.classList.add("active");
+    });
     let currentPhone = '';
     const API = '/funauth/api';
 

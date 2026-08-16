@@ -245,6 +245,7 @@ func runServer() {
 
 	loadDailyData(loc)
 	loadRuntimeState()
+	loadFleetBanPersist()
 	initMLLog()
 	setupMLShutdown()
 	initTelegramBot()

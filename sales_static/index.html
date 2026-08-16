@@ -67,6 +67,15 @@
     }
     .status.err .dot { background: var(--loss); box-shadow: 0 0 0 3px var(--loss-bg); }
 
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+    .nav a {
+      color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600;
+      padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+      background: var(--surface-solid);
+    }
+    .nav a:hover { color: var(--ink); }
+    .nav a.active { color: var(--ink); border-color: rgba(15,118,110,.35); background: var(--accent-soft); }
+
     .periodbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
     .periodbar .cap { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
     .seg {
@@ -202,7 +211,12 @@
   <div class="wrap">
     <header class="hero">
       <h1 class="brand">4narek <span>Продажи</span></h1>
-      <p class="lede">Что покупаем, за сколько продаём и сколько на этом реально зарабатываем — с поправкой на прочность предметов. <a href="/fleet/" style="color:var(--accent)">Баны флота →</a></p>
+      <nav class="nav" aria-label="Разделы">
+        <a href="/sales/" data-nav="sales">Продажи</a>
+        <a href="/funauth/" data-nav="funauth">FunAuth</a>
+        <a href="/fleet/" data-nav="fleet">Баны</a>
+      </nav>
+      <p class="lede">Что покупаем, за сколько продаём и сколько на этом реально зарабатываем — с поправкой на прочность предметов.</p>
       <div class="status" id="status"><span class="dot"></span><span id="statusText">подключение…</span></div>
     </header>
 
@@ -279,6 +293,9 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
+    document.querySelectorAll(".nav a").forEach((a) => {
+      if (location.pathname.startsWith("/" + a.dataset.nav)) a.classList.add("active");
+    });
     let overview = null;
     let selectedId = null;
     let sortKey = "profit";

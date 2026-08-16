@@ -59,6 +59,19 @@
       padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
     }
     .nav a:hover { color: var(--ink); }
+    .nav a.active { color: var(--ink); border-color: rgba(185,28,28,.35); background: var(--ban-bg); }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+    .btn {
+      font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+      padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+      background: var(--surface); color: var(--ink);
+    }
+    .btn:hover { border-color: rgba(12,18,34,.2); }
+    .btn.ok { border-color: rgba(4,120,87,.35); color: var(--ok); }
+    .toast {
+      font-size: 12px; color: var(--ok); font-weight: 600; opacity: 0; transition: opacity .2s;
+    }
+    .toast.show { opacity: 1; }
     .section-title {
       font-family: var(--display); font-size: 20px; margin: 28px 0 10px; letter-spacing: -.02em;
     }
@@ -91,6 +104,7 @@
     .pill.banned { background: var(--ban-bg); color: var(--ban); }
     .pill.pending { background: #e8edf5; color: var(--muted); }
     .pill.error { background: var(--warn-bg); color: var(--warn); }
+    .src-persisted { color: var(--faint); font-size: 11px; }
     @media (max-width: 640px) { .kpi { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -98,10 +112,15 @@
   <div class="wrap">
     <h1>4narek <span>Баны</span></h1>
     <p class="lede">Баны бай-ботов и статусы владельцев кланов (периодический логин). Данные с оркестраторов через presence.</p>
-    <div class="nav">
-      <a href="/sales/">Продажи</a>
-      <a href="/funauth/">FunAuth</a>
-      <a href="/fleet/">Флот / баны</a>
+    <nav class="nav" aria-label="Разделы">
+      <a href="/sales/" data-nav="sales">Продажи</a>
+      <a href="/funauth/" data-nav="funauth">FunAuth</a>
+      <a href="/fleet/" data-nav="fleet">Баны</a>
+    </nav>
+    <div class="toolbar">
+      <button type="button" class="btn" id="copyBots">Скопировать ботов</button>
+      <button type="button" class="btn" id="copyAll">Скопировать всё</button>
+      <span class="toast" id="copyToast">скопировано</span>
     </div>
     <div class="status" id="status"><span class="dot"></span><span id="statusText">подключение…</span></div>
     <div class="kpi">
@@ -116,6 +135,17 @@
   </div>
   <script>
     const $ = (id) => document.getElementById(id);
+    let lastOverview = null;
+    const seenBanKeys = new Set(JSON.parse(localStorage.getItem("fleetSeenBans") || "[]"));
+
+    document.querySelectorAll(".nav a").forEach((a) => {
+      if (location.pathname.startsWith("/" + a.dataset.nav)) a.classList.add("active");
+    });
+
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+
     const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const fmtWhen = (iso) => {
       if (!iso) return "—";
@@ -130,16 +160,83 @@
       error: "ошибка",
     })[s] || s || "?";
 
+    const banKey = (b) => `${String(b.username || "").toLowerCase()}|${b.anarchy ?? "?"}`;
+
+    function formatBotLine(b) {
+      const an = b.anarchy ?? "?";
+      const role = b.role || "—";
+      const type = b.go_type || "—";
+      const when = b.banned_at || "—";
+      const reason = (b.reason || "—").replace(/\s+/g, " ");
+      const src = b.source === "persisted" ? " [persisted]" : "";
+      return `an${an}\t${b.username}\t${role}\t${type}\t${when}\t${reason}${src}`;
+    }
+
+    function formatOwnerLine(o) {
+      const st = o.banned || o.status === "banned" ? "BAN" : (o.status || "?").toUpperCase();
+      return `an${o.anarchy ?? "?"}\t${o.username}\tclan_owner\t${st}\t${o.checked_at || o.banned_at || "—"}\t${(o.reason || "—").replace(/\s+/g, " ")}`;
+    }
+
+    async function copyText(text) {
+      await navigator.clipboard.writeText(text);
+      const t = $("copyToast");
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 1400);
+    }
+
+    function notifyNewBans(data) {
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      for (const b of data.banned || []) {
+        const key = banKey(b);
+        if (seenBanKeys.has(key)) continue;
+        seenBanKeys.add(key);
+        new Notification("4narek · бан бота", {
+          body: `${b.username} · an${b.anarchy ?? "?"}`,
+          tag: key,
+        });
+      }
+      for (const o of data.clan_owners || []) {
+        if (!o.banned && o.status !== "banned") continue;
+        const key = `owner|${banKey(o)}`;
+        if (seenBanKeys.has(key)) continue;
+        seenBanKeys.add(key);
+        new Notification("4narek · бан владельца", {
+          body: `${o.username} · an${o.anarchy ?? "?"}`,
+          tag: key,
+        });
+      }
+      localStorage.setItem("fleetSeenBans", JSON.stringify([...seenBanKeys]));
+    }
+
+    $("copyBots").addEventListener("click", async () => {
+      if (!lastOverview?.banned?.length) {
+        await copyText("");
+        return;
+      }
+      await copyText(lastOverview.banned.map(formatBotLine).join("\n"));
+    });
+    $("copyAll").addEventListener("click", async () => {
+      if (!lastOverview) return;
+      const lines = [];
+      for (const b of lastOverview.banned || []) lines.push(formatBotLine(b));
+      for (const o of lastOverview.clan_owners || []) {
+        if (o.banned || o.status === "banned") lines.push(formatOwnerLine(o));
+      }
+      await copyText(lines.join("\n"));
+    });
+
     async function load() {
       try {
         const res = await fetch("/fleet/api/overview", { cache: "no-store" });
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
+        lastOverview = data;
+        notifyNewBans(data);
         $("status").classList.remove("err");
         const t = new Date(data.updated_at);
         const owners = data.clan_owners || [];
         const ownersBanned = owners.filter((o) => o.banned || o.status === "banned").length;
-        $("statusText").textContent = `обновлено ${t.toLocaleTimeString("ru-RU")} · ${data.total_banned} бан(ов) · владельцев ${owners.length}`;
+        $("statusText").textContent = `обновлено ${t.toLocaleTimeString("ru-RU")} · ${data.total_banned} бан(ов) · в памяти ${data.persisted_banned ?? 0} · владельцев ${owners.length}`;
         $("kpiTotal").textContent = data.total_banned;
         $("kpiAn").textContent = (data.anarchies || []).filter((a) => a.count > 0).length;
         $("kpiOwners").textContent = owners.length ? `${ownersBanned}/${owners.length}` : "—";
@@ -177,11 +274,13 @@
           const rows = (a.banned || []).map((b) => {
             const role = b.role === "clan_owner" ? "владелец клана" : (b.role || "—");
             const type = b.role === "clan_owner" ? "clan" : (b.go_type || "—");
+            const persisted = b.source === "persisted" ? `<div class="src-persisted">из памяти сервера</div>` : "";
             return `
             <tr>
               <td>
                 <div class="nick">${escapeHtml(b.username)}</div>
                 <div class="meta">${escapeHtml(role)} · ${escapeHtml(type)}</div>
+                ${persisted}
               </td>
               <td class="mono">${fmtWhen(b.banned_at)}</td>
               <td><div class="reason" title="${escapeHtml(b.reason || "")}">${escapeHtml(b.reason || "—")}</div></td>

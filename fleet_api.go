@@ -41,12 +41,13 @@ type fleetAnarchyView struct {
 }
 
 type fleetOverview struct {
-	OK         bool               `json:"ok"`
-	UpdatedAt  time.Time          `json:"updated_at"`
-	Total      int                `json:"total_banned"`
-	Anarchies  []fleetAnarchyView `json:"anarchies"`
-	Banned     []bannedBotView    `json:"banned"`
-	ClanOwners []clanOwnerView    `json:"clan_owners"`
+	OK              bool               `json:"ok"`
+	UpdatedAt       time.Time          `json:"updated_at"`
+	Total           int                `json:"total_banned"`
+	PersistedBanned int                `json:"persisted_banned"`
+	Anarchies       []fleetAnarchyView `json:"anarchies"`
+	Banned          []bannedBotView    `json:"banned"`
+	ClanOwners      []clanOwnerView    `json:"clan_owners"`
 }
 
 // clientBannedBots — снимок забаненных с каждого WS-оркестратора.
@@ -102,9 +103,14 @@ func fleetJSON(w http.ResponseWriter, code int, v any) {
 }
 
 func setClientBannedBots(ws *websocket.Conn, raw []bannedBotView) {
+	out := dedupeBannedBots(raw)
+	clientBannedBots[ws] = out
+	ingestBannedBotsFromPresence(out)
+}
+
+func dedupeBannedBots(raw []bannedBotView) []bannedBotView {
 	if len(raw) == 0 {
-		clientBannedBots[ws] = nil
-		return
+		return nil
 	}
 	out := make([]bannedBotView, 0, len(raw))
 	seen := make(map[string]struct{}, len(raw))
@@ -121,7 +127,7 @@ func setClientBannedBots(ws *websocket.Conn, raw []bannedBotView) {
 		b.Username = u
 		out = append(out, b)
 	}
-	clientBannedBots[ws] = out
+	return out
 }
 
 func setClientClanOwners(ws *websocket.Conn, raw []clanOwnerView) {
@@ -155,6 +161,7 @@ func setClientClanOwners(ws *websocket.Conn, raw []clanOwnerView) {
 		out = append(out, b)
 	}
 	clientClanOwners[ws] = out
+	ingestClanOwnersFromPresence(out)
 }
 
 func anarchyInt(v any) int {
@@ -181,20 +188,28 @@ func buildFleetOverview() fleetOverview {
 	mutex.RLock()
 	defer mutex.RUnlock()
 
-	byUser := make(map[string]bannedBotView)
-	for _, list := range clientBannedBots {
-		for _, b := range list {
-			key := strings.ToLower(b.Username)
-			if prev, ok := byUser[key]; ok {
-				// более свежий banned_at побеждает
-				if b.BannedAt != "" && (prev.BannedAt == "" || b.BannedAt > prev.BannedAt) {
-					byUser[key] = b
+	byUser := mergeLiveAndPersistedBanned()
+	persistedOnly := 0
+	for key, b := range byUser {
+		live := false
+		for _, list := range clientBannedBots {
+			for _, x := range list {
+				if banUserKey(x.Username) == key {
+					live = true
+					break
 				}
-				continue
 			}
+			if live {
+				break
+			}
+		}
+		if !live {
+			b.Source = "persisted"
 			byUser[key] = b
+			persistedOnly++
 		}
 	}
+	_ = persistedOnly
 
 	all := make([]bannedBotView, 0, len(byUser))
 	for _, b := range byUser {
@@ -229,13 +244,19 @@ func buildFleetOverview() fleetOverview {
 		})
 	}
 
+	persistedCount := 0
+	fleetPersistMu.RLock()
+	persistedCount = len(persistedBannedBots)
+	fleetPersistMu.RUnlock()
+
 	return fleetOverview{
-		OK:         true,
-		UpdatedAt:  now,
-		Total:      len(all),
-		Anarchies:  anarchies,
-		Banned:     all,
-		ClanOwners: collectClanOwnersLocked(),
+		OK:              true,
+		UpdatedAt:       now,
+		Total:           len(all),
+		PersistedBanned: persistedCount,
+		Anarchies:       anarchies,
+		Banned:          all,
+		ClanOwners:      applyPersistedClanOwnerBans(collectClanOwnersLocked()),
 	}
 }
 
