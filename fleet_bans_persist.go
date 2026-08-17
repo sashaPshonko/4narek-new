@@ -95,9 +95,6 @@ func mergeBannedBotView(prev, next bannedBotView) bannedBotView {
 	if out.GoType == "" && prev.GoType != "" {
 		out.GoType = prev.GoType
 	}
-	if out.Role == "" && prev.Role != "" {
-		out.Role = prev.Role
-	}
 	if anarchyInt(out.Anarchy) == 0 && anarchyInt(prev.Anarchy) != 0 {
 		out.Anarchy = prev.Anarchy
 	}
@@ -135,9 +132,6 @@ func ingestClanOwnersFromPresence(raw []clanOwnerView) {
 		}
 		key := banUserKey(u)
 		o.Username = u
-		if o.Role == "" {
-			o.Role = "clan_owner"
-		}
 		if o.Banned || o.Status == "banned" {
 			prev, had := persistedClanOwnerBans[key]
 			merged := o

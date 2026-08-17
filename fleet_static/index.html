@@ -165,12 +165,11 @@
 
     function formatBotLine(b) {
       const an = b.anarchy ?? "?";
-      const role = b.role || "—";
       const type = b.go_type || "—";
       const when = b.banned_at || "—";
       const reason = (b.reason || "—").replace(/\s+/g, " ");
       const src = b.source === "persisted" ? " [persisted]" : "";
-      return `an${an}\t${b.username}\t${role}\t${type}\t${when}\t${reason}${src}`;
+      return `an${an}\t${b.username}\t${type}\t${when}\t${reason}${src}`;
     }
 
     function formatOwnerLine(o) {
@@ -315,14 +314,13 @@
         list.innerHTML = (data.anarchies || []).map((a) => {
           const title = a.anarchy ? `Анархия ${a.anarchy}` : "Без анархии";
           const rows = (a.banned || []).map((b) => {
-            const role = b.role === "clan_owner" ? "владелец клана" : (b.role || "—");
-            const type = b.role === "clan_owner" ? "clan" : (b.go_type || "—");
+            const type = b.go_type || "—";
             const persisted = b.source === "persisted" ? `<div class="src-persisted">из памяти сервера</div>` : "";
             return `
             <tr>
               <td>
                 <div class="nick">${escapeHtml(b.username)}</div>
-                <div class="meta">${escapeHtml(role)} · ${escapeHtml(type)}</div>
+                <div class="meta">${escapeHtml(type)}</div>
                 ${persisted}
               </td>
               <td class="mono">${fmtWhen(b.banned_at)}</td>

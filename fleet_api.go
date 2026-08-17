@@ -17,7 +17,6 @@ type bannedBotView struct {
 	Username string `json:"username"`
 	Anarchy  any    `json:"anarchy"`
 	GoType   string `json:"go_type,omitempty"`
-	Role     string `json:"role,omitempty"`
 	BannedAt string `json:"banned_at,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 	Source   string `json:"source,omitempty"` // оркестратор / анархия-группа
@@ -26,7 +25,6 @@ type bannedBotView struct {
 type clanOwnerView struct {
 	Username  string `json:"username"`
 	Anarchy   any    `json:"anarchy"`
-	Role      string `json:"role,omitempty"`
 	Status    string `json:"status"` // pending|ok|banned|error
 	Banned    bool   `json:"banned"`
 	BannedAt  string `json:"banned_at,omitempty"`
@@ -148,9 +146,6 @@ func setClientClanOwners(ws *websocket.Conn, raw []clanOwnerView) {
 		}
 		seen[key] = struct{}{}
 		b.Username = u
-		if b.Role == "" {
-			b.Role = "clan_owner"
-		}
 		if b.Status == "" {
 			if b.Banned {
 				b.Status = "banned"

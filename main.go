@@ -377,7 +377,7 @@ func isMinecraftTypeActiveLocked(minecraftType string) bool {
 		return false
 	}
 	for _, types := range clientActiveTypes {
-		if _, ok := types[minecraftType]; ok {
+		if catalogTypeActiveIn(types, minecraftType) {
 			return true
 		}
 	}
@@ -423,8 +423,8 @@ func typeWasActiveForAnalysisWindowLocked(minecraftType string, windowStart time
 	if !isMinecraftTypeActiveLocked(minecraftType) {
 		return false
 	}
-	since, ok := typeActiveSince[minecraftType]
-	if !ok || since.IsZero() {
+	since := typeActiveSinceForCatalogType(minecraftType)
+	if since.IsZero() {
 		return false
 	}
 	return !since.After(windowStart)

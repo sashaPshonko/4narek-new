@@ -218,12 +218,12 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		acc, diag := b.pool.pickForAnarchyBindDiag(job.nick, job.anarchy, tried)
 		if acc == nil {
 			errCode := "no_accounts"
-			if diag.OtherAn > 0 && diag.Offline == 0 && diag.Full == 0 {
-				errCode = "all_on_other_anarchies"
+			if diag.Busy > 0 && diag.Offline == 0 && diag.Full == 0 {
+				errCode = "all_accounts_busy"
 			}
 			log.Printf(
-				"[funauth] pick fail %s an%d: err=%s offline=%d full=%d other_an=%d excluded=%d",
-				job.nick, job.anarchy, errCode, diag.Offline, diag.Full, diag.OtherAn, diag.Excluded,
+				"[funauth] pick fail %s an%d: err=%s offline=%d full=%d busy=%d excluded=%d",
+				job.nick, job.anarchy, errCode, diag.Offline, diag.Full, diag.Busy, diag.Excluded,
 			)
 			return funauthBindResult{OK: false, Nick: job.nick, Error: errCode}
 		}
@@ -292,7 +292,7 @@ func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
 		if cancelled {
 			return funauthBindResult{OK: false, Nick: job.nick, Error: "timeout"}
 		}
-		acc := b.pool.pickForAnarchyBind(job.nick, job.anarchy, tried)
+		acc := b.pool.pickReadyAny(tried)
 		if acc == nil {
 			return funauthBindResult{OK: false, Nick: job.nick, Error: "no_bound_account"}
 		}

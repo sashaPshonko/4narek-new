@@ -411,8 +411,7 @@ func (p *funauthPool) syncAnarchyRosterFull(anarchy int) {
 	}
 }
 
-// syncAccountRosterFull — full только если ВСЕ ники анки из roster на этом TG.
-// Если roster неполный — снимаем full (чинит старые ошибочные пометки).
+// syncAccountRosterFull — 1 MC = 1 TG: full после первой привязки.
 func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -420,31 +419,18 @@ func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 	if acc == nil {
 		return false
 	}
-	an := acc.meta.Anarchy
-	if an <= 0 {
-		for nick, id := range p.nicks {
-			if id != accountID {
-				continue
-			}
-			if a := p.roster.anarchyForNick(nick); a > 0 {
-				an = a
-				acc.meta.Anarchy = an
-				break
-			}
-		}
-	}
-	complete := an > 0 && p.roster.completeWithVerified(an, p.nicks, p.verified, accountID, acc.meta.Anarchy)
+	bound := p.accountBoundCountLocked(accountID)
+	complete := bound >= 1
 	if acc.meta.Full != complete {
 		was := acc.meta.Full
 		acc.meta.Full = complete
 		if err := p.saveMeta(acc.meta); err != nil {
 			log.Printf("[funauth] save meta %s: %v", accountID, err)
 		}
-		bound, total := p.roster.progressWithVerified(an, p.nicks, p.verified, accountID)
 		if complete {
-			log.Printf("[funauth] anarchy %d complete on %s → full (%d/%d)", an, accountID, bound, total)
+			log.Printf("[funauth] TG %s → full (1 MC привязан)", accountID)
 		} else if was {
-			log.Printf("[funauth] anarchy %d incomplete on %s → not full (%d/%d)", an, accountID, bound, total)
+			log.Printf("[funauth] TG %s → not full (0 MC)", accountID)
 		}
 	}
 	return complete
@@ -492,9 +478,12 @@ func (p *funauthPool) list() []funauthAccountView {
 		v := a.view()
 		an := a.meta.Anarchy
 		if an > 0 {
-			bound, total := p.roster.progressWithVerified(an, p.nicks, p.verified, a.meta.ID)
+			bound := p.accountBoundCountLocked(a.meta.ID)
+			if bound > 1 {
+				bound = 1
+			}
 			v.RosterBound = bound
-			v.RosterTotal = total
+			v.RosterTotal = 1
 		}
 		out = append(out, v)
 	}
@@ -572,8 +561,10 @@ func (p *funauthPool) cleanupOrphanAnarchies() {
 type funauthPickDiag struct {
 	Offline  int
 	Full     int
-	OtherAn  int
+	Busy     int // TG уже привязан к другому MC-нику
 	Excluded int
+	// OtherAn — устар.; для логов совместимости = Busy
+	OtherAn int
 }
 
 func (p *funauthPool) pickForAnarchyBind(nick string, anarchy int, exclude map[string]struct{}) *funauthAccount {
@@ -587,15 +578,12 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 	exclude map[string]struct{},
 ) (*funauthAccount, funauthPickDiag) {
 	key := strings.ToLower(strings.TrimSpace(nick))
-	if anarchy <= 0 && key != "" {
-		anarchy = p.roster.anarchyForNick(key)
-	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	var diag funauthPickDiag
-	var candidates []*funauthAccount
+	var free []*funauthAccount
 
 	for _, acc := range p.accounts {
 		if _, skip := exclude[acc.meta.ID]; skip {
@@ -613,25 +601,32 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 		if key != "" && p.nicks[key] == acc.meta.ID {
 			return acc, diag
 		}
-		candidates = append(candidates, acc)
+		if p.accountBoundCountLocked(acc.meta.ID) > 0 {
+			diag.Busy++
+			diag.OtherAn = diag.Busy
+			continue
+		}
+		free = append(free, acc)
 	}
 
-	if anarchy > 0 {
-		for _, acc := range candidates {
-			if p.effectiveAnarchyLocked(acc) == anarchy {
-				return acc, diag
-			}
+	if len(free) == 0 {
+		return nil, diag
+	}
+	return free[0], diag
+}
+
+func (p *funauthPool) pickReadyAny(exclude map[string]struct{}) *funauthAccount {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, acc := range p.accounts {
+		if _, skip := exclude[acc.meta.ID]; skip {
+			continue
+		}
+		if acc.ready && acc.api != nil {
+			return acc
 		}
 	}
-
-	for _, acc := range candidates {
-		if p.effectiveAnarchyLocked(acc) == 0 {
-			return acc, diag
-		}
-	}
-
-	diag.OtherAn = len(candidates)
-	return nil, diag
+	return nil
 }
 
 func (p *funauthPool) assignAnarchy(accountID string, anarchy int) {
@@ -662,17 +657,7 @@ func (p *funauthPool) afterBindSuccess(nick, accountID string, anarchy int) {
 	}
 	p.assignAnarchy(accountID, anarchy)
 	p.rememberNick(nick, accountID)
-
-	p.mu.Lock()
-	an := anarchy
-	if acc := p.accounts[accountID]; acc != nil && acc.meta.Anarchy > 0 {
-		an = acc.meta.Anarchy
-	}
-	bound, total := p.roster.progressWithVerified(an, p.nicks, p.verified, accountID)
-	p.mu.Unlock()
-	if an > 0 && total > 0 {
-		log.Printf("[funauth] anarchy %d bind %s → %d/%d on %s", an, nick, bound, total, accountID)
-	}
+	log.Printf("[funauth] bind %s → TG %s (an%d)", nick, accountID, anarchy)
 }
 
 func (p *funauthPool) markStarted(id string) {

@@ -23,7 +23,7 @@ func TestFleetOverviewGroupsByAnarchy(t *testing.T) {
 	wsB := &websocket.Conn{}
 	setClientBannedBots(wsA, []bannedBotView{
 		{Username: "botA", Anarchy: 503, GoType: "boots", BannedAt: "2026-08-06T10:00:00Z"},
-		{Username: "botB", Anarchy: 503, Role: "seller"},
+		{Username: "botB", Anarchy: 503, GoType: "boots"},
 	})
 	setClientBannedBots(wsB, []bannedBotView{
 		{Username: "botC", Anarchy: 510},

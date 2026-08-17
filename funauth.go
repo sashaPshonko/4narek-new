@@ -361,7 +361,7 @@ func funauthSetNickState(nick, state string) {
 	funauthNickStateMu.Unlock()
 }
 
-// handleFunauthBindWS — очередь bind; 1 TG-аккаунт на анархию (owner+bots).
+// handleFunauthBindWS — очередь bind; 1 MC = 1 TG.
 func handleFunauthBindWS(nick, password string, anarchy int) {
 	initFunauth()
 	nick = strings.TrimSpace(nick)
@@ -420,23 +420,18 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 			return
 		}
 
-		if result.Error == "all_on_other_anarchies" {
+		if result.Error == "all_accounts_busy" || result.Error == "all_on_other_anarchies" {
 			funauthSetNickState(nick, "no_accounts")
-			an := anarchy
-			if an <= 0 {
-				an = funauthPoolInst.roster.anarchyForNick(nick)
-			}
 			msg := fmt.Sprintf(
-				"🚨 FunAuth: все TG заняты другими анками — `%s` (an%d)\nНужен ещё TG или /funauth/ → смотри колонку «Анка»",
-				nick, an,
+				"🚨 FunAuth: все TG уже привязаны к MC — `%s`\nНужен ещё TG: http://127.0.0.1:8080/funauth/",
+				nick,
 			)
 			enqueueTelegramMessage(msg, "Markdown")
 			broadcastFunauthResult(map[string]interface{}{
-				"action":  "funauth_no_accounts",
-				"ok":      false,
-				"nick":    nick,
-				"error":   "all_on_other_anarchies",
-				"anarchy": an,
+				"action": "funauth_no_accounts",
+				"ok":     false,
+				"nick":   nick,
+				"error":  "all_accounts_busy",
 			})
 			return
 		}

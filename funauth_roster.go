@@ -17,7 +17,7 @@ func loadFunauthRoster() funauthRoster {
 	path := funauthRosterFile
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		log.Printf("[funauth] roster %s: %v (anarchy=1 TG без лимита по составу)", path, err)
+		log.Printf("[funauth] roster %s: %v (anarchy lookup only)", path, err)
 		return nil
 	}
 	var rawMap map[string][]string
