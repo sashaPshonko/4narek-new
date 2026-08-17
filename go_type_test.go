@@ -2,17 +2,24 @@ package main
 
 import "testing"
 
-func TestCatalogTypeActiveIn(t *testing.T) {
-	active := map[string]struct{}{
-		netheriteArmorGoType: {},
+func TestItemConfigActiveIn(t *testing.T) {
+	armorOnly := map[string]struct{}{netheriteArmorGoType: {}}
+	cfgBoots := ItemConfig{Name: "netherite_boots", Type: netheriteArmorGoType}
+	if !itemConfigActiveIn(armorOnly, cfgBoots) {
+		t.Fatal("netherite_armor active → boots item")
 	}
-	if !catalogTypeActiveIn(active, "netherite_helmet-1.21") {
-		t.Fatal("helmet should be active via netherite_armor")
+
+	chestOnly := map[string]struct{}{"netherite_chestplate-1.21": {}}
+	cfgChest := ItemConfig{Name: "netherite_chestplate", Type: netheriteArmorGoType}
+	if !itemConfigActiveIn(chestOnly, cfgChest) {
+		t.Fatal("chestplate goType → chestplate item")
 	}
-	if catalogTypeActiveIn(active, "позорная-броня-1.21") {
-		t.Fatal("pozor should not match armor go type")
+	if itemConfigActiveIn(chestOnly, cfgBoots) {
+		t.Fatal("chestplate goType must not activate boots item")
 	}
-	if !catalogTypeActiveIn(active, netheriteArmorGoType) {
-		t.Fatal("direct armor go type")
+
+	pozor := ItemConfig{Name: "netherite_helmet", Type: "позорная-броня-1.21"}
+	if itemConfigActiveIn(armorOnly, pozor) {
+		t.Fatal("pozor type separate from netherite_armor")
 	}
 }

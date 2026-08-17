@@ -495,7 +495,7 @@ func applyMarketFloors(floors map[string]int, windowStartMs, windowEndMs, window
 				continue
 			}
 
-			if !isMinecraftTypeActiveLocked(cfg.Type) {
+			if !itemConfigActiveLocked(cfg) {
 				continue
 			}
 
@@ -728,7 +728,7 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	if !ok || cfg.PriceStep <= 0 {
 		return ev
 	}
-	if !isMinecraftTypeActiveLocked(cfg.Type) {
+	if !itemConfigActiveLocked(cfg) {
 		return ev
 	}
 	if _, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime); blockDown {
@@ -822,7 +822,7 @@ func adjustPrice(item string) AdjustReport {
 
 	rep := AdjustReport{Item: item, NormalSales: cfg.NormalSales, Step: cfg.PriceStep}
 
-	if !isMinecraftTypeActiveLocked(cfg.Type) {
+	if !itemConfigActiveLocked(cfg) {
 		log.Printf("[SKIP] %s: тип %s — нет активных ботов", item, cfg.Type)
 		mutex.Unlock()
 		rep.Action = "skip_inactive"

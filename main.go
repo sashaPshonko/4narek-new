@@ -423,8 +423,8 @@ func typeWasActiveForAnalysisWindowLocked(minecraftType string, windowStart time
 	if !isMinecraftTypeActiveLocked(minecraftType) {
 		return false
 	}
-	since := typeActiveSinceForCatalogType(minecraftType)
-	if since.IsZero() {
+	since, ok := typeActiveSince[minecraftType]
+	if !ok || since.IsZero() {
 		return false
 	}
 	return !since.After(windowStart)
@@ -996,7 +996,7 @@ func getItemStatsForReporting(item string, since time.Time) (sales, buys, trySel
 }
 
 func adjustAndReport(item string, cfg ItemConfig) {
-	if !isMinecraftTypeActive(cfg.Type) {
+	if !itemConfigActiveLocked(cfg) {
 		log.Printf("[SKIP] %s: тип %s — нет активных ботов на оркестраторах", item, cfg.Type)
 		return
 	}
