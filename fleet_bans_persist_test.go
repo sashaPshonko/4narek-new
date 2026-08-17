@@ -11,21 +11,36 @@ func TestFleetBanPersistAndMerge(t *testing.T) {
 	oldOwners := clientClanOwners
 	oldPersist := persistedBannedBots
 	oldOwnerPersist := persistedClanOwnerBans
+	oldClients := clients
+	oldOrchAn := clientOrchestratorAnarchy
+	oldRoster := fleetNickRoster
 	t.Cleanup(func() {
 		clientBannedBots = oldBots
 		clientClanOwners = oldOwners
 		persistedBannedBots = oldPersist
 		persistedClanOwnerBans = oldOwnerPersist
+		clients = oldClients
+		clientOrchestratorAnarchy = oldOrchAn
+		fleetNickRoster = oldRoster
 	})
 
 	clientBannedBots = make(map[*websocket.Conn][]bannedBotView)
 	clientClanOwners = make(map[*websocket.Conn][]clanOwnerView)
+	clients = make(map[*websocket.Conn]bool)
+	clientOrchestratorAnarchy = make(map[*websocket.Conn]int)
+	fleetNickRoster = funauthRoster{
+		502: {"tablydait13": {}},
+		503: {"krupkaobod15": {}},
+		504: {"eblivi1_r0t7": {}},
+	}
+
 	persistedBannedBots = map[string]bannedBotView{
-		"oldbot": {Username: "oldbot", Anarchy: 502, BannedAt: "2026-08-01T10:00:00Z"},
+		"tablydait13": {Username: "tablydait13", Anarchy: 502, BannedAt: "2026-08-01T10:00:00Z"},
+		"oldghost":    {Username: "oldghost", Anarchy: 502, BannedAt: "2026-08-01T09:00:00Z"},
 	}
 	persistedClanOwnerBans = map[string]clanOwnerView{
-		"owner504": {
-			Username:  "owner504",
+		"eblivi1_r0t7": {
+			Username:  "eblivi1_r0t7",
 			Anarchy:   504,
 			Status:    "banned",
 			Banned:    true,
@@ -36,44 +51,34 @@ func TestFleetBanPersistAndMerge(t *testing.T) {
 	}
 
 	ws := &websocket.Conn{}
+	clients[ws] = true
+	setClientOrchestratorAnarchy(ws, 503)
 	setClientBannedBots(ws, []bannedBotView{
-		{Username: "livebot", Anarchy: 503, GoType: "boots", BannedAt: "2026-08-06T10:00:00Z"},
+		{Username: "krupkaobod15", Anarchy: 503, GoType: "armor", BannedAt: "2026-08-06T10:00:00Z"},
 	})
 	setClientClanOwners(ws, []clanOwnerView{
-		{Username: "owner504", Anarchy: 504, Status: "error", CheckedAt: "2026-08-06T12:00:00Z"},
-		{Username: "owner507", Anarchy: 507, Status: "ok", CheckedAt: "2026-08-06T12:00:00Z"},
+		{Username: "eblivi1_r0t7", Anarchy: 504, Status: "error", CheckedAt: "2026-08-06T12:00:00Z"},
+		{Username: "vorishkaok14", Anarchy: 507, Status: "ok", CheckedAt: "2026-08-06T12:00:00Z"},
 	})
 
 	out := buildFleetOverview()
-	if out.Total != 2 {
-		t.Fatalf("total=%d want 2 (persisted oldbot + live livebot)", out.Total)
+	if out.Total != 1 {
+		t.Fatalf("total=%d want 1 (only an503 running: krupkaobod15)", out.Total)
 	}
-	var oldbot, livebot bannedBotView
+	var live bannedBotView
 	for _, b := range out.Banned {
-		switch b.Username {
-		case "oldbot":
-			oldbot = b
-		case "livebot":
-			livebot = b
+		if b.Username == "krupkaobod15" {
+			live = b
 		}
 	}
-	if oldbot.Source != "persisted" {
-		t.Fatalf("oldbot source=%q want persisted", oldbot.Source)
-	}
-	if livebot.Username != "livebot" {
-		t.Fatalf("livebot=%+v", livebot)
+	if live.Username != "krupkaobod15" {
+		t.Fatalf("live=%+v", live)
 	}
 
-	var owner504 clanOwnerView
-	for _, o := range out.ClanOwners {
-		if o.Username == "owner504" {
-			owner504 = o
-		}
+	if len(out.ClanOwners) != 0 {
+		t.Fatalf("owners filtered (504 not running): %+v", out.ClanOwners)
 	}
-	if owner504.Status != "banned" || !owner504.Banned {
-		t.Fatalf("owner504 should stay banned on error, got %+v", owner504)
-	}
-	if len(persistedBannedBots) != 2 {
-		t.Fatalf("persisted bots=%d want 2", len(persistedBannedBots))
+	if len(persistedBannedBots) != 3 {
+		t.Fatalf("persisted bots=%d want 3 (storage unchanged)", len(persistedBannedBots))
 	}
 }

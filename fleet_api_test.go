@@ -12,15 +12,32 @@ import (
 func TestFleetOverviewGroupsByAnarchy(t *testing.T) {
 	old := clientBannedBots
 	oldOwners := clientClanOwners
+	oldClients := clients
+	oldOrchAn := clientOrchestratorAnarchy
+	oldRoster := fleetNickRoster
 	clientBannedBots = make(map[*websocket.Conn][]bannedBotView)
 	clientClanOwners = make(map[*websocket.Conn][]clanOwnerView)
+	clients = make(map[*websocket.Conn]bool)
+	clientOrchestratorAnarchy = make(map[*websocket.Conn]int)
+	fleetNickRoster = funauthRoster{
+		503: {"bota": {}, "botb": {}, "kokos_555117": {}},
+		510: {"botc": {}},
+	}
 	t.Cleanup(func() {
 		clientBannedBots = old
 		clientClanOwners = oldOwners
+		clients = oldClients
+		clientOrchestratorAnarchy = oldOrchAn
+		fleetNickRoster = oldRoster
 	})
 
 	wsA := &websocket.Conn{}
 	wsB := &websocket.Conn{}
+	clients[wsA] = true
+	clients[wsB] = true
+	setClientOrchestratorAnarchy(wsA, 503)
+	setClientOrchestratorAnarchy(wsB, 510)
+
 	setClientBannedBots(wsA, []bannedBotView{
 		{Username: "botA", Anarchy: 503, GoType: "boots", BannedAt: "2026-08-06T10:00:00Z"},
 		{Username: "botB", Anarchy: 503, GoType: "boots"},
@@ -30,7 +47,7 @@ func TestFleetOverviewGroupsByAnarchy(t *testing.T) {
 		{Username: "botA", Anarchy: 503, BannedAt: "2026-08-06T12:00:00Z", Reason: "newer"},
 	})
 	setClientClanOwners(wsA, []clanOwnerView{
-		{Username: "owner503", Anarchy: 503, Status: "ok", CheckedAt: "2026-08-07T12:00:00Z"},
+		{Username: "kokos_555117", Anarchy: 503, Status: "ok", CheckedAt: "2026-08-07T12:00:00Z"},
 	})
 
 	out := buildFleetOverview()
@@ -55,8 +72,8 @@ func TestFleetOverviewGroupsByAnarchy(t *testing.T) {
 	if botA.Reason != "newer" || botA.BannedAt != "2026-08-06T12:00:00Z" {
 		t.Fatalf("dedupe prefer newer: %+v", botA)
 	}
-	if len(out.ClanOwners) != 1 || out.ClanOwners[0].Username != "owner503" || out.ClanOwners[0].Status != "ok" {
-		t.Fatalf("clan_owners=%+v", out.ClanOwners)
+	if len(out.ClanOwners) != 1 || out.ClanOwners[0].Username != "kokos_555117" {
+		t.Fatalf("clan owners=%+v", out.ClanOwners)
 	}
 }
 

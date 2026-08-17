@@ -218,40 +218,30 @@ func buildFleetOverview() fleetOverview {
 		return all[i].Username < all[j].Username
 	})
 
-	groups := make(map[int][]bannedBotView)
-	for _, b := range all {
-		a := anarchyInt(b.Anarchy)
-		groups[a] = append(groups[a], b)
-	}
-	keys := make([]int, 0, len(groups))
-	for a := range groups {
-		keys = append(keys, a)
-	}
-	sort.Ints(keys)
-
-	anarchies := make([]fleetAnarchyView, 0, len(keys))
-	for _, a := range keys {
-		list := groups[a]
-		anarchies = append(anarchies, fleetAnarchyView{
-			Anarchy: a,
-			Banned:  list,
-			Count:   len(list),
-		})
-	}
+	running := collectRunningAnarchiesLocked()
+	roster := fleetNickRoster
+	visible := filterBannedForFleet(all, running, roster)
+	anarchies := groupBannedByAnarchy(visible)
 
 	persistedCount := 0
 	fleetPersistMu.RLock()
 	persistedCount = len(persistedBannedBots)
 	fleetPersistMu.RUnlock()
 
+	owners := filterClanOwnersForFleet(
+		applyPersistedClanOwnerBans(collectClanOwnersLocked()),
+		running,
+		roster,
+	)
+
 	return fleetOverview{
 		OK:              true,
 		UpdatedAt:       now,
-		Total:           len(all),
+		Total:           len(visible),
 		PersistedBanned: persistedCount,
 		Anarchies:       anarchies,
-		Banned:          all,
-		ClanOwners:      applyPersistedClanOwnerBans(collectClanOwnersLocked()),
+		Banned:          visible,
+		ClanOwners:      owners,
 	}
 }
 

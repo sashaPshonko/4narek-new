@@ -247,6 +247,7 @@ func runServer() {
 	loadDailyData(loc)
 	loadRuntimeState()
 	loadFleetBanPersist()
+	loadFleetNickRoster()
 	initMLLog()
 	setupMLShutdown()
 	initTelegramBot()
@@ -475,6 +476,7 @@ func removeClient(ws *websocket.Conn) {
 	delete(clientBotsPerType, ws)
 	delete(clientBannedBots, ws)
 	delete(clientClanOwners, ws)
+	deleteClientOrchestratorAnarchy(ws)
 }
 
 func broadcastBroker() {
@@ -1286,6 +1288,9 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		setClientBotsPerType(ws, msg.BotsPerType)
 		setClientBannedBots(ws, msg.Banned)
 		setClientClanOwners(ws, msg.ClanOwners)
+		if a := inferOrchestratorAnarchy(msg.Banned, msg.ClanOwners); a > 0 {
+			setClientOrchestratorAnarchy(ws, a)
+		}
 		updateTypeFleetActivityLocked()
 		mutex.Unlock()
 
