@@ -204,6 +204,10 @@ func main() {
 		runListTelegramChats()
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "-vacuum-db" {
+		runVacuumDBCLI()
+		return
+	}
 	for {
 		runSafe("server", runServer)
 		log.Println("[RESTART] сервер перезапускается через 2s...")

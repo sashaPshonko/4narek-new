@@ -128,12 +128,20 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case path == "/health" && r.Method == http.MethodGet:
+		rosterBound, rosterTotal := funauthPoolInst.rosterStats()
+		rosterPending := rosterTotal - rosterBound
+		if rosterPending < 0 {
+			rosterPending = 0
+		}
 		funauthJSON(w, http.StatusOK, map[string]any{
-			"ok":       true,
-			"accounts": len(funauthPoolInst.list()),
-			"ready":    funauthPoolInst.readyCount(),
-			"queue":    funauthBinderInst.queueLen(),
-			"configured": funauthPoolInst.configured(),
+			"ok":            true,
+			"accounts":      len(funauthPoolInst.list()),
+			"ready":         funauthPoolInst.readyCount(),
+			"queue":         funauthBinderInst.queueLen(),
+			"configured":    funauthPoolInst.configured(),
+			"rosterTotal":   rosterTotal,
+			"rosterBound":   rosterBound,
+			"rosterPending": rosterPending,
 		})
 		return
 

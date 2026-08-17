@@ -514,6 +514,15 @@ func (p *funauthPool) readyCount() int {
 	return n
 }
 
+func (p *funauthPool) rosterStats() (bound, total int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.roster == nil {
+		return 0, 0
+	}
+	return p.roster.globalProgress(p.nicks, p.verified)
+}
+
 func (p *funauthPool) pickReady(exclude map[string]struct{}) *funauthAccount {
 	return p.pickForAnarchyBind("", 0, exclude)
 }

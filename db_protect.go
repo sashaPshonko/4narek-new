@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 // SQLite DSN: WAL + FULL sync + длинный busy_timeout.
@@ -69,7 +72,55 @@ func backupMLDatabase() error {
 	}
 	log.Printf("[ML] backup → %s", dest)
 	rotateBackups(dir, "pricing-", ".db", mlBackupKeep())
+	if err := compactMLDatabaseLocked(); err != nil {
+		log.Printf("[ML] compact after backup: %v", err)
+	}
 	return nil
+}
+
+// compactMLDatabaseLocked — мягкое сжатие основной БД (под mlDBMu).
+func compactMLDatabaseLocked() error {
+	if mlDB == nil {
+		return fmt.Errorf("db not open")
+	}
+	if _, err := mlDB.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		return err
+	}
+	if _, err := mlDB.Exec(`PRAGMA incremental_vacuum(1000)`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// runVacuumDBCLI — полный VACUUM INTO + атомарная замена (Go должен быть остановлен).
+func runVacuumDBCLI() {
+	path := mlDBPath
+	if path == "" {
+		path = defaultMLDBPath
+	}
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	tmp := filepath.Join(dir, base+".vacuum-tmp.db")
+	bak := filepath.Join(dir, base+".pre-vacuum.bak")
+
+	db, err := sql.Open("sqlite", mlOpenDSN(path))
+	if err != nil {
+		log.Fatalf("[vacuum] open: %v", err)
+	}
+	defer db.Close()
+
+	q := fmt.Sprintf(`VACUUM INTO '%s'`, strings.ReplaceAll(tmp, `'`, `''`))
+	if _, err := db.Exec(q); err != nil {
+		log.Fatalf("[vacuum] VACUUM INTO: %v", err)
+	}
+	if err := os.Rename(path, bak); err != nil {
+		log.Fatalf("[vacuum] backup rename: %v", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Rename(bak, path)
+		log.Fatalf("[vacuum] replace: %v", err)
+	}
+	log.Printf("[vacuum] ok → %s (backup %s)", path, bak)
 }
 
 func rotateBackups(dir, prefix, suffix string, keep int) {

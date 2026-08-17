@@ -86,6 +86,28 @@
       background: var(--ok);
       box-shadow: 0 0 0 3px rgba(31, 143, 78, 0.15);
     }
+    #health.warn::before {
+      background: var(--warn);
+      box-shadow: 0 0 0 3px rgba(184, 110, 0, 0.15);
+    }
+    #rosterPending {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(184, 110, 0, 0.1);
+      border: 1px solid rgba(184, 110, 0, 0.22);
+      color: var(--warn);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    #rosterPending.done {
+      background: rgba(31, 143, 78, 0.1);
+      border-color: rgba(31, 143, 78, 0.22);
+      color: var(--ok);
+    }
+    #rosterPending.hidden { display: none; }
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -265,6 +287,7 @@
       </nav>
       <p>Пул Telegram-аккаунтов для привязки Minecraft через @FunAuthBot. Трафик идёт через Reality SOCKS на :1080.</p>
       <div id="health">Загрузка…</div>
+      <div id="rosterPending" class="hidden"></div>
     </header>
 
     <div class="grid">
@@ -375,8 +398,25 @@
           api('/accounts'),
           api('/queue'),
         ]);
+        const rosterTotal = Number(health.rosterTotal) || 0;
+        const rosterBound = Number(health.rosterBound) || 0;
+        const rosterPending = Number(health.rosterPending) || Math.max(0, rosterTotal - rosterBound);
         $('health').textContent =
-          `${health.accounts ?? 0} акк. · ${health.ready ?? 0} готовых · очередь ${health.queue ?? 0}`;
+          `${health.accounts ?? 0} акк. · ${health.ready ?? 0} готовых · очередь ${health.queue ?? 0}` +
+          (rosterTotal ? ` · roster ${rosterBound}/${rosterTotal}` : '');
+        $('health').classList.toggle('warn', rosterPending > 0);
+
+        const pendingEl = $('rosterPending');
+        if (!rosterTotal) {
+          pendingEl.className = 'hidden';
+          pendingEl.textContent = '';
+        } else if (rosterPending > 0) {
+          pendingEl.className = '';
+          pendingEl.textContent = `Осталось привязать: ${rosterPending} из ${rosterTotal}`;
+        } else {
+          pendingEl.className = 'done';
+          pendingEl.textContent = `Roster закрыт: все ${rosterTotal} аккаунтов привязаны`;
+        }
 
         if (!Array.isArray(accounts) || !accounts.length) {
           $('accounts').innerHTML = '<p class="empty">Пока пусто — добавь телефон слева</p>';

@@ -51,6 +51,8 @@ const (
 	corridorMaxNoBuyUps          = 8 // столько ↑ подряд без buys → пауза (антиvacuum)
 	corridorNoBuyUpResumeEvery   = 4 // раз в N мёртвых циклов разрешить ещё одну попытку
 	corridorRecoverMaxSteps      = 10 // recover не поднимает выше floor + N×step (demand-↑ без лимита)
+	corridorRecoverMaxStepsThin  = 15 // 504 и др.: 2 бота → sales/цикл ниже, потолок recover выше
+	corridorThinFleetMaxBots     = 2  // ≤ столько ботов в категории → мягче пороги спроса / recover
 )
 
 // AdjustReport — итог цикла adjustPrice для TG/логов.
@@ -323,18 +325,39 @@ func isNightMSK(t time.Time) bool {
 	return h >= 3 && h < 9
 }
 
-// demandStrongEnoughForUp — не поднимать на крошках.
-// День: sales≥3 или sales=2 два цикла подряд.
-// Ночь 03–09 MSK: только sales≥4 (sustained×2 ночью отключён — там fwd после ↑ был <0).
-func demandStrongEnoughForUp(sales, lastCycleSales int, night bool) bool {
-	minSales := corridorMinSalesForUp
+// demandMinSalesForUp — порог sales на ↑ с учётом размера флота в категории.
+// 2 бота (504 кирки): sales/цикл естественно ниже → днём достаточно 2, ночью 3.
+func demandMinSalesForUp(botsInCategory int, night bool) int {
 	if night {
-		minSales = corridorNightMinSalesForUp
+		if botsInCategory > 0 && botsInCategory <= corridorThinFleetMaxBots {
+			return 3
+		}
+		return corridorNightMinSalesForUp
 	}
+	if botsInCategory > 0 && botsInCategory <= corridorThinFleetMaxBots {
+		return 2
+	}
+	return corridorMinSalesForUp
+}
+
+func recoverMaxStepsFor(botsInCategory int) int {
+	if botsInCategory > 0 && botsInCategory <= corridorThinFleetMaxBots {
+		return corridorRecoverMaxStepsThin
+	}
+	return corridorRecoverMaxSteps
+}
+
+// demandStrongEnoughForUp — не поднимать на крошках.
+// День: sales≥minSales или sales=2 два цикла подряд (если minSales≤2).
+// Ночь 03–09 MSK: только sales≥minSales (sustained×2 ночью отключён).
+func demandStrongEnoughForUp(sales, lastCycleSales, minSales int, night bool) bool {
 	if sales >= minSales {
 		return true
 	}
 	if night {
+		return false
+	}
+	if minSales > 2 {
 		return false
 	}
 	return sales >= 2 && lastCycleSales >= 2
@@ -907,6 +930,9 @@ func adjustPrice(item string) AdjustReport {
 	}
 	prevCycleSales := state.LastCycleSales // до обновления в конце цикла
 	nightMSK := isNightMSK(now)
+	botsInCat := aggregateBotsPerTypeLocked()[cfg.Type]
+	minSalesForUp := demandMinSalesForUp(botsInCat, nightMSK)
+	recoverMaxSteps := recoverMaxStepsFor(botsInCat)
 
 	underbuyOK := false
 	if buys < sales {
@@ -1006,7 +1032,7 @@ func adjustPrice(item string) AdjustReport {
 		// deep (пусто/почти пусто): обход up_cd и streak — быстрее выход с пола после дампа.
 		recoverCDOK := state.CorridorUpCooldown == 0 || bypassUpCD
 		recoverStreakOK := state.CorridorUpStreak < corridorMaxUpStreak || bypassUpCD
-		recoverAtCeiling := priceBefore >= priceFloor+corridorRecoverMaxSteps*step
+		recoverAtCeiling := priceBefore >= priceFloor+recoverMaxSteps*step
 		recoverOK := !nightMSK &&
 			recoverCDOK &&
 			recoverStreakOK &&
@@ -1027,11 +1053,11 @@ func adjustPrice(item string) AdjustReport {
 			action = "corridor_hold_up_cd"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d но up_cd=%d — пауза после ↑",
 				totalHeld, targetLo, sales, state.CorridorUpCooldown))
-		case sales > buys && !demandStrongEnoughForUp(sales, prevCycleSales, nightMSK):
+		case sales > buys && !demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK):
 			action = "corridor_hold_weak_demand"
 			if nightMSK {
 				notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d last=%d night — нужен sales≥%d, ↑ запрещён",
-					totalHeld, targetLo, sales, prevCycleSales, corridorNightMinSalesForUp))
+					totalHeld, targetLo, sales, prevCycleSales, minSalesForUp))
 			} else {
 				notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d last=%d — слабый спрос, ↑ запрещён",
 					totalHeld, targetLo, sales, prevCycleSales))
@@ -1067,7 +1093,7 @@ func adjustPrice(item string) AdjustReport {
 		case recoverAtCeiling:
 			action = "corridor_hold_recover_ceiling"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d price=%d ≥ floor+%d×step=%d — потолок recover",
-				totalHeld, targetLo, priceBefore, corridorRecoverMaxSteps, priceFloor+corridorRecoverMaxSteps*step))
+				totalHeld, targetLo, priceBefore, recoverMaxSteps, priceFloor+recoverMaxSteps*step))
 		case noBuyBlocked:
 			action = "corridor_hold_recover_pause"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d — пауза recover: %d ↑ без buys (антиvacuum)",
@@ -1090,7 +1116,7 @@ func adjustPrice(item string) AdjustReport {
 			state.CorridorUpCooldown == 0 &&
 			state.CorridorUpStreak < corridorMaxUpStreak &&
 			sales > buys &&
-			demandStrongEnoughForUp(sales, prevCycleSales, nightMSK) &&
+			demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) &&
 			!trySellsBlockUp(sales, trySells)
 		switch {
 		case trySellsBlockUp(sales, trySells):
@@ -1108,7 +1134,7 @@ func adjustPrice(item string) AdjustReport {
 			action = "corridor_hold_band"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] up_cd=%d — пауза skim",
 				totalHeld, targetLo, targetHi, state.CorridorUpCooldown))
-		case !demandStrongEnoughForUp(sales, prevCycleSales, nightMSK) || sales <= buys:
+		case !demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) || sales <= buys:
 			action = "corridor_hold_band"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] sales=%d buys=%d last=%d — нет сигнала skim",
 				totalHeld, targetLo, targetHi, sales, buys, prevCycleSales))
@@ -1292,7 +1318,7 @@ func adjustPrice(item string) AdjustReport {
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice: totalHeld < targetLo && !trySellsBlockUp(sales, trySells) && state.CorridorNoBuyUpStreak < corridorMaxNoBuyUps && buys <= sales && ((sales > buys && demandStrongEnoughForUp(sales, prevCycleSales, nightMSK) && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo))) || (!nightMSK && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo)))),
+			CanRaisePrice: totalHeld < targetLo && !trySellsBlockUp(sales, trySells) && state.CorridorNoBuyUpStreak < corridorMaxNoBuyUps && buys <= sales && ((sales > buys && demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo))) || (!nightMSK && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo)))),
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  online,
 		}

@@ -120,3 +120,23 @@ func (r funauthRoster) progressWithVerified(
 	}
 	return bound, total
 }
+
+// globalProgress — по всем анархиям из roster: сколько ников уже привязано (TG или game verified).
+func (r funauthRoster) globalProgress(nickToAccount map[string]string, verified map[string]bool) (bound, total int) {
+	if len(r) == 0 {
+		return 0, 0
+	}
+	for _, nicks := range r {
+		for nick := range nicks {
+			total++
+			if nickToAccount[nick] != "" {
+				bound++
+				continue
+			}
+			if verified != nil && verified[nick] {
+				bound++
+			}
+		}
+	}
+	return bound, total
+}
