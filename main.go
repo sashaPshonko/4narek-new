@@ -254,7 +254,11 @@ func runServer() {
 	loadFleetNickRoster()
 	initMLLog()
 	setupMLShutdown()
-	initTelegramBot()
+	
+	// ОТКЛЮЧАЕМ ТОЛЬКО ТЕЛЕГРАМ
+	// initTelegramBot()
+	
+	// Funauth ОСТАВЛЯЕМ
 	initFunauth()
 
 	// Запускаем брокер рассылки
@@ -1027,8 +1031,9 @@ func adjustAndReport(item string, cfg ItemConfig) {
 		rep.NormalSales = cfg.NormalSales
 	}
 
-	onlineCount := getOnlineCount()
-	sendIntervalStatsToTelegram(item, start, now, onlineCount, rep)
+	// ОТКЛЮЧАЕМ ТЕЛЕГРАМ СТАТИСТИКУ
+	// onlineCount := getOnlineCount()
+	// sendIntervalStatsToTelegram(item, start, now, onlineCount, rep)
 }
 
 // cloneDailySnapshotLocked — снимок dailyData; вызывать только под mutex.Lock.
@@ -1229,6 +1234,11 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	enchJSON := tradeEnchantsJSON(msg.Enchants)
 	switch msg.Action {
 	case "buy":
+		if strings.TrimSpace(msg.Type) == "" {
+			log.Printf("[WS] buy skip: пустой type price=%d enchants=%d", msg.Price, len(msg.Enchants))
+			mutex.Unlock()
+			break
+		}
 		data.BuyStats[msg.Type]++
 		data.LastTrade[msg.Type] = time.Now()
 		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy", Price: msg.Price})
@@ -1241,7 +1251,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		saveDailyDataNoMessageUpdate()
 		if surge.Dropped {
 			publishPriceUpdate()
-			enqueueBuySurgeTelegram(surge)
+			// enqueueBuySurgeTelegram(surge)
 		}
 
 	case "sell":

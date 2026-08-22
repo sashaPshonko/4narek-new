@@ -968,8 +968,8 @@ func adjustPrice(item string) AdjustReport {
 			notes = append(notes, note+" · floor")
 			if action == "" {
 				action = "hold"
-			}
 		}
+	}
 	}
 	applyUp := func(label, note string) {
 		newPrice = priceBefore + step
