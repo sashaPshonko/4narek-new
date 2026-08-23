@@ -101,14 +101,55 @@ func mergeBannedBotView(prev, next bannedBotView) bannedBotView {
 	return out
 }
 
+func nickInCurrentRoster(roster funauthRoster, nick string, anarchy any) bool {
+	if len(roster) == 0 {
+		return true
+	}
+	an := anarchyInt(anarchy)
+	if an > 0 {
+		return roster.nickOnAnarchy(an, nick)
+	}
+	return roster.anarchyForNick(nick) > 0
+}
+
+func prunePersistedBansNotInRoster(roster funauthRoster) {
+	if len(roster) == 0 {
+		return
+	}
+	fleetPersistMu.Lock()
+	changed := false
+	for key, b := range persistedBannedBots {
+		if nickInCurrentRoster(roster, b.Username, b.Anarchy) {
+			continue
+		}
+		delete(persistedBannedBots, key)
+		changed = true
+	}
+	for key, o := range persistedClanOwnerBans {
+		if nickInCurrentRoster(roster, o.Username, o.Anarchy) {
+			continue
+		}
+		delete(persistedClanOwnerBans, key)
+		changed = true
+	}
+	fleetPersistMu.Unlock()
+	if changed {
+		saveFleetBanPersist()
+	}
+}
+
 func ingestBannedBotsFromPresence(raw []bannedBotView) {
 	if len(raw) == 0 {
 		return
 	}
+	roster := currentFleetRoster()
 	fleetPersistMu.Lock()
 	for _, b := range raw {
 		u := strings.TrimSpace(b.Username)
 		if u == "" {
+			continue
+		}
+		if !nickInCurrentRoster(roster, u, b.Anarchy) {
 			continue
 		}
 		key := banUserKey(u)
@@ -124,10 +165,14 @@ func ingestClanOwnersFromPresence(raw []clanOwnerView) {
 	if len(raw) == 0 {
 		return
 	}
+	roster := currentFleetRoster()
 	fleetPersistMu.Lock()
 	for _, o := range raw {
 		u := strings.TrimSpace(o.Username)
 		if u == "" {
+			continue
+		}
+		if !nickInCurrentRoster(roster, u, o.Anarchy) {
 			continue
 		}
 		key := banUserKey(u)

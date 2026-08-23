@@ -14,6 +14,10 @@ const funauthRosterFile = "funauth_roster.json"
 type funauthRoster map[int]map[string]struct{}
 
 func loadFunauthRoster() funauthRoster {
+	return loadFunauthRosterFile(true)
+}
+
+func loadFunauthRosterFile(logOK bool) funauthRoster {
 	path := funauthRosterFile
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -42,7 +46,9 @@ func loadFunauthRoster() funauthRoster {
 			out[an] = set
 		}
 	}
-	log.Printf("[funauth] roster: %d anarchy(ies)", len(out))
+	if logOK {
+		log.Printf("[funauth] roster: %d anarchy(ies)", len(out))
+	}
 	return out
 }
 

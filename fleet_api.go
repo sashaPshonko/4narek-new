@@ -180,6 +180,9 @@ func anarchyInt(v any) int {
 
 func buildFleetOverview() fleetOverview {
 	now := time.Now()
+	roster := currentFleetRoster()
+	prunePersistedBansNotInRoster(roster)
+
 	mutex.RLock()
 	defer mutex.RUnlock()
 
@@ -219,7 +222,6 @@ func buildFleetOverview() fleetOverview {
 	})
 
 	running := collectRunningAnarchiesLocked()
-	roster := fleetNickRoster
 	visible := filterBannedForFleet(all, running, roster)
 	anarchies := groupBannedByAnarchy(visible)
 

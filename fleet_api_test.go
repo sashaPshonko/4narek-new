@@ -19,6 +19,7 @@ func TestFleetOverviewGroupsByAnarchy(t *testing.T) {
 	clientClanOwners = make(map[*websocket.Conn][]clanOwnerView)
 	clients = make(map[*websocket.Conn]bool)
 	clientOrchestratorAnarchy = make(map[*websocket.Conn]int)
+	skipFleetRosterReload = true
 	fleetNickRoster = funauthRoster{
 		503: {"bota": {}, "botb": {}, "kokos_555117": {}},
 		510: {"botc": {}},
@@ -29,6 +30,7 @@ func TestFleetOverviewGroupsByAnarchy(t *testing.T) {
 		clients = oldClients
 		clientOrchestratorAnarchy = oldOrchAn
 		fleetNickRoster = oldRoster
+		skipFleetRosterReload = false
 	})
 
 	wsA := &websocket.Conn{}

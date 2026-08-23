@@ -28,6 +28,8 @@ func TestFleetBanPersistAndMerge(t *testing.T) {
 	clientClanOwners = make(map[*websocket.Conn][]clanOwnerView)
 	clients = make(map[*websocket.Conn]bool)
 	clientOrchestratorAnarchy = make(map[*websocket.Conn]int)
+	skipFleetRosterReload = true
+	t.Cleanup(func() { skipFleetRosterReload = false })
 	fleetNickRoster = funauthRoster{
 		502: {"tablydait13": {}},
 		503: {"krupkaobod15": {}},
@@ -78,7 +80,40 @@ func TestFleetBanPersistAndMerge(t *testing.T) {
 	if len(out.ClanOwners) != 0 {
 		t.Fatalf("owners filtered (504 not running): %+v", out.ClanOwners)
 	}
-	if len(persistedBannedBots) != 3 {
-		t.Fatalf("persisted bots=%d want 3 (storage unchanged)", len(persistedBannedBots))
+	if _, ok := persistedBannedBots["oldghost"]; ok {
+		t.Fatal("oldghost should be pruned after leaving roster")
+	}
+	if len(persistedBannedBots) != 2 {
+		t.Fatalf("persisted bots=%d want 2 (tablydait13 + live krupkaobod15)", len(persistedBannedBots))
+	}
+}
+
+func TestPrunePersistedBansNotInRoster(t *testing.T) {
+	oldPersist := persistedBannedBots
+	oldOwners := persistedClanOwnerBans
+	t.Cleanup(func() {
+		persistedBannedBots = oldPersist
+		persistedClanOwnerBans = oldOwners
+	})
+	persistedBannedBots = map[string]bannedBotView{
+		"keepme":   {Username: "keepme", Anarchy: 503},
+		"oldghost": {Username: "oldghost", Anarchy: 503},
+	}
+	persistedClanOwnerBans = map[string]clanOwnerView{
+		"goneowner":    {Username: "goneowner", Anarchy: 504, Status: "banned"},
+		"eblivi1_r0t7": {Username: "eblivi1_r0t7", Anarchy: 504, Status: "banned"},
+	}
+	prunePersistedBansNotInRoster(funauthRoster{
+		503: {"keepme": {}},
+		504: {"eblivi1_r0t7": {}},
+	})
+	if _, ok := persistedBannedBots["oldghost"]; ok {
+		t.Fatal("expected oldghost pruned")
+	}
+	if _, ok := persistedBannedBots["keepme"]; !ok {
+		t.Fatal("expected keepme")
+	}
+	if _, ok := persistedClanOwnerBans["goneowner"]; ok {
+		t.Fatal("expected goneowner pruned")
 	}
 }

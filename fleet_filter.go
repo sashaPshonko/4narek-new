@@ -10,8 +10,20 @@ import (
 // fleetNickRoster — ники из funauth_roster.json (боты + владельцы по анкам).
 var fleetNickRoster funauthRoster
 
+// skipFleetRosterReload — тесты подставляют roster в память, без чтения файла.
+var skipFleetRosterReload bool
+
 func loadFleetNickRoster() {
 	fleetNickRoster = loadFunauthRoster()
+}
+
+func currentFleetRoster() funauthRoster {
+	if !skipFleetRosterReload {
+		if r := loadFunauthRosterFile(false); len(r) > 0 {
+			fleetNickRoster = r
+		}
+	}
+	return fleetNickRoster
 }
 
 // clientOrchestratorAnarchy — anarchy подключённого оркестратора (по presence).
