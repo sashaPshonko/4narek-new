@@ -7,21 +7,22 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// fleetNickRoster — ники из funauth_roster.json (боты + владельцы по анкам).
+// fleetNickRoster — ники запущенных аккаунтов (bots/*.json + владельцы), не весь funauth roster.
 var fleetNickRoster funauthRoster
 
 // skipFleetRosterReload — тесты подставляют roster в память, без чтения файла.
 var skipFleetRosterReload bool
 
-func loadFleetNickRoster() {
-	fleetNickRoster = loadFunauthRoster()
-}
-
 func currentFleetRoster() funauthRoster {
-	if !skipFleetRosterReload {
-		if r := loadFunauthRosterFile(false); len(r) > 0 {
-			fleetNickRoster = r
-		}
+	if skipFleetRosterReload {
+		return fleetNickRoster
+	}
+	if r := loadFleetRunningNicks(); len(r) > 0 {
+		fleetNickRoster = r
+		return r
+	}
+	if r := loadFunauthRosterFile(false); len(r) > 0 {
+		fleetNickRoster = r
 	}
 	return fleetNickRoster
 }

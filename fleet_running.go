@@ -1,0 +1,113 @@
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func fleetBotsDir() string {
+	if d := strings.TrimSpace(os.Getenv("FLEET_BOTS_DIR")); d != "" {
+		return d
+	}
+	for _, d := range []string{
+		filepath.Join("..", "4narek-1.12", "bots"),
+		"bots",
+		"/root/4narek-1.12/bots",
+	} {
+		st, err := os.Stat(d)
+		if err == nil && st.IsDir() {
+			return d
+		}
+	}
+	return ""
+}
+
+func addFleetNick(r funauthRoster, anarchy int, nick string) {
+	nk := strings.ToLower(strings.TrimSpace(nick))
+	if r == nil || anarchy <= 0 || nk == "" {
+		return
+	}
+	if r[anarchy] == nil {
+		r[anarchy] = make(map[string]struct{})
+	}
+	r[anarchy][nk] = struct{}{}
+}
+
+type fleetBotJSONRow struct {
+	Username string `json:"username"`
+	Anarchy  any    `json:"anarchy"`
+}
+
+func loadFleetBotsJSON(dir string, out funauthRoster) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(strings.ToLower(name), ".json") {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			continue
+		}
+		var rows []fleetBotJSONRow
+		if err := json.Unmarshal(raw, &rows); err != nil {
+			continue
+		}
+		for _, row := range rows {
+			addFleetNick(out, anarchyInt(row.Anarchy), row.Username)
+		}
+	}
+}
+
+func loadFleetClanOwnersJSON(path string, out funauthRoster) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var byAn map[string]fleetBotJSONRow
+	if err := json.Unmarshal(raw, &byAn); err != nil {
+		return
+	}
+	for _, row := range byAn {
+		an := anarchyInt(row.Anarchy)
+		addFleetNick(out, an, row.Username)
+	}
+}
+
+// loadFleetRunningNicks — ники из bots/*.json + clan-owners.json (текущий запуск), не funauth_roster.
+func loadFleetRunningNicks() funauthRoster {
+	dir := fleetBotsDir()
+	if dir == "" {
+		return nil
+	}
+	out := make(funauthRoster)
+	loadFleetBotsJSON(dir, out)
+	owners := strings.TrimSpace(os.Getenv("FLEET_OWNERS_FILE"))
+	if owners == "" {
+		owners = filepath.Join(filepath.Dir(dir), "clan-owners.json")
+	}
+	loadFleetClanOwnersJSON(owners, out)
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func loadFleetNickRoster() {
+	if r := loadFleetRunningNicks(); len(r) > 0 {
+		fleetNickRoster = r
+		n := 0
+		for _, set := range r {
+			n += len(set)
+		}
+		log.Printf("[fleet] running nicks: %d anarchy(ies), %d nicks from %s", len(r), n, fleetBotsDir())
+		return
+	}
+	fleetNickRoster = loadFunauthRoster()
+}
