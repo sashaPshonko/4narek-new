@@ -738,8 +738,29 @@ func funauthClientOptions(sessionPath string, handler telegram.UpdateHandler) te
 		log.Printf("[funauth] SOCKS dialer без ContextDialer — без прокси")
 		return opt
 	}
-	opt.Resolver = dcs.Plain(dcs.PlainOptions{Dial: cd.DialContext})
+	opt.Resolver = dcs.Plain(dcs.PlainOptions{
+		Network:    "tcp4",
+		PreferIPv6: false,
+		Dial:       funauthDialIPv4(cd),
+	})
 	return opt
+}
+
+// funauthDialIPv4 — Алматы без IPv6; gotd иначе шлёт migrate на 2001:… и ловит deadline.
+func funauthDialIPv4(cd proxy.ContextDialer) dcs.DialFunc {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
+			return nil, fmt.Errorf("skip ipv6 dc %s", host)
+		}
+		if network == "tcp" || network == "tcp6" {
+			network = "tcp4"
+		}
+		return cd.DialContext(ctx, network, net.JoinHostPort(host, port))
+	}
 }
 
 func (p *funauthPool) connectAccount(meta funauthAccountMeta) {
