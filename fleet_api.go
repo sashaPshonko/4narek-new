@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -58,6 +59,7 @@ func registerFleetHTTP(mux *http.ServeMux) {
 	mux.HandleFunc("/fleet", recoverHTTP(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/fleet/", http.StatusFound)
 	}))
+	mux.HandleFunc("/api/clan-owner", recoverHTTP(handleClanOwnerHTTP))
 
 	staticRoot, err := fs.Sub(fleetStaticFS, "fleet_static")
 	if err != nil {
@@ -65,6 +67,7 @@ func registerFleetHTTP(mux *http.ServeMux) {
 		return
 	}
 	fileServer := http.FileServer(http.FS(staticRoot))
+
 	mux.Handle("/fleet/", recoverHTTPHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/fleet/api/") {
 			fleetAPI(w, r)
@@ -80,6 +83,34 @@ func registerFleetHTTP(mux *http.ServeMux) {
 		fileServer.ServeHTTP(w, &r2)
 	})))
 	log.Printf("[fleet] dashboard ready at /fleet/")
+}
+
+func handleClanOwnerHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var body clanOwnerView
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(body.Username) == "" {
+		http.Error(w, "username required", http.StatusBadRequest)
+		return
+	}
+	if body.Banned || body.Status == "banned" {
+		body.Banned = true
+		body.Status = "banned"
+	} else if body.Status == "" {
+		body.Status = "ok"
+	}
+	if body.CheckedAt == "" {
+		body.CheckedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	ingestClanOwnersFromPresence([]clanOwnerView{body})
+	log.Printf("[fleet] clan-owner http %s an=%v status=%s banned=%v", body.Username, body.Anarchy, body.Status, body.Banned)
+	fleetJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func fleetAPI(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gorilla/websocket"
@@ -108,5 +109,39 @@ func TestFleetHTTPOverview(t *testing.T) {
 	defer res2.Body.Close()
 	if res2.StatusCode != 200 {
 		t.Fatalf("page status %d", res2.StatusCode)
+	}
+}
+
+func TestClanOwnerHTTPIngest(t *testing.T) {
+	oldPersist := persistedClanOwnerBans
+	oldRoster := fleetNickRoster
+	persistedClanOwnerBans = make(map[string]clanOwnerView)
+	skipFleetRosterReload = true
+	fleetNickRoster = funauthRoster{
+		502: {"owner_nick": {}},
+	}
+	t.Cleanup(func() {
+		persistedClanOwnerBans = oldPersist
+		fleetNickRoster = oldRoster
+		skipFleetRosterReload = false
+	})
+
+	mux := http.NewServeMux()
+	registerFleetHTTP(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	body := `{"username":"owner_nick","anarchy":502,"status":"banned","banned":true,"reason":"ВЫ ЗАБАНЕНЫ!"}`
+	res, err := http.Post(srv.URL+"/api/clan-owner", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	got, ok := persistedClanOwnerBans["owner_nick"]
+	if !ok || !got.Banned {
+		t.Fatalf("persist=%+v", persistedClanOwnerBans)
 	}
 }
