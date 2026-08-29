@@ -168,6 +168,10 @@ func prunePersistedOwnerBansNotInConfig(ownerRoster funauthRoster) {
 	}
 }
 
+func reasonIsChatBan(reason string) bool {
+	return strings.Contains(strings.ToLower(reason), "вы забанены")
+}
+
 func ingestBannedBotsFromPresence(raw []bannedBotView) {
 	if len(raw) == 0 {
 		return
@@ -180,14 +184,18 @@ func ingestBannedBotsFromPresence(raw []bannedBotView) {
 			continue
 		}
 		if !nickInCurrentRoster(roster, u, b.Anarchy) {
-			rememberBannedIPLocked(b.IP, u, b.Reason, "presence", b.BannedAt)
+			if reasonIsChatBan(b.Reason) {
+				rememberBannedIPLocked(b.IP, u, b.Reason, "presence", b.BannedAt)
+			}
 			continue
 		}
 		key := banUserKey(u)
 		b.Username = u
 		prev := persistedBannedBots[key]
 		persistedBannedBots[key] = mergeBannedBotView(prev, b)
-		rememberBannedIPLocked(firstNonEmpty(b.IP, prev.IP), u, b.Reason, "presence", b.BannedAt)
+		if reasonIsChatBan(firstNonEmpty(b.Reason, prev.Reason)) {
+			rememberBannedIPLocked(firstNonEmpty(b.IP, prev.IP), u, b.Reason, "presence", b.BannedAt)
+		}
 	}
 	fleetPersistMu.Unlock()
 	saveFleetBanPersist()
