@@ -44,8 +44,17 @@
     .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
     .status.err .dot { background: var(--ban); }
     .kpi {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px;
     }
+    .lookup-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+    .lookup-row input {
+      font: inherit; font-family: var(--mono); font-size: 14px; padding: 8px 12px;
+      border-radius: 10px; border: 1px solid var(--line); min-width: 220px; flex: 1;
+    }
+    #ipResult { margin-top: 10px; font-size: 14px; }
+    #ipResult.ban { color: var(--ban); font-weight: 600; }
+    #ipResult.ok { color: var(--ok); font-weight: 600; }
+    #ipResult.muted { color: var(--muted); }
     .card {
       background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
       padding: 14px 16px; box-shadow: 0 10px 30px rgba(12,18,34,.04);
@@ -112,7 +121,7 @@
 <body>
   <div class="wrap">
     <h1>4narek <span>Баны</span></h1>
-    <p class="lede">Баны бай-ботов и статусы владельцев кланов (периодический логин). Данные с оркестраторов через presence.</p>
+    <p class="lede">Баны ников и прокси. Введи IP — скажет, помечен ли он забаненным. Текущие слоты из ip.json / owner-ip.json ниже.</p>
     <nav class="nav" aria-label="Разделы">
       <a href="/sales/" data-nav="sales">Продажи</a>
       <a href="/funauth/" data-nav="funauth">FunAuth</a>
@@ -128,7 +137,23 @@
       <div class="card"><div class="k">Забанено сейчас</div><div class="v ban mono" id="kpiTotal">—</div></div>
       <div class="card"><div class="k">Анархии с банами</div><div class="v mono" id="kpiAn">—</div></div>
       <div class="card"><div class="k">Владельцы кланов</div><div class="v mono" id="kpiOwners">—</div></div>
+      <div class="card"><div class="k">Забаненные IP</div><div class="v ban mono" id="kpiIPs">—</div></div>
     </div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="k">Проверить прокси</div>
+      <form class="lookup-row" id="ipForm">
+        <input id="ipQ" name="ip" autocomplete="off" placeholder="85.120.128.204 или socks5://…@ip:port" />
+        <button type="submit" class="btn">Проверить</button>
+        <button type="button" class="btn" id="ipBan">Пометить бан</button>
+        <button type="button" class="btn ok" id="ipClear">Снять бан</button>
+        <button type="button" class="btn" id="ipMarkUsed">Все текущие прокси = бан</button>
+      </form>
+      <div id="ipResult" class="muted">вставь IP и проверь</div>
+    </div>
+    <h2 class="section-title">Текущие прокси (ip.json)</h2>
+    <div id="assigned"></div>
+    <h2 class="section-title">Забаненные IP</h2>
+    <div id="bannedIps"></div>
     <h2 class="section-title">Владельцы кланов</h2>
     <div id="owners"></div>
     <h2 class="section-title">Баны ботов</h2>
@@ -243,6 +268,73 @@
       localStorage.setItem("fleetSeenBans", JSON.stringify([...seenBanKeys]));
     }
 
+    function renderIPResult(r) {
+      const el = $("ipResult");
+      if (!r || !r.ip) {
+        el.className = "muted";
+        el.textContent = "непонятный IP";
+        return;
+      }
+      if (r.banned) {
+        el.className = "ban";
+        el.textContent = r.ip + " — ЗАБАНЕН" + (r.nicks?.length ? " · ники: " + r.nicks.join(", ") : "") + (r.note ? " · " + r.note : "");
+        return;
+      }
+      if (r.known) {
+        el.className = "ok";
+        el.textContent = r.ip + " — в базе, бан снят";
+        return;
+      }
+      el.className = "ok";
+      el.textContent = r.ip + " — в базе нет (не значит, что FunTime его не банил — просто мы его не помечали)";
+    }
+
+    async function postIP(ip, banned) {
+      const res = await fetch("/fleet/api/ip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ip, banned }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || ("HTTP " + res.status));
+      renderIPResult(data.result);
+      load();
+    }
+
+    $("ipForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const ip = $("ipQ").value.trim();
+      if (!ip) return;
+      try {
+        const res = await fetch("/fleet/api/ip?ip=" + encodeURIComponent(ip), { cache: "no-store" });
+        const data = await res.json();
+        renderIPResult(data.result);
+      } catch (err) {
+        $("ipResult").className = "ban";
+        $("ipResult").textContent = String(err.message || err);
+      }
+    });
+    $("ipBan").addEventListener("click", async () => {
+      const ip = $("ipQ").value.trim();
+      if (!ip) return;
+      try { await postIP(ip, true); } catch (err) { showCopyToast(String(err.message || err), true); }
+    });
+    $("ipClear").addEventListener("click", async () => {
+      const ip = $("ipQ").value.trim();
+      if (!ip) return;
+      try { await postIP(ip, false); } catch (err) { showCopyToast(String(err.message || err), true); }
+    });
+    $("ipMarkUsed").addEventListener("click", async () => {
+      if (!confirm("Пометить все IP из ip.json / owner-ip.json / sellbot как забаненные?")) return;
+      try {
+        const res = await fetch("/fleet/api/ips/mark-used", { method: "POST" });
+        const data = await res.json();
+        showCopyToast("помечено " + (data.marked ?? 0));
+        load();
+      } catch (err) {
+        showCopyToast(String(err.message || err), true);
+      }
+    });
     $("copyBots").addEventListener("click", async () => {
       if (!lastOverview?.banned?.length) {
         showCopyToast("список ботов пуст", true);
@@ -282,6 +374,48 @@
         $("kpiTotal").textContent = data.total_banned;
         $("kpiAn").textContent = (data.anarchies || []).filter((a) => a.count > 0).length;
         $("kpiOwners").textContent = owners.length ? `${ownersBanned}/${owners.length}` : "—";
+        $("kpiIPs").textContent = data.banned_ip_count ?? (data.banned_ips || []).length;
+
+        const assignedEl = $("assigned");
+        const assigned = data.assigned_proxies || [];
+        if (!assigned.length) {
+          assignedEl.innerHTML = `<div class="anarchy"><div class="empty">Go не видит ip.json рядом с bots/ — на VPS должен быть /root/4narek-1.12.</div></div>`;
+        } else {
+          const rows = assigned.map((a) => `
+            <tr>
+              <td class="mono">${escapeHtml(a.ip)}</td>
+              <td>${escapeHtml(a.kind)} · ${escapeHtml(a.slot)}</td>
+              <td>${a.banned ? `<span class="pill banned">бан</span>` : `<span class="pill ok">не помечен</span>`}</td>
+            </tr>`).join("");
+          assignedEl.innerHTML = `<section class="anarchy">
+            <header><h2>Слоты</h2><span class="cnt">${assigned.length}</span></header>
+            <table>
+              <thead><tr><th>IP</th><th>Где</th><th>Статус</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </section>`;
+        }
+
+        const ipsEl = $("bannedIps");
+        const ips = data.banned_ips || [];
+        if (!ips.length) {
+          ipsEl.innerHTML = `<div class="anarchy"><div class="empty">Пока ни один IP не помечен. Нажми «Все текущие прокси = бан» если они уже горят.</div></div>`;
+        } else {
+          const rows = ips.map((a) => `
+            <tr>
+              <td class="mono">${escapeHtml(a.ip)}</td>
+              <td class="mono">${fmtWhen(a.banned_at)}</td>
+              <td>${escapeHtml((a.nicks || []).join(", ") || "—")}</td>
+              <td class="reason">${escapeHtml(a.note || a.source || "—")}</td>
+            </tr>`).join("");
+          ipsEl.innerHTML = `<section class="anarchy">
+            <header><h2>Бан-лист IP</h2><span class="cnt">${ips.length}</span></header>
+            <table>
+              <thead><tr><th>IP</th><th>Когда</th><th>Ники</th><th>Заметка</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </section>`;
+        }
 
         const ownersEl = $("owners");
         if (!owners.length) {
@@ -291,7 +425,7 @@
             <tr>
               <td>
                 <div class="nick">${escapeHtml(o.username)}</div>
-                <div class="meta">an${escapeHtml(o.anarchy ?? "?")} · владелец клана</div>
+                <div class="meta">an${escapeHtml(o.anarchy ?? "?")} · владелец клана${o.ip ? " · " + escapeHtml(o.ip) : ""}</div>
               </td>
               <td><span class="pill ${escapeHtml(o.status || "pending")}">${escapeHtml(statusLabel(o.status))}</span></td>
               <td class="mono">${fmtWhen(o.checked_at || o.banned_at)}</td>
@@ -320,7 +454,7 @@
             <tr>
               <td>
                 <div class="nick">${escapeHtml(b.username)}</div>
-                <div class="meta">${escapeHtml(type)}</div>
+                <div class="meta">${escapeHtml(type)}${b.ip ? " · " + escapeHtml(b.ip) : ""}</div>
                 ${persisted}
               </td>
               <td class="mono">${fmtWhen(b.banned_at)}</td>

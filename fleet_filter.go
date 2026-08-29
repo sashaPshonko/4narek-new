@@ -115,24 +115,17 @@ func filterBannedForFleet(all []bannedBotView, running map[int]struct{}, roster 
 	return out
 }
 
-func filterClanOwnersForFleet(all []clanOwnerView, running map[int]struct{}, roster funauthRoster) []clanOwnerView {
+func filterClanOwnersForFleet(all []clanOwnerView, _ map[int]struct{}, roster funauthRoster) []clanOwnerView {
 	if len(all) == 0 {
 		return nil
 	}
 	out := make([]clanOwnerView, 0, len(all))
 	for _, o := range all {
 		an := anarchyInt(o.Anarchy)
-		if an <= 0 {
+		if an <= 0 || strings.TrimSpace(o.Username) == "" {
 			continue
 		}
-		if len(running) > 0 {
-			if _, ok := running[an]; !ok {
-				continue
-			}
-		} else {
-			continue
-		}
-		if !roster.nickOnAnarchy(an, o.Username) {
+		if len(roster) == 0 || !roster.nickOnAnarchy(an, o.Username) {
 			continue
 		}
 		out = append(out, o)

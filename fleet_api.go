@@ -21,6 +21,7 @@ type bannedBotView struct {
 	BannedAt string `json:"banned_at,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 	Source   string `json:"source,omitempty"` // оркестратор / анархия-группа
+	IP       string `json:"ip,omitempty"`
 }
 
 type clanOwnerView struct {
@@ -31,6 +32,7 @@ type clanOwnerView struct {
 	BannedAt  string `json:"banned_at,omitempty"`
 	Reason    string `json:"reason,omitempty"`
 	CheckedAt string `json:"checked_at,omitempty"`
+	IP        string `json:"ip,omitempty"`
 }
 
 type fleetAnarchyView struct {
@@ -40,13 +42,16 @@ type fleetAnarchyView struct {
 }
 
 type fleetOverview struct {
-	OK              bool               `json:"ok"`
-	UpdatedAt       time.Time          `json:"updated_at"`
-	Total           int                `json:"total_banned"`
-	PersistedBanned int                `json:"persisted_banned"`
-	Anarchies       []fleetAnarchyView `json:"anarchies"`
-	Banned          []bannedBotView    `json:"banned"`
-	ClanOwners      []clanOwnerView    `json:"clan_owners"`
+	OK              bool                `json:"ok"`
+	UpdatedAt       time.Time           `json:"updated_at"`
+	Total           int                 `json:"total_banned"`
+	PersistedBanned int                 `json:"persisted_banned"`
+	Anarchies       []fleetAnarchyView  `json:"anarchies"`
+	Banned          []bannedBotView     `json:"banned"`
+	ClanOwners      []clanOwnerView     `json:"clan_owners"`
+	BannedIPs       []bannedIPView      `json:"banned_ips"`
+	AssignedProxies []assignedProxyView `json:"assigned_proxies"`
+	BannedIPCount   int                 `json:"banned_ip_count"`
 }
 
 // clientBannedBots — снимок забаненных с каждого WS-оркестратора.
@@ -60,6 +65,7 @@ func registerFleetHTTP(mux *http.ServeMux) {
 		http.Redirect(w, r, "/fleet/", http.StatusFound)
 	}))
 	mux.HandleFunc("/api/clan-owner", recoverHTTP(handleClanOwnerHTTP))
+	mux.HandleFunc("/api/banned-ip", recoverHTTP(handleBannedIPHTTP))
 
 	staticRoot, err := fs.Sub(fleetStaticFS, "fleet_static")
 	if err != nil {
@@ -109,7 +115,10 @@ func handleClanOwnerHTTP(w http.ResponseWriter, r *http.Request) {
 		body.CheckedAt = time.Now().UTC().Format(time.RFC3339)
 	}
 	ingestClanOwnersFromPresence([]clanOwnerView{body})
-	log.Printf("[fleet] clan-owner http %s an=%v status=%s banned=%v", body.Username, body.Anarchy, body.Status, body.Banned)
+	if body.Banned && normalizeProxyHost(body.IP) != "" {
+		setBannedIP(body.IP, true, body.Reason, body.Username, "clan-owner")
+	}
+	log.Printf("[fleet] clan-owner http %s an=%v status=%s banned=%v ip=%s", body.Username, body.Anarchy, body.Status, body.Banned, body.IP)
 	fleetJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -117,6 +126,14 @@ func fleetAPI(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/fleet/api")
 	if path == "/overview" && r.Method == http.MethodGet {
 		fleetJSON(w, http.StatusOK, buildFleetOverview())
+		return
+	}
+	if path == "/ip" {
+		handleBannedIPHTTP(w, r)
+		return
+	}
+	if path == "/ips/mark-used" {
+		handleMarkUsedIPsHTTP(w, r)
 		return
 	}
 	fleetJSON(w, http.StatusNotFound, map[string]any{"ok": false, "error": "not found"})
@@ -213,6 +230,7 @@ func buildFleetOverview() fleetOverview {
 	now := time.Now()
 	roster := currentFleetRoster()
 	prunePersistedBansNotInRoster(roster)
+	prunePersistedOwnerBansNotInConfig(currentClanOwnerRoster())
 
 	mutex.RLock()
 	defer mutex.RUnlock()
@@ -264,9 +282,10 @@ func buildFleetOverview() fleetOverview {
 	owners := filterClanOwnersForFleet(
 		applyPersistedClanOwnerBans(collectClanOwnersLocked()),
 		running,
-		roster,
+		currentClanOwnerRoster(),
 	)
 
+	bannedIPs := listBannedIPs()
 	return fleetOverview{
 		OK:              true,
 		UpdatedAt:       now,
@@ -275,6 +294,9 @@ func buildFleetOverview() fleetOverview {
 		Anarchies:       anarchies,
 		Banned:          visible,
 		ClanOwners:      owners,
+		BannedIPs:       bannedIPs,
+		AssignedProxies: loadAssignedProxies(),
+		BannedIPCount:   len(bannedIPs),
 	}
 }
 

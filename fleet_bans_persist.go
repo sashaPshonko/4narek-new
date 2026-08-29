@@ -15,6 +15,7 @@ const fleetBansPersistPath = "ml_data/fleet_bans.json"
 type fleetBansPersistFile struct {
 	Bots       map[string]bannedBotView `json:"bots"`
 	ClanOwners map[string]clanOwnerView `json:"clan_owners"`
+	IPs        map[string]bannedIPView  `json:"ips"`
 	UpdatedAt  time.Time                `json:"updated_at"`
 }
 
@@ -22,6 +23,7 @@ var (
 	fleetPersistMu         sync.RWMutex
 	persistedBannedBots    = make(map[string]bannedBotView)
 	persistedClanOwnerBans = make(map[string]clanOwnerView)
+	persistedBannedIPs     = make(map[string]bannedIPView)
 )
 
 func loadFleetBanPersist() {
@@ -45,7 +47,12 @@ func loadFleetBanPersist() {
 	if snap.ClanOwners != nil {
 		persistedClanOwnerBans = snap.ClanOwners
 	}
-	log.Printf("[fleet] bans loaded: %d bot(s), %d owner ban(s)", len(persistedBannedBots), len(persistedClanOwnerBans))
+	if snap.IPs != nil {
+		persistedBannedIPs = snap.IPs
+	} else if persistedBannedIPs == nil {
+		persistedBannedIPs = make(map[string]bannedIPView)
+	}
+	log.Printf("[fleet] bans loaded: %d bot(s), %d owner ban(s), %d ip(s)", len(persistedBannedBots), len(persistedClanOwnerBans), len(persistedBannedIPs))
 }
 
 func saveFleetBanPersist() {
@@ -53,6 +60,7 @@ func saveFleetBanPersist() {
 	snap := fleetBansPersistFile{
 		Bots:       persistedBannedBots,
 		ClanOwners: persistedClanOwnerBans,
+		IPs:        persistedBannedIPs,
 		UpdatedAt:  time.Now(),
 	}
 	fleetPersistMu.RUnlock()
@@ -98,6 +106,9 @@ func mergeBannedBotView(prev, next bannedBotView) bannedBotView {
 	if anarchyInt(out.Anarchy) == 0 && anarchyInt(prev.Anarchy) != 0 {
 		out.Anarchy = prev.Anarchy
 	}
+	if out.IP == "" && prev.IP != "" {
+		out.IP = prev.IP
+	}
 	return out
 }
 
@@ -138,6 +149,25 @@ func prunePersistedBansNotInRoster(roster funauthRoster) {
 	}
 }
 
+func prunePersistedOwnerBansNotInConfig(ownerRoster funauthRoster) {
+	if len(ownerRoster) == 0 {
+		return
+	}
+	fleetPersistMu.Lock()
+	changed := false
+	for key, o := range persistedClanOwnerBans {
+		if ownerRoster.nickOnAnarchy(anarchyInt(o.Anarchy), o.Username) {
+			continue
+		}
+		delete(persistedClanOwnerBans, key)
+		changed = true
+	}
+	fleetPersistMu.Unlock()
+	if changed {
+		saveFleetBanPersist()
+	}
+}
+
 func ingestBannedBotsFromPresence(raw []bannedBotView) {
 	if len(raw) == 0 {
 		return
@@ -150,12 +180,14 @@ func ingestBannedBotsFromPresence(raw []bannedBotView) {
 			continue
 		}
 		if !nickInCurrentRoster(roster, u, b.Anarchy) {
+			rememberBannedIPLocked(b.IP, u, b.Reason, "presence", b.BannedAt)
 			continue
 		}
 		key := banUserKey(u)
 		b.Username = u
 		prev := persistedBannedBots[key]
 		persistedBannedBots[key] = mergeBannedBotView(prev, b)
+		rememberBannedIPLocked(firstNonEmpty(b.IP, prev.IP), u, b.Reason, "presence", b.BannedAt)
 	}
 	fleetPersistMu.Unlock()
 	saveFleetBanPersist()
@@ -165,19 +197,23 @@ func ingestClanOwnersFromPresence(raw []clanOwnerView) {
 	if len(raw) == 0 {
 		return
 	}
-	roster := currentFleetRoster()
+	roster := currentClanOwnerRoster()
 	fleetPersistMu.Lock()
 	for _, o := range raw {
 		u := strings.TrimSpace(o.Username)
 		if u == "" {
 			continue
 		}
-		if !nickInCurrentRoster(roster, u, o.Anarchy) {
+		if len(roster) == 0 || !roster.nickOnAnarchy(anarchyInt(o.Anarchy), u) {
+			if o.Banned || o.Status == "banned" {
+				rememberBannedIPLocked(o.IP, u, o.Reason, "clan-owner", firstNonEmpty(o.BannedAt, o.CheckedAt))
+			}
 			continue
 		}
 		key := banUserKey(u)
 		o.Username = u
 		if o.Banned || o.Status == "banned" {
+			rememberBannedIPLocked(o.IP, u, o.Reason, "clan-owner", firstNonEmpty(o.BannedAt, o.CheckedAt))
 			prev, had := persistedClanOwnerBans[key]
 			merged := o
 			if had {

@@ -45,6 +45,37 @@ func TestLoadFleetRunningNicksFromBotsJSON(t *testing.T) {
 	}
 }
 
+func TestLoadClanOwnersJSONIgnoresMyNickString(t *testing.T) {
+	dir := t.TempDir()
+	owners := `{
+	  "502": {"username": "syrnikbomb16", "anarchy": 502},
+	  "506": {"username": "klanvshlem13", "anarchy": 506},
+	  "myNick": "nebotovodt4n6"
+	}`
+	path := filepath.Join(dir, "clan-owners.json")
+	if err := os.WriteFile(path, []byte(owners), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := make(funauthRoster)
+	loadFleetClanOwnersJSON(path, out)
+	if !out.nickOnAnarchy(502, "syrnikbomb16") || !out.nickOnAnarchy(506, "klanvshlem13") {
+		t.Fatalf("owners not loaded (myNick broke parse?): %+v", out)
+	}
+}
+
+func TestFilterClanOwnersShowsBanWithoutOrchestrator(t *testing.T) {
+	roster := funauthRoster{504: {"eblivi1_r0t7": {}}}
+	running := map[int]struct{}{503: {}}
+	out := filterClanOwnersForFleet([]clanOwnerView{
+		{Username: "eblivi1_r0t7", Anarchy: 504, Status: "banned", Banned: true},
+		{Username: "kokos_555117", Anarchy: 503, Status: "ok"},
+		{Username: "old_owner", Anarchy: 504, Status: "banned", Banned: true},
+	}, running, roster)
+	if len(out) != 1 || out[0].Username != "eblivi1_r0t7" {
+		t.Fatalf("got %+v", out)
+	}
+}
+
 func TestFilterBannedIgnoresRosterOnlyNicks(t *testing.T) {
 	runningNicks := funauthRoster{
 		502: {"tablydait13": {}, "gorbtikphon12": {}, "kventikasha12": {}, "bubkagub9": {}},

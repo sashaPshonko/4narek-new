@@ -11,6 +11,7 @@ func TestFleetBanPersistAndMerge(t *testing.T) {
 	oldOwners := clientClanOwners
 	oldPersist := persistedBannedBots
 	oldOwnerPersist := persistedClanOwnerBans
+	oldIPPersist := persistedBannedIPs
 	oldClients := clients
 	oldOrchAn := clientOrchestratorAnarchy
 	oldRoster := fleetNickRoster
@@ -19,6 +20,7 @@ func TestFleetBanPersistAndMerge(t *testing.T) {
 		clientClanOwners = oldOwners
 		persistedBannedBots = oldPersist
 		persistedClanOwnerBans = oldOwnerPersist
+		persistedBannedIPs = oldIPPersist
 		clients = oldClients
 		clientOrchestratorAnarchy = oldOrchAn
 		fleetNickRoster = oldRoster
@@ -28,6 +30,7 @@ func TestFleetBanPersistAndMerge(t *testing.T) {
 	clientClanOwners = make(map[*websocket.Conn][]clanOwnerView)
 	clients = make(map[*websocket.Conn]bool)
 	clientOrchestratorAnarchy = make(map[*websocket.Conn]int)
+	persistedBannedIPs = make(map[string]bannedIPView)
 	skipFleetRosterReload = true
 	t.Cleanup(func() { skipFleetRosterReload = false })
 	fleetNickRoster = funauthRoster{
@@ -77,8 +80,8 @@ func TestFleetBanPersistAndMerge(t *testing.T) {
 		t.Fatalf("live=%+v", live)
 	}
 
-	if len(out.ClanOwners) != 0 {
-		t.Fatalf("owners filtered (504 not running): %+v", out.ClanOwners)
+	if len(out.ClanOwners) != 1 || out.ClanOwners[0].Username != "eblivi1_r0t7" {
+		t.Fatalf("want persisted owner ban visible without 504 orchestrator: %+v", out.ClanOwners)
 	}
 	if _, ok := persistedBannedBots["oldghost"]; ok {
 		t.Fatal("oldghost should be pruned after leaving roster")

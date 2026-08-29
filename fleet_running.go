@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 	"os"
@@ -70,14 +71,53 @@ func loadFleetClanOwnersJSON(path string, out funauthRoster) {
 	if err != nil {
 		return
 	}
-	var byAn map[string]fleetBotJSONRow
-	if err := json.Unmarshal(raw, &byAn); err != nil {
+	var blobs map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &blobs); err != nil {
+		log.Printf("[fleet] clan-owners.json: %v", err)
 		return
 	}
-	for _, row := range byAn {
+	for key, blob := range blobs {
+		blob = bytes.TrimSpace(blob)
+		if len(blob) == 0 || blob[0] != '{' {
+			continue
+		}
+		var row fleetBotJSONRow
+		if err := json.Unmarshal(blob, &row); err != nil {
+			continue
+		}
 		an := anarchyInt(row.Anarchy)
+		if an <= 0 {
+			an = anarchyInt(key)
+		}
 		addFleetNick(out, an, row.Username)
 	}
+}
+
+func fleetOwnersFile() string {
+	if p := strings.TrimSpace(os.Getenv("FLEET_OWNERS_FILE")); p != "" {
+		return p
+	}
+	dir := fleetBotsDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(dir), "clan-owners.json")
+}
+
+func currentClanOwnerRoster() funauthRoster {
+	if skipFleetRosterReload {
+		return fleetNickRoster
+	}
+	path := fleetOwnersFile()
+	if path == "" {
+		return nil
+	}
+	out := make(funauthRoster)
+	loadFleetClanOwnersJSON(path, out)
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // loadFleetRunningNicks — ники из bots/*.json + clan-owners.json (текущий запуск), не funauth_roster.
@@ -88,11 +128,9 @@ func loadFleetRunningNicks() funauthRoster {
 	}
 	out := make(funauthRoster)
 	loadFleetBotsJSON(dir, out)
-	owners := strings.TrimSpace(os.Getenv("FLEET_OWNERS_FILE"))
-	if owners == "" {
-		owners = filepath.Join(filepath.Dir(dir), "clan-owners.json")
+	if path := fleetOwnersFile(); path != "" {
+		loadFleetClanOwnersJSON(path, out)
 	}
-	loadFleetClanOwnersJSON(owners, out)
 	if len(out) == 0 {
 		return nil
 	}
