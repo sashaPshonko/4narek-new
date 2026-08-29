@@ -479,7 +479,20 @@
         if (r.error && !r.ok) throw new Error(r.error);
         currentPhone = r.phone || phone;
         $('btnCode').disabled = false;
-        setMsg($('loginMsg'), 'Код отправлен на ' + currentPhone, 'ok');
+        const via = r.via || '';
+        let where = 'Код отправлен на ' + currentPhone;
+        if (via === 'app') {
+          where += ' — смотри в Telegram (чат «Telegram»), это НЕ SMS';
+        } else if (via === 'sms' || via === 'firebase_sms' || via === 'fragment_sms' || via === 'sms_word' || via === 'sms_phrase') {
+          where += ' — SMS на телефон';
+        } else if (via === 'call' || via === 'flash_call' || via === 'missed_call') {
+          where += ' — звонок / flash-call';
+        } else if (via === 'email') {
+          where += ' — на почту Telegram';
+        } else if (via) {
+          where += ' (via ' + via + ')';
+        }
+        setMsg($('loginMsg'), where, 'ok');
       } catch (e) {
         setMsg($('loginMsg'), String(e.message || e), 'err');
       } finally {

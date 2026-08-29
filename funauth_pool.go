@@ -79,6 +79,7 @@ type channelAuth struct {
 
 	codeSentOnce sync.Once
 	codeSent     chan struct{}
+	sentType     string // app / sms / call / …
 
 	needPassOnce sync.Once
 	needPass     chan struct{}
@@ -97,9 +98,43 @@ func newChannelAuth(phone string) *channelAuth {
 	}
 }
 
+func describeSentCodeType(t tg.AuthSentCodeTypeClass) string {
+	switch t.(type) {
+	case *tg.AuthSentCodeTypeApp:
+		return "app"
+	case *tg.AuthSentCodeTypeSMS:
+		return "sms"
+	case *tg.AuthSentCodeTypeCall:
+		return "call"
+	case *tg.AuthSentCodeTypeFlashCall:
+		return "flash_call"
+	case *tg.AuthSentCodeTypeMissedCall:
+		return "missed_call"
+	case *tg.AuthSentCodeTypeEmailCode:
+		return "email"
+	case *tg.AuthSentCodeTypeFragmentSMS:
+		return "fragment_sms"
+	case *tg.AuthSentCodeTypeFirebaseSMS:
+		return "firebase_sms"
+	case *tg.AuthSentCodeTypeSMSWord:
+		return "sms_word"
+	case *tg.AuthSentCodeTypeSMSPhrase:
+		return "sms_phrase"
+	default:
+		if t == nil {
+			return "unknown"
+		}
+		return fmt.Sprintf("%T", t)
+	}
+}
+
 func (a *channelAuth) Phone(context.Context) (string, error) { return a.phone, nil }
 
-func (a *channelAuth) Code(ctx context.Context, _ *tg.AuthSentCode) (string, error) {
+func (a *channelAuth) Code(ctx context.Context, sent *tg.AuthSentCode) (string, error) {
+	if sent != nil {
+		a.sentType = describeSentCodeType(sent.Type)
+		log.Printf("[funauth] code sent to %s via %s (timeout=%ds)", a.phone, a.sentType, sent.Timeout)
+	}
 	a.codeSentOnce.Do(func() { close(a.codeSent) })
 	select {
 	case code := <-a.codeCh:
@@ -852,7 +887,11 @@ func (p *funauthPool) loginStart(phone string) (map[string]any, error) {
 
 	select {
 	case <-a.codeSent:
-		return map[string]any{"phone": normalized, "sent": true}, nil
+		out := map[string]any{"phone": normalized, "sent": true}
+		if a.sentType != "" {
+			out["via"] = a.sentType
+		}
+		return out, nil
 	case res := <-pend.done:
 		p.mu.Lock()
 		delete(p.pending, normalized)
