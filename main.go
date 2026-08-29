@@ -257,7 +257,10 @@ func runServer() {
 	
 	// ОТКЛЮЧАЕМ ТОЛЬКО ТЕЛЕГРАМ
 	// initTelegramBot()
-	
+	if err := ensureTelegramXray(); err != nil {
+		log.Printf("[xray] %v — FunAuth без SOCKS", err)
+	}
+
 	// Funauth ОСТАВЛЯЕМ
 	initFunauth()
 
