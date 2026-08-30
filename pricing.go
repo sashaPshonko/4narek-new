@@ -561,13 +561,10 @@ func applyMarketFloors(floors map[string]int, windowStartMs, windowEndMs, window
 	*/
 }
 
-func sellPriceFloor(cfg ItemConfig, minBuy, nacenka int) int {
-	// minBuy — самая дешёвая покупка из истории (см. getMinPriceFromHistory)
-	floor := minBuy + nacenka
-	if cfg.BasePrice > floor {
-		floor = cfg.BasePrice
-	}
-	return floor
+func sellPriceFloor(minBuy, nacenka int) int {
+	// base_price не пол: только старт, если цены ещё нет.
+	// Пол = дешёвая покупка из истории + наценка (без истории — только наценка).
+	return minBuy + nacenka
 }
 
 // countItemsInCategoryLocked — сколько id в items_config с данным go-типом. Только под mutex.Lock.
@@ -793,7 +790,7 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	}
 	nacenka := getNacenka(item)
 	minBuy := getMinPriceFromHistory(item)
-	floor := sellPriceFloor(cfg, minBuy, nacenka)
+	floor := sellPriceFloor(minBuy, nacenka)
 	newPrice := priceBefore - cfg.PriceStep
 	if newPrice < floor {
 		newPrice = floor
@@ -873,7 +870,7 @@ func adjustPrice(item string) AdjustReport {
 	minPrice := getMinPriceFromHistory(item)
 	nacenkaSumNow := nacenkaSumInWindow(item, lastUpdate)
 	nacenkaSumPrev := state.LastCycleNacenkaSum
-	priceFloor := sellPriceFloor(cfg, minPrice, nacenka)
+	priceFloor := sellPriceFloor(minPrice, nacenka)
 
 	ahCounts := make(map[string]int)
 	invCounts := make(map[string]int)
@@ -1343,7 +1340,7 @@ func adjustPrice(item string) AdjustReport {
 		Share:           share,
 		Free:            free,
 		Need:            need,
-		PriceFloor:      sellPriceFloor(cfg, minPrice, nacenka),
+		PriceFloor:      sellPriceFloor(minPrice, nacenka),
 		Step:            step,
 		Cooldown:        state.StockVsSalesCooldown,
 		NacenkaSumNow:   nacenkaSumNow,
