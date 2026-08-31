@@ -505,7 +505,7 @@ func handleFunauthVerifiedWS(nick string, anarchy int) {
 		return
 	}
 	if anarchy <= 0 {
-		anarchy = funauthPoolInst.roster.anarchyForNick(nick)
+		anarchy = funauthPoolInst.rosterAnarchy(nick)
 	}
 	funauthPoolInst.rememberVerified(nick, anarchy)
 }

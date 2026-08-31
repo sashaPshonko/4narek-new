@@ -487,6 +487,7 @@ func removeClient(ws *websocket.Conn) {
 	delete(clientBotsPerType, ws)
 	delete(clientBannedBots, ws)
 	delete(clientClanOwners, ws)
+	deleteClientOrchBots(ws)
 	deleteClientOrchestratorAnarchy(ws)
 }
 
@@ -1193,6 +1194,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			BotsPerType   map[string]int  `json:"bots_per_type"`
 			Banned        []bannedBotView `json:"banned"`
 			ClanOwners    []clanOwnerView `json:"clan_owners"`
+			Bots          []orchBotNick   `json:"bots"`
 			Price         int             `json:"price"`
 			Enchants      []ItemEffect    `json:"enchants"`
 			Durability    *float64        `json:"durability"`
@@ -1225,6 +1227,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	BotsPerType   map[string]int  `json:"bots_per_type"`
 	Banned        []bannedBotView `json:"banned"`
 	ClanOwners    []clanOwnerView `json:"clan_owners"`
+	Bots          []orchBotNick   `json:"bots"`
 	Price         int             `json:"price"`
 	Enchants      []ItemEffect    `json:"enchants"`
 	Durability    *float64        `json:"durability"`
@@ -1294,6 +1297,9 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			fleetTypes = msg.ActiveTypes
 		}
 		setClientFleetTypes(ws, fleetTypes)
+		if len(msg.Bots) > 0 {
+			setClientOrchBots(ws, msg.Bots)
+		}
 		log.Printf("[FLEET] оркестратор подключился | заявленные типы: %v", typesMapKeys(clientFleetTypes[ws]))
 		mutex.Unlock()
 		logGlobalFleetState("[FLEET]")
@@ -1305,8 +1311,15 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		setClientBotsPerType(ws, msg.BotsPerType)
 		setClientBannedBots(ws, msg.Banned)
 		setClientClanOwners(ws, msg.ClanOwners)
+		if len(msg.Bots) > 0 {
+			setClientOrchBots(ws, msg.Bots)
+		}
 		if a := inferOrchestratorAnarchy(msg.Banned, msg.ClanOwners); a > 0 {
 			setClientOrchestratorAnarchy(ws, a)
+		} else if len(msg.Bots) > 0 {
+			if a := anarchyInt(msg.Bots[0].Anarchy); a > 0 {
+				setClientOrchestratorAnarchy(ws, a)
+			}
 		}
 		updateTypeFleetActivityLocked()
 		mutex.Unlock()

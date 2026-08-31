@@ -220,7 +220,10 @@ func (p *funauthPool) init() {
 	}
 	p.loadNicks()
 	p.loadVerified()
-	p.roster = loadFunauthRoster()
+	p.roster = loadFleetRunningNicks()
+	if len(p.roster) == 0 {
+		p.roster = loadFunauthRoster()
+	}
 	p.cleanupOrphanAnarchies()
 	p.syncAllRosterFull()
 	entries, err := os.ReadDir(p.dir)
@@ -398,7 +401,7 @@ func (p *funauthPool) rememberVerified(nick string, anarchy int) bool {
 		return false
 	}
 	if anarchy <= 0 {
-		anarchy = p.roster.anarchyForNick(key)
+		anarchy = p.rosterAnarchy(key)
 	}
 	p.mu.Lock()
 	if p.verified[key] {
@@ -559,6 +562,25 @@ func (p *funauthPool) rosterStats() (bound, total int) {
 	return p.roster.globalProgress(p.nicks, p.verified)
 }
 
+func (p *funauthPool) replaceRoster(r funauthRoster) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	p.roster = r
+	p.mu.Unlock()
+}
+
+func (p *funauthPool) rosterAnarchy(nick string) int {
+	if p == nil {
+		return 0
+	}
+	p.mu.Lock()
+	r := p.roster
+	p.mu.Unlock()
+	return r.anarchyForNick(nick)
+}
+
 func (p *funauthPool) pickReady(exclude map[string]struct{}) *funauthAccount {
 	return p.pickForAnarchyBind("", 0, exclude)
 }
@@ -698,7 +720,7 @@ func (p *funauthPool) assignAnarchy(accountID string, anarchy int) {
 func (p *funauthPool) afterBindSuccess(nick, accountID string, anarchy int) {
 	nickKey := strings.ToLower(strings.TrimSpace(nick))
 	if anarchy <= 0 && nickKey != "" {
-		anarchy = p.roster.anarchyForNick(nickKey)
+		anarchy = p.rosterAnarchy(nickKey)
 	}
 	p.assignAnarchy(accountID, anarchy)
 	p.rememberNick(nick, accountID)

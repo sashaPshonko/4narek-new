@@ -17,6 +17,13 @@ func currentFleetRoster() funauthRoster {
 	if skipFleetRosterReload {
 		return fleetNickRoster
 	}
+	mutex.RLock()
+	live := mergeClientOrchBotsLocked()
+	mutex.RUnlock()
+	if len(live) > 0 {
+		fleetNickRoster = live
+		return live
+	}
 	if r := loadFleetRunningNicks(); len(r) > 0 {
 		fleetNickRoster = r
 		return r
