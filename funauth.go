@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -190,6 +192,20 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handleFunauthTwoFAWS(body.Nick, body.Anarchy)
+		funauthJSON(w, http.StatusAccepted, map[string]any{"ok": true, "queued": true})
+		return
+
+	case path == "/scrub-chats" && r.Method == http.MethodPost:
+		if !funauthPoolInst.configured() {
+			funauthJSONErr(w, http.StatusServiceUnavailable, "funauth not ready")
+			return
+		}
+		goSafe("funauth:scrub-http", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+			defer cancel()
+			n := funauthPoolInst.scrubBoundChats(ctx)
+			log.Printf("[funauth] http scrub bound chats: %d", n)
+		})
 		funauthJSON(w, http.StatusAccepted, map[string]any{"ok": true, "queued": true})
 		return
 

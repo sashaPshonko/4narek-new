@@ -21,10 +21,10 @@ const (
 )
 
 var (
-	funauthBindOK  = regexp.MustCompile(`(?i)был привязан`)
+	funauthBindOK = regexp.MustCompile(`(?i)был привязан`)
 	// «[Бот] У Вас уже много привязанных аккаунтов»
-	funauthBindFull = regexp.MustCompile(`(?i)у вас уже много привязанных|уже много привязанных|много привязанных аккаунт`)
-	funauthTwofaOK = regexp.MustCompile(`(?i)выключено|Подтверждение входа`)
+	funauthBindFull        = regexp.MustCompile(`(?i)у вас уже много привязанных|уже много привязанных|много привязанных аккаунт`)
+	funauthTwofaOK         = regexp.MustCompile(`(?i)выключено|Подтверждение входа`)
 	funauthHistoryBindHint = regexp.MustCompile(`(?i)(/bind\s+|был привязан|/2fa\s+|подтверждение входа|привязан)`)
 )
 
@@ -309,7 +309,7 @@ func (b *funauthBinder) findAccountsByBotHistory(ctx context.Context, nick strin
 		return nil
 	}
 	var hits []*funauthAccount
-	for _, acc := range b.pool.listReadyAccounts() {
+	for _, acc := range b.pool.listConnectedAccounts() {
 		ok, err := funauthHistoryHasNick(ctx, acc, needle)
 		if err != nil {
 			log.Printf("[funauth] history %s: %v", acc.meta.Phone, err)
@@ -421,6 +421,8 @@ func (b *funauthBinder) runTwoFAOnAccount(ctx context.Context, acc *funauthAccou
 		}
 	}
 	sender := message.NewSender(api)
+	funauthPrepareBotChat(ctx, acc)
+	defer funauthScrubAfterJob(acc)
 	if err := funauthEnsureChannel(ctx, sender); err != nil {
 		log.Printf("[funauth] join @%s: %v", funauthChannel, err)
 	}
@@ -461,6 +463,8 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 		}
 	}
 	sender := message.NewSender(api)
+	funauthPrepareBotChat(ctx, acc)
+	defer funauthScrubAfterJob(acc)
 
 	if err := funauthEnsureChannel(ctx, sender); err != nil {
 		log.Printf("[funauth] join @%s: %v", funauthChannel, err)

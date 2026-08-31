@@ -26,11 +26,11 @@ import (
 )
 
 const (
-	funauthSessionsDir = "funauth_sessions"
-	funauthBotUser     = "FunAuthBot"
-	funauthChannel     = "funtime"
-	funauthNicksFile     = "nicks.json"
-	funauthVerifiedFile  = "verified.json"
+	funauthSessionsDir  = "funauth_sessions"
+	funauthBotUser      = "FunAuthBot"
+	funauthChannel      = "funtime"
+	funauthNicksFile    = "nicks.json"
+	funauthVerifiedFile = "verified.json"
 	// Как у Telegram Desktop (как в tg-export) — без .env / my.telegram.org
 	funauthDesktopAPIID   = 2040
 	funauthDesktopAPIHash = "b18441a1ff607e10a989891a5462e627"
@@ -258,6 +258,7 @@ func (p *funauthPool) init() {
 		})
 	}
 	log.Printf("[funauth] loading %d account(s) from %s", n, p.dir)
+	p.scheduleScrubBound()
 }
 
 func (p *funauthPool) sessionPath(id string) string {
@@ -815,6 +816,17 @@ func (p *funauthPool) connectAccount(meta funauthAccountMeta) {
 		p.mu.Unlock()
 
 		log.Printf("[funauth] connected %s", acc.meta.Phone)
+		if p.accountShouldScrub(acc) {
+			phone := acc.meta.Phone
+			goSafe("funauth:scrub-on-connect:"+acc.meta.ID, func() {
+				time.Sleep(2 * time.Second)
+				sctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+				defer cancel()
+				if err := funauthScrubBotChat(sctx, acc); err != nil {
+					log.Printf("[funauth] scrub on connect %s: %v", phone, err)
+				}
+			})
+		}
 		<-ctx.Done()
 		return ctx.Err()
 	})
@@ -1256,4 +1268,3 @@ func (p *funauthPool) importAuthKey(raw string, dcID int) (funauthAccountView, e
 	_ = p.remove(id)
 	return funauthAccountView{}, errors.New("authkey_connect_timeout")
 }
-
