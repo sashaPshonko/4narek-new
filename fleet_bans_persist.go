@@ -99,6 +99,8 @@ func mergeBannedBotView(prev, next bannedBotView) bannedBotView {
 	}
 	if out.Reason == "" && prev.Reason != "" {
 		out.Reason = prev.Reason
+	} else if prev.Reason != "" && !reasonIsChatBan(out.Reason) && reasonIsChatBan(prev.Reason) {
+		out.Reason = prev.Reason
 	}
 	if out.GoType == "" && prev.GoType != "" {
 		out.GoType = prev.GoType

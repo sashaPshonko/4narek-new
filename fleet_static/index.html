@@ -106,6 +106,31 @@
     .mono { font-family: var(--mono); }
     .empty { text-align: center; padding: 40px 16px; color: var(--muted); }
     .reason { max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
+    .reason-open {
+      display: block; max-width: 280px; margin: 0; padding: 0; border: 0; background: none;
+      font: inherit; font-size: 12px; color: var(--ban); cursor: pointer; text-align: left;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .reason-open:hover { text-decoration: underline; }
+    .modal {
+      position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+      padding: 20px; background: rgba(12,18,34,.48);
+    }
+    .modal[hidden] { display: none; }
+    .modal-card {
+      width: min(560px, 100%); max-height: 82vh; overflow: auto;
+      background: var(--surface); border-radius: 16px; padding: 16px 18px 18px;
+      box-shadow: 0 24px 60px rgba(12,18,34,.2); border: 1px solid var(--line);
+    }
+    .modal-card header {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px;
+    }
+    .modal-card h3 { margin: 0; font-family: var(--display); font-size: 18px; }
+    .banner-pre {
+      margin: 0; white-space: pre-wrap; word-break: break-word;
+      font-family: var(--mono); font-size: 13px; line-height: 1.45;
+      background: #f6f7fa; border-radius: 12px; padding: 12px 14px;
+    }
     .pill {
       display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 600;
       padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em;
@@ -143,6 +168,15 @@
     <h2 class="section-title">Баны ботов</h2>
     <div id="list"></div>
   </div>
+  <div class="modal" id="bannerModal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="bannerNick">
+      <header>
+        <h3 id="bannerNick">баннер</h3>
+        <button type="button" class="btn" id="bannerClose">закрыть</button>
+      </header>
+      <pre class="banner-pre" id="bannerBody"></pre>
+    </div>
+  </div>
   <script>
     const $ = (id) => document.getElementById(id);
     let lastOverview = null;
@@ -171,6 +205,28 @@
     })[s] || s || "?";
 
     const banKey = (b) => `${String(b.username || "").toLowerCase()}|${b.anarchy ?? "?"}`;
+
+    function reasonPreview(reason) {
+      const r = String(reason || "").trim();
+      if (!r) return "";
+      return r.replace(/\s+/g, " ");
+    }
+
+    function reasonCell(reason, nick) {
+      const r = String(reason || "").trim();
+      if (!r) return `<td><div class="reason">—</div></td>`;
+      return `<td><button type="button" class="reason-open" data-nick="${escapeHtml(nick || "")}" data-banner="${escapeHtml(r)}">${escapeHtml(reasonPreview(r))}</button></td>`;
+    }
+
+    function openBanner(nick, text) {
+      $("bannerNick").textContent = nick || "баннер";
+      $("bannerBody").textContent = text || "";
+      $("bannerModal").hidden = false;
+    }
+
+    function closeBanner() {
+      $("bannerModal").hidden = true;
+    }
 
     function formatBotLine(b) {
       const an = b.anarchy ?? "?";
@@ -304,7 +360,7 @@
               </td>
               <td><span class="pill ${escapeHtml(o.status || "pending")}">${escapeHtml(statusLabel(o.status))}</span></td>
               <td class="mono">${fmtWhen(o.checked_at || o.banned_at)}</td>
-              <td><div class="reason" title="${escapeHtml(o.reason || "")}">${escapeHtml(o.reason || "—")}</div></td>
+              ${reasonCell(o.reason, o.username)}
             </tr>`).join("");
           ownersEl.innerHTML = `<section class="anarchy owners">
             <header><h2>Все анки</h2><span class="cnt">${owners.length}</span></header>
@@ -333,7 +389,7 @@
                 ${persisted}
               </td>
               <td class="mono">${fmtWhen(b.banned_at)}</td>
-              <td><div class="reason" title="${escapeHtml(b.reason || "")}">${escapeHtml(b.reason || "—")}</div></td>
+              ${reasonCell(b.reason, b.username)}
             </tr>`;
           }).join("");
           return `<section class="anarchy">
@@ -349,6 +405,17 @@
         $("statusText").textContent = "нет связи: " + e.message;
       }
     }
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest(".reason-open");
+      if (btn) {
+        openBanner(btn.getAttribute("data-nick"), btn.getAttribute("data-banner"));
+        return;
+      }
+      if (e.target.id === "bannerClose" || e.target.id === "bannerModal") closeBanner();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeBanner();
+    });
     load();
     setInterval(load, 5000);
   </script>
