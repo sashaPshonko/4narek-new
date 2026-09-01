@@ -1309,11 +1309,11 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		clientInventory[ws] = copyMap(msg.Inventory)
 		setClientActiveTypes(ws, msg.ActiveTypes)
 		setClientBotsPerType(ws, msg.BotsPerType)
-		setClientBannedBots(ws, msg.Banned)
-		setClientClanOwners(ws, msg.ClanOwners)
 		if len(msg.Bots) > 0 {
 			setClientOrchBots(ws, msg.Bots)
 		}
+		setClientBannedBots(ws, msg.Banned)
+		setClientClanOwners(ws, msg.ClanOwners)
 		if a := inferOrchestratorAnarchy(msg.Banned, msg.ClanOwners); a > 0 {
 			setClientOrchestratorAnarchy(ws, a)
 		} else if len(msg.Bots) > 0 {

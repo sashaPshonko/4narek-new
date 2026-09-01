@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -118,5 +119,22 @@ func TestPrunePersistedBansNotInRoster(t *testing.T) {
 	}
 	if _, ok := persistedClanOwnerBans["goneowner"]; ok {
 		t.Fatal("expected goneowner pruned")
+	}
+}
+
+func TestIngestBannedUnderMutexNoDeadlock(t *testing.T) {
+	done := make(chan struct{})
+	go func() {
+		mutex.Lock()
+		ingestBannedBotsFromPresence([]bannedBotView{
+			{Username: "deadlockcheck", Anarchy: 502},
+		})
+		mutex.Unlock()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ingestBannedBotsFromPresence deadlocked under mutex.Lock")
 	}
 }

@@ -50,7 +50,7 @@ func TestLoadClanOwnersJSONIgnoresMyNickString(t *testing.T) {
 	owners := `{
 	  "502": {"username": "syrnikbomb16", "anarchy": 502},
 	  "506": {"username": "klanvshlem13", "anarchy": 506},
-	  "myNick": "nebotovodt4n7"
+	  "myNick": "nebotovodt4n8"
 	}`
 	path := filepath.Join(dir, "clan-owners.json")
 	if err := os.WriteFile(path, []byte(owners), 0o644); err != nil {
