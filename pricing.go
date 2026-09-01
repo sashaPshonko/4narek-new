@@ -16,7 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
-// stock_corridor_v8 — v7 + profit-skim в полосе.
+// stock_corridor_v8d — v8c без потолка recover (пол+N×step).
+// Пустая/тонкая витрина = цена ещё низкая: recover ↑ пока не сработает noBuy-пауза
+// или try/buy-veto. Потолок резал шлемы на ~1.5M при рынке ~2.5M.
+// Цена < пола (minBuy+наценка) → поднимаем. Пустое не роняем.
 //
 // v7→v8 (29.07): в [lo,hi] всегда был hold → цена залипала в «удобном» равновесии
 // (шлемы 1.2M вместо прибыльных ~2.5M). Skim: если сток в полосе и рынок реально
@@ -50,8 +53,9 @@ const (
 	// recover-↑ без BasePrice: можно ↑ при недоборе без sales, но не бесконечно в пустоту.
 	corridorMaxNoBuyUps          = 8 // столько ↑ подряд без buys → пауза (антиvacuum)
 	corridorNoBuyUpResumeEvery   = 4 // раз в N мёртвых циклов разрешить ещё одну попытку
-	corridorRecoverMaxSteps      = 10 // recover не поднимает выше floor + N×step (demand-↑ без лимита)
-	corridorRecoverMaxStepsThin  = 15 // 504 и др.: 2 бота → sales/цикл ниже, потолок recover выше
+	// recoverMaxSteps*: больше не режут live-↑ (v8d). Остались для тестов/логов старых циклов.
+	corridorRecoverMaxSteps      = 10
+	corridorRecoverMaxStepsThin  = 15
 	corridorThinFleetMaxBots     = 2  // ≤ столько ботов в категории → мягче пороги спроса / recover
 )
 
@@ -631,8 +635,10 @@ func actionReasonRU(action string) string {
 		return "corridor_v8: недобор стока, рынок молчит → ↑ (без BasePrice)"
 	case "corridor_price_up_skim":
 		return "corridor_v8: held в полосе + сильный разбор → +цена (probe прибыли)"
+	case "corridor_price_up_floor":
+		return "corridor_v8c: цена ниже пола (minBuy+наценка) → поднимаем"
 	case "corridor_hold_recover_ceiling":
-		return "corridor_v8: recover упёрся в потолок (floor + N×step) — ждём demand"
+		return "corridor_v8(legacy): recover упирался в пол+N×step — в v8d снято"
 	case "corridor_hold_recover_pause":
 		return "corridor_v8: слишком много ↑ без buys → пауза (антиvacuum)"
 	case "corridor_hold_band":
@@ -929,7 +935,6 @@ func adjustPrice(item string) AdjustReport {
 	nightMSK := isNightMSK(now)
 	botsInCat := aggregateBotsPerTypeLocked()[cfg.Type]
 	minSalesForUp := demandMinSalesForUp(botsInCat, nightMSK)
-	recoverMaxSteps := recoverMaxStepsFor(botsInCat)
 
 	underbuyOK := false
 	if buys < sales {
@@ -1025,18 +1030,16 @@ func adjustPrice(item string) AdjustReport {
 		// buys==sales (в т.ч. 1=1 при held≈0) — рынок забирает всё → ↑ можно.
 		liveBuyVeto := buys > sales
 		noBuyBlocked := state.CorridorNoBuyUpStreak >= corridorMaxNoBuyUps
-		// recover: недобор, нет try-veto / buy-veto, не ночь. Без BasePrice.
-		// deep (пусто/почти пусто): обход up_cd и streak — быстрее выход с пола после дампа.
+		// recover: недобор, нет try/buy-veto, не ночь. Без потолка по цене:
+		// пустая витрина = мало стока, не «дорого». Вакуум режет noBuy-пауза.
 		recoverCDOK := state.CorridorUpCooldown == 0 || bypassUpCD
 		recoverStreakOK := state.CorridorUpStreak < corridorMaxUpStreak || bypassUpCD
-		recoverAtCeiling := priceBefore >= priceFloor+recoverMaxSteps*step
 		recoverOK := !nightMSK &&
 			recoverCDOK &&
 			recoverStreakOK &&
 			!trySellsBlockUp(sales, trySells) &&
 			!liveBuyVeto &&
-			!noBuyBlocked &&
-			!recoverAtCeiling
+			!noBuyBlocked
 		switch {
 		case trySellsBlockUp(sales, trySells):
 			action = "corridor_hold_try_veto"
@@ -1087,10 +1090,6 @@ func adjustPrice(item string) AdjustReport {
 					totalHeld, targetLo, state.CorridorNoBuyUpStreak, corridorMaxNoBuyUps)
 			}
 			applyUp(label, note)
-		case recoverAtCeiling:
-			action = "corridor_hold_recover_ceiling"
-			notes = append(notes, fmt.Sprintf("held=%d < lo=%d price=%d ≥ floor+%d×step=%d — потолок recover",
-				totalHeld, targetLo, priceBefore, recoverMaxSteps, priceFloor+recoverMaxSteps*step))
 		case noBuyBlocked:
 			action = "corridor_hold_recover_pause"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d — пауза recover: %d ↑ без buys (антиvacuum)",
@@ -1161,6 +1160,17 @@ func adjustPrice(item string) AdjustReport {
 
 	if action == "" {
 		action = "hold"
+	}
+
+	if newPrice < priceFloor {
+		newPrice = priceFloor
+		if newPrice > priceBefore {
+			changed = true
+			action = "corridor_price_up_floor"
+			notes = append(notes, fmt.Sprintf("цена %d < пола %d → поднимаем", priceBefore, priceFloor))
+		} else if newPrice == priceBefore {
+			notes = append(notes, "уже на полу")
+		}
 	}
 
 	// Стрелки коридора + soft↓ cooldown + up-cooldown / last sales
