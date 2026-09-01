@@ -107,7 +107,14 @@
       border-color: rgba(31, 143, 78, 0.22);
       color: var(--ok);
     }
-    #rosterPending.hidden { display: none; }
+    #rosterPending.need {
+      background: rgba(184, 110, 0, 0.12);
+      border-color: rgba(184, 110, 0, 0.28);
+      color: var(--warn);
+      max-width: 52em;
+      align-items: flex-start;
+      white-space: pre-wrap;
+    }
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -398,16 +405,24 @@
           api('/accounts'),
           api('/queue'),
         ]);
+        const needsBind = Array.isArray(health.needsBind) ? health.needsBind : [];
         const rosterTotal = Number(health.rosterTotal) || 0;
         const rosterBound = Number(health.rosterBound) || 0;
         const rosterPending = Number(health.rosterPending) || Math.max(0, rosterTotal - rosterBound);
         $('health').textContent =
           `${health.accounts ?? 0} акк. · ${health.ready ?? 0} готовых · очередь ${health.queue ?? 0}` +
-          (rosterTotal ? ` · roster ${rosterBound}/${rosterTotal}` : '');
-        $('health').classList.toggle('warn', rosterPending > 0);
+          (rosterTotal ? ` · roster ${rosterBound}/${rosterTotal}` : '') +
+          (needsBind.length ? ` · в игре ждут ${needsBind.length}` : '');
+        $('health').classList.toggle('warn', rosterPending > 0 || needsBind.length > 0);
 
         const pendingEl = $('rosterPending');
-        if (!rosterTotal) {
+        if (needsBind.length) {
+          pendingEl.className = 'need';
+          pendingEl.textContent = 'FunTime просит привязку:\n' + needsBind.map((n) => {
+            const an = n.anarchy ? `an${n.anarchy} ` : '';
+            return '· ' + an + (n.nick || '');
+          }).join('\n');
+        } else if (!rosterTotal) {
           pendingEl.className = 'hidden';
           pendingEl.textContent = '';
         } else if (rosterPending > 0) {
