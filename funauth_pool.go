@@ -60,12 +60,13 @@ type funauthAccountView struct {
 }
 
 type funauthAccount struct {
-	meta   funauthAccountMeta
-	ready  bool
-	api    *tg.Client
-	botID  int64
-	botMsg chan string
-	cancel context.CancelFunc
+	meta     funauthAccountMeta
+	ready    bool
+	api      *tg.Client
+	botID    int64
+	botMsg   chan string
+	cancel   context.CancelFunc
+	socksURL string
 }
 
 type funauthLoginResult struct {
@@ -257,7 +258,7 @@ func (p *funauthPool) init() {
 		n++
 		metaCopy := meta
 		goSafe("funauth:connect:"+meta.ID, func() {
-			p.connectAccount(metaCopy)
+			p.connectAccount(metaCopy, pickFarmLoginSOCKS())
 		})
 	}
 	log.Printf("[funauth] loading %d account(s) from %s", n, p.dir)
@@ -740,25 +741,22 @@ func (p *funauthPool) markStarted(id string) {
 	}
 }
 
-// funauthClientOptions — сессия + апдейты + SOCKS как у Bot API (127.0.0.1:1080).
-func funauthClientOptions(sessionPath string, handler telegram.UpdateHandler) telegram.Options {
+// funauthClientOptions — сессия + апдейты + SOCKS. socksURL пустой → xray 1080.
+func funauthClientOptions(sessionPath string, handler telegram.UpdateHandler, socksURL string) telegram.Options {
 	opt := telegram.Options{
 		SessionStorage: &session.FileStorage{Path: sessionPath},
 		UpdateHandler:  handler,
 	}
-	proxyURL := resolveTelegramProxyURL()
+	proxyURL := strings.TrimSpace(socksURL)
+	if proxyURL == "" {
+		proxyURL = resolveTelegramProxyURL()
+	}
 	if proxyURL == "" {
 		return opt
 	}
-	host, port := parseSocksHostPort(proxyURL)
-	sock5, err := proxy.SOCKS5("tcp", net.JoinHostPort(host, port), nil, proxy.Direct)
+	cd, err := socks5ContextDialer(proxyURL)
 	if err != nil {
 		log.Printf("[funauth] SOCKS5: %v — без прокси", err)
-		return opt
-	}
-	cd, ok := sock5.(proxy.ContextDialer)
-	if !ok {
-		log.Printf("[funauth] SOCKS dialer без ContextDialer — без прокси")
 		return opt
 	}
 	opt.Resolver = dcs.Plain(dcs.PlainOptions{
@@ -786,17 +784,18 @@ func funauthDialIPv4(cd proxy.ContextDialer) dcs.DialFunc {
 	}
 }
 
-func (p *funauthPool) connectAccount(meta funauthAccountMeta) {
+func (p *funauthPool) connectAccount(meta funauthAccountMeta, socksURL string) {
 	dispatcher := tg.NewUpdateDispatcher()
 	acc := &funauthAccount{
-		meta:   meta,
-		botMsg: make(chan string, 32),
+		meta:     meta,
+		botMsg:   make(chan string, 32),
+		socksURL: strings.TrimSpace(socksURL),
 	}
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, u *tg.UpdateNewMessage) error {
 		return p.handleBotMessage(acc, e, u.Message)
 	})
 
-	client := telegram.NewClient(p.apiID, p.apiHash, funauthClientOptions(p.sessionPath(meta.ID), dispatcher))
+	client := telegram.NewClient(p.apiID, p.apiHash, funauthClientOptions(p.sessionPath(meta.ID), dispatcher, socksURL))
 	ctx, cancel := context.WithCancel(p.ctx)
 	acc.cancel = cancel
 
@@ -837,7 +836,11 @@ func (p *funauthPool) connectAccount(meta funauthAccountMeta) {
 		_ = p.saveMeta(acc.meta)
 		p.mu.Unlock()
 
-		log.Printf("[funauth] connected %s", acc.meta.Phone)
+		via := "xray"
+		if acc.socksURL != "" {
+			via = socksURLHost(acc.socksURL)
+		}
+		log.Printf("[funauth] connected %s via %s", acc.meta.Phone, via)
 		if p.accountShouldScrub(acc) {
 			phone := acc.meta.Phone
 			goSafe("funauth:scrub-on-connect:"+acc.meta.ID, func() {
@@ -861,6 +864,79 @@ func (p *funauthPool) connectAccount(meta funauthAccountMeta) {
 		acc.api = nil
 	}
 	p.mu.Unlock()
+}
+
+// ensureNickSOCKS переподключает TG-акк через SOCKS фермы/овнера на время bind/2fa.
+func (p *funauthPool) ensureNickSOCKS(acc *funauthAccount, nick string) *funauthAccount {
+	if p == nil || acc == nil {
+		return acc
+	}
+	socks := lookupMCNickSOCKS(nick)
+	if socks == "" {
+		log.Printf("[funauth] %s: SOCKS фермы нет — остаёмся на xray", nick)
+		return acc
+	}
+	p.mu.Lock()
+	same := acc.ready && acc.socksURL == socks && acc.api != nil
+	meta := acc.meta
+	p.mu.Unlock()
+	if same {
+		log.Printf("[funauth] %s: уже %s", nick, socksURLHost(socks))
+		return acc
+	}
+	log.Printf("[funauth] %s: MTProto → %s", nick, socksURLHost(socks))
+	if !p.reconnectAccount(meta, socks) {
+		log.Printf("[funauth] %s: не поднялись через ферму — xray", nick)
+		p.mu.Lock()
+		cur := p.accounts[meta.ID]
+		p.mu.Unlock()
+		if cur != nil {
+			return cur
+		}
+		return acc
+	}
+	p.mu.Lock()
+	cur := p.accounts[meta.ID]
+	p.mu.Unlock()
+	if cur != nil {
+		return cur
+	}
+	return acc
+}
+
+func (p *funauthPool) reconnectAccount(meta funauthAccountMeta, socksURL string) bool {
+	p.mu.Lock()
+	old := p.accounts[meta.ID]
+	p.mu.Unlock()
+	if old != nil && old.cancel != nil {
+		old.cancel()
+	}
+	waitDead := time.Now().Add(20 * time.Second)
+	for time.Now().Before(waitDead) {
+		p.mu.Lock()
+		cur := p.accounts[meta.ID]
+		alive := cur != nil && cur.ready && (old == nil || cur == old)
+		p.mu.Unlock()
+		if !alive {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	goSafe("funauth:reconnect:"+meta.ID, func() {
+		p.connectAccount(meta, socksURL)
+	})
+	deadline := time.Now().Add(45 * time.Second)
+	for time.Now().Before(deadline) {
+		p.mu.Lock()
+		cur := p.accounts[meta.ID]
+		ok := cur != nil && cur.ready && cur.api != nil && cur.socksURL == socksURL
+		p.mu.Unlock()
+		if ok {
+			return true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return false
 }
 
 func (p *funauthPool) handleBotMessage(acc *funauthAccount, e tg.Entities, msgClass tg.MessageClass) error {
@@ -966,7 +1042,13 @@ func (p *funauthPool) loginStart(phone string) (map[string]any, error) {
 func (p *funauthPool) runPendingLogin(pend *funauthPendingLogin) {
 	dispatcher := tg.NewUpdateDispatcher()
 	sessionFile := p.sessionPath(pend.id)
-	client := telegram.NewClient(p.apiID, p.apiHash, funauthClientOptions(sessionFile, dispatcher))
+	socks := pickFarmLoginSOCKS()
+	if socks != "" {
+		log.Printf("[funauth] login %s via %s", pend.phone, socksURLHost(socks))
+	} else {
+		log.Printf("[funauth] login %s — нет SOCKS фермы, xray", pend.phone)
+	}
+	client := telegram.NewClient(p.apiID, p.apiHash, funauthClientOptions(sessionFile, dispatcher, socks))
 
 	finished := false
 	err := client.Run(pend.ctx, func(ctx context.Context) error {
@@ -1010,12 +1092,13 @@ func (p *funauthPool) runPendingLogin(pend *funauthPendingLogin) {
 		api := client.API()
 		botID, _ := resolveFunauthBotID(ctx, api)
 		acc := &funauthAccount{
-			meta:   meta,
-			ready:  true,
-			api:    api,
-			botID:  botID,
-			botMsg: make(chan string, 32),
-			cancel: pend.cancel,
+			meta:     meta,
+			ready:    true,
+			api:      api,
+			botID:    botID,
+			botMsg:   make(chan string, 32),
+			cancel:   pend.cancel,
+			socksURL: socks,
 		}
 		dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, u *tg.UpdateNewMessage) error {
 			return p.handleBotMessage(acc, e, u.Message)
@@ -1031,7 +1114,11 @@ func (p *funauthPool) runPendingLogin(pend *funauthPendingLogin) {
 		case pend.done <- funauthLoginResult{view: acc.view()}:
 		default:
 		}
-		log.Printf("[funauth] login ok %s", phone)
+		via := "xray"
+		if socks != "" {
+			via = socksURLHost(socks)
+		}
+		log.Printf("[funauth] login ok %s via %s", phone, via)
 		<-ctx.Done()
 		return ctx.Err()
 	})
@@ -1267,7 +1354,7 @@ func (p *funauthPool) importAuthKey(raw string, dcID int) (funauthAccountView, e
 	}
 
 	goSafe("funauth:connect:"+id, func() {
-		p.connectAccount(meta)
+		p.connectAccount(meta, pickFarmLoginSOCKS())
 	})
 
 	deadline := time.Now().Add(45 * time.Second)

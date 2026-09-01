@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,8 +63,18 @@ func resolveTelegramProxyURL() string {
 
 func parseSocksHostPort(proxyURL string) (host, port string) {
 	raw := strings.TrimSpace(proxyURL)
+	if u, err := url.Parse(raw); err == nil && u.Hostname() != "" {
+		p := u.Port()
+		if p == "" {
+			p = "1080"
+		}
+		return u.Hostname(), p
+	}
 	for _, prefix := range []string{"socks5h://", "socks5://", "http://", "https://"} {
 		raw = strings.TrimPrefix(raw, prefix)
+	}
+	if i := strings.LastIndex(raw, "@"); i >= 0 {
+		raw = raw[i+1:]
 	}
 	if i := strings.Index(raw, "/"); i >= 0 {
 		raw = raw[:i]
@@ -73,6 +84,42 @@ func parseSocksHostPort(proxyURL string) (host, port string) {
 		return "127.0.0.1", "1080"
 	}
 	return host, port
+}
+
+func socks5ContextDialer(proxyURL string) (proxy.ContextDialer, error) {
+	raw := strings.TrimSpace(proxyURL)
+	if raw == "" {
+		return nil, fmt.Errorf("empty socks url")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+	host := u.Hostname()
+	port := u.Port()
+	if host == "" {
+		host, port = parseSocksHostPort(raw)
+	}
+	if port == "" {
+		port = "1080"
+	}
+	var auth *proxy.Auth
+	if u.User != nil {
+		user := u.User.Username()
+		pass, _ := u.User.Password()
+		if user != "" {
+			auth = &proxy.Auth{User: user, Password: pass}
+		}
+	}
+	d, err := proxy.SOCKS5("tcp", net.JoinHostPort(host, port), auth, proxy.Direct)
+	if err != nil {
+		return nil, err
+	}
+	cd, ok := d.(proxy.ContextDialer)
+	if !ok {
+		return nil, fmt.Errorf("socks dialer without ContextDialer")
+	}
+	return cd, nil
 }
 
 func isTCPReachable(host, port string, timeout time.Duration) bool {

@@ -229,6 +229,7 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		}
 		tried[acc.meta.ID] = struct{}{}
 
+		acc = b.pool.ensureNickSOCKS(acc, job.nick)
 		phone := acc.meta.Phone
 		ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
 		result, retry := b.runOnAccount(ctx, acc, job)
@@ -254,6 +255,7 @@ func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
 			return nil
 		}
 		tried[acc.meta.ID] = struct{}{}
+		acc = b.pool.ensureNickSOCKS(acc, job.nick)
 		log.Printf("[funauth] 2fa %s via %s (%s)", job.nick, acc.meta.Phone, why)
 		ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
 		res := b.runTwoFAOnAccount(ctx, acc, job.nick)
