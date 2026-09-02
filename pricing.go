@@ -56,12 +56,10 @@ const (
 	corridorMaxNoBuyUps          = 8 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
 	corridorRecoverProbeSteps    = 2 // recover ≤ max(sell в TTL) + K×step
 	corridorThinFleetMaxBots     = 2  // ≤ столько ботов в категории → мягче пороги спроса / recover
-	// FunTime bound vs наша цена: в server_price_events мелкие мин +10–28% бывают,
-	// скачки ≥50% на шлемах (16.07, 02.09 1.6→3.55) — при живом обороте.
-	serverBoundJumpNumer         = 3 // proposed/ours ≥ 3/2
-	serverBoundJumpDenom         = 2
+	// FunTime min: не доля, а +≥1кк при живых закупках.
+	// 02.09/16.07 шлем +1.0…2.0кк — глюк. Штаны 600→950 (+350к) — пол, пускаем.
+	serverMinAnomalousDelta      = 1_000_000
 	serverBoundLookCycles        = 3
-	serverBoundMinSales          = 3
 	serverBoundMinBuys           = 2
 )
 
@@ -366,7 +364,7 @@ func countTradesInRange(item, kind string, start, end time.Time) int {
 	return n
 }
 
-func recentFlowHealthy(item string, cycle time.Duration, now time.Time) bool {
+func recentBuysPresent(item string, cycle time.Duration, now time.Time) bool {
 	if item == "" {
 		return false
 	}
@@ -374,22 +372,16 @@ func recentFlowHealthy(item string, cycle time.Duration, now time.Time) bool {
 		cycle = 10 * time.Minute
 	}
 	start := now.Add(-time.Duration(serverBoundLookCycles) * cycle)
-	sales := countTradesInRange(item, "sell", start, now)
-	buys := countTradesInRange(item, "buy", start, now)
-	return sales >= serverBoundMinSales && buys >= serverBoundMinBuys
+	return countTradesInRange(item, "buy", start, now) >= serverBoundMinBuys
 }
 
-func serverBoundMuchAbove(ours, proposed int) bool {
-	if ours <= 0 || proposed <= ours {
+// serverFunTimeRaiseAnomalous — мин (и редкий max↑): FunTime поднял нас на ≥1кк,
+// и мы в это время ещё закупались → наша цена в рынке, это не «занизили».
+func serverFunTimeRaiseAnomalous(ours, proposed int, item string, cycle time.Duration, now time.Time) bool {
+	if proposed-ours < serverMinAnomalousDelta {
 		return false
 	}
-	return proposed*serverBoundJumpDenom >= ours*serverBoundJumpNumer
-}
-
-// serverFunTimeRaiseAnomalous — FunTime хочет сильно поднять нашу цену, а за 3 цикла
-// уже были и продажи, и закупки: мы не «ниже рынка», это скачок (шлем 1.6→3.55).
-func serverFunTimeRaiseAnomalous(ours, proposed int, item string, cycle time.Duration, now time.Time) bool {
-	return serverBoundMuchAbove(ours, proposed) && recentFlowHealthy(item, cycle, now)
+	return recentBuysPresent(item, cycle, now)
 }
 
 // trySellsBlockUp — рынок уже отказывается от цены: ↑ запрещён даже при недоборе стока.
