@@ -1354,7 +1354,8 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			mutex.Unlock()
 			return
 		}
-		if _, exists := itemsConfig[msg.Type]; !exists {
+		cfg, exists := itemsConfig[msg.Type]
+		if !exists {
 			mutex.Unlock()
 			return
 		}
@@ -1363,8 +1364,14 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			return
 		}
 		oldPrice := data.Prices[msg.Type]
+		now := time.Now()
+		if serverFunTimeRaiseAnomalous(oldPrice, msg.Price, msg.Type, cfg.AnalysisTime, now) {
+			log.Printf("[CONFIG] %s: min АХ %d vs наша %d, оборот живой — скачок, каталог не трогаем", msg.Type, msg.Price, oldPrice)
+			mutex.Unlock()
+			return
+		}
 		data.Prices[msg.Type] = msg.Price
-		data.LastManualUpdate[msg.Type] = time.Now()
+		data.LastManualUpdate[msg.Type] = now
 		data.LastManualKind[msg.Type] = "min"
 		recordExternalPriceChangeLocked(msg.Type, "server_min", oldPrice, msg.Price)
 		log.Printf("[CONFIG] %s: min -> цена %d -> %d (clamp: только ↑ на цикл)", msg.Type, oldPrice, msg.Price)
@@ -1377,20 +1384,31 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			mutex.Unlock()
 			return
 		}
-		if _, exists := itemsConfig[msg.Type]; !exists {
+		cfg, exists := itemsConfig[msg.Type]
+		if !exists {
 			mutex.Unlock()
 			return
 		}
 		oldPrice := data.Prices[msg.Type]
-		if msg.Price >= oldPrice {
+		if msg.Price == oldPrice {
+			mutex.Unlock()
+			return
+		}
+		now := time.Now()
+		if serverFunTimeRaiseAnomalous(oldPrice, msg.Price, msg.Type, cfg.AnalysisTime, now) {
+			log.Printf("[CONFIG] %s: max АХ %d vs наша %d, оборот живой — скачок, каталог не трогаем", msg.Type, msg.Price, oldPrice)
 			mutex.Unlock()
 			return
 		}
 		data.Prices[msg.Type] = msg.Price
-		data.LastManualUpdate[msg.Type] = time.Now()
+		data.LastManualUpdate[msg.Type] = now
 		data.LastManualKind[msg.Type] = "max"
 		recordExternalPriceChangeLocked(msg.Type, "server_max", oldPrice, msg.Price)
-		log.Printf("[CONFIG] %s: max -> цена %d -> %d (clamp: только ↓ на цикл)", msg.Type, oldPrice, msg.Price)
+		if msg.Price < oldPrice {
+			log.Printf("[CONFIG] %s: max -> цена %d -> %d (clamp: только ↓ на цикл)", msg.Type, oldPrice, msg.Price)
+		} else {
+			log.Printf("[CONFIG] %s: max -> цена %d -> %d (оборот слабый, каталог могли занизить)", msg.Type, oldPrice, msg.Price)
+		}
 		mutex.Unlock()
 		publishPrices()
 		saveDailyDataNoMessageUpdate()

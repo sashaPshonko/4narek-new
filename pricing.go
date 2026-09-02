@@ -56,6 +56,13 @@ const (
 	corridorMaxNoBuyUps          = 8 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
 	corridorRecoverProbeSteps    = 2 // recover ≤ max(sell в TTL) + K×step
 	corridorThinFleetMaxBots     = 2  // ≤ столько ботов в категории → мягче пороги спроса / recover
+	// FunTime bound vs наша цена: в server_price_events мелкие мин +10–28% бывают,
+	// скачки ≥50% на шлемах (16.07, 02.09 1.6→3.55) — при живом обороте.
+	serverBoundJumpNumer         = 3 // proposed/ours ≥ 3/2
+	serverBoundJumpDenom         = 2
+	serverBoundLookCycles        = 3
+	serverBoundMinSales          = 3
+	serverBoundMinBuys           = 2
 )
 
 // AdjustReport — итог цикла adjustPrice для TG/логов.
@@ -343,6 +350,46 @@ func recoverBlockedByPaidCap(price, lastPaid, step int) bool {
 		return true
 	}
 	return price >= cap
+}
+
+func countTradesInRange(item, kind string, start, end time.Time) int {
+	n := 0
+	for _, trade := range data.TradeHistory[item] {
+		if trade.Type != kind {
+			continue
+		}
+		if !trade.Time.After(start) || trade.Time.After(end) {
+			continue
+		}
+		n++
+	}
+	return n
+}
+
+func recentFlowHealthy(item string, cycle time.Duration, now time.Time) bool {
+	if item == "" {
+		return false
+	}
+	if cycle <= 0 {
+		cycle = 10 * time.Minute
+	}
+	start := now.Add(-time.Duration(serverBoundLookCycles) * cycle)
+	sales := countTradesInRange(item, "sell", start, now)
+	buys := countTradesInRange(item, "buy", start, now)
+	return sales >= serverBoundMinSales && buys >= serverBoundMinBuys
+}
+
+func serverBoundMuchAbove(ours, proposed int) bool {
+	if ours <= 0 || proposed <= ours {
+		return false
+	}
+	return proposed*serverBoundJumpDenom >= ours*serverBoundJumpNumer
+}
+
+// serverFunTimeRaiseAnomalous — FunTime хочет сильно поднять нашу цену, а за 3 цикла
+// уже были и продажи, и закупки: мы не «ниже рынка», это скачок (шлем 1.6→3.55).
+func serverFunTimeRaiseAnomalous(ours, proposed int, item string, cycle time.Duration, now time.Time) bool {
+	return serverBoundMuchAbove(ours, proposed) && recentFlowHealthy(item, cycle, now)
 }
 
 // trySellsBlockUp — рынок уже отказывается от цены: ↑ запрещён даже при недоборе стока.
