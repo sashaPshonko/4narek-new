@@ -356,6 +356,20 @@ func (p *funauthPool) rememberNick(nick, accountID string) {
 	p.syncAccountRosterFull(id)
 }
 
+func (p *funauthPool) markFull(id string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	a := p.accounts[id]
+	if a == nil {
+		return
+	}
+	a.meta.Full = true
+	if err := p.saveMeta(a.meta); err != nil {
+		log.Printf("[funauth] save meta %s: %v", id, err)
+	}
+	log.Printf("[funauth] TG %s → full (FunAuthBot: много аккаунтов)", a.meta.Phone)
+}
+
 func (p *funauthPool) accountByID(id string) *funauthAccount {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -451,7 +465,7 @@ func (p *funauthPool) syncAnarchyRosterFull(anarchy int) {
 	}
 }
 
-// syncAccountRosterFull — 1 MC = 1 TG: full после первой привязки.
+// syncAccountRosterFull — ферма 1 MC = 1 TG; овнер не закрывает слот (следующий овнер той же анки).
 func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -459,8 +473,8 @@ func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 	if acc == nil {
 		return false
 	}
-	bound := p.accountBoundCountLocked(accountID)
-	complete := bound >= 1
+	hasFarm := p.accountHasFarmNickLocked(accountID)
+	complete := hasFarm || acc.meta.Full
 	if acc.meta.Full != complete {
 		was := acc.meta.Full
 		acc.meta.Full = complete
@@ -468,12 +482,12 @@ func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 			log.Printf("[funauth] save meta %s: %v", accountID, err)
 		}
 		if complete {
-			log.Printf("[funauth] TG %s → full (1 MC привязан)", accountID)
+			log.Printf("[funauth] TG %s → full (ферма привязана)", accountID)
 		} else if was {
-			log.Printf("[funauth] TG %s → not full (0 MC)", accountID)
+			log.Printf("[funauth] TG %s → not full", accountID)
 		}
 	}
-	return complete
+	return acc.meta.Full
 }
 
 func (p *funauthPool) syncAllRosterFull() {
@@ -596,6 +610,15 @@ func (p *funauthPool) accountBoundCountLocked(accountID string) int {
 	return n
 }
 
+func (p *funauthPool) accountHasFarmNickLocked(accountID string) bool {
+	for nick, id := range p.nicks {
+		if id == accountID && nickIsFarmBot(nick) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *funauthPool) effectiveAnarchyLocked(acc *funauthAccount) int {
 	if acc == nil {
 		return 0
@@ -652,6 +675,8 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 
 	var diag funauthPickDiag
 	var free []*funauthAccount
+	var ownerReuse []*funauthAccount
+	ownerJob := nickIsClanOwnerOf(key, anarchy)
 
 	for _, acc := range p.accounts {
 		if _, skip := exclude[acc.meta.ID]; skip {
@@ -670,6 +695,11 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 			return acc, diag
 		}
 		if p.accountBoundCountLocked(acc.meta.ID) > 0 {
+			if ownerJob && !p.accountHasFarmNickLocked(acc.meta.ID) &&
+				(acc.meta.Anarchy == 0 || acc.meta.Anarchy == anarchy) {
+				ownerReuse = append(ownerReuse, acc)
+				continue
+			}
 			diag.Busy++
 			diag.OtherAn = diag.Busy
 			continue
@@ -677,6 +707,9 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 		free = append(free, acc)
 	}
 
+	if len(ownerReuse) > 0 {
+		return ownerReuse[0], diag
+	}
 	if len(free) == 0 {
 		return nil, diag
 	}

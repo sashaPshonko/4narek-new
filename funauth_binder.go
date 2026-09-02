@@ -235,7 +235,7 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		result, retry := b.runOnAccount(ctx, acc, job)
 		cancel()
 		if retry {
-			log.Printf("[funauth] account %s saturated, trying next", phone)
+			log.Printf("[funauth] account %s full, trying next", phone)
 			continue
 		}
 		if result.OK {
@@ -499,11 +499,11 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 	}
 
 	if funauthBindFull.MatchString(bindReply) {
-		b.pool.syncAccountRosterFull(acc.meta.ID)
+		b.pool.markFull(acc.meta.ID)
 		return funauthBindResult{
 			OK: false, Nick: job.nick, TgPhone: acc.meta.Phone,
 			Error: "tg_bind_limit", Reply: truncateRunes(bindReply, 200),
-		}, false
+		}, true
 	}
 	if !funauthBindOK.MatchString(bindReply) {
 		return funauthBindResult{

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gotd/td/tg"
@@ -47,10 +49,36 @@ func TestSyncAccountRosterFullOneToOne(t *testing.T) {
 	}
 	p.nicks = map[string]string{"a": "tg1"}
 
-	if !p.syncAccountRosterFull("tg1") {
-		t.Fatal("expected full after 1 bind")
+	if p.syncAccountRosterFull("tg1") {
+		t.Fatal("owner-only bind should not mark full")
 	}
-	if !p.accounts["tg1"].meta.Full {
-		t.Fatal("meta.Full not set")
+	if p.accounts["tg1"].meta.Full {
+		t.Fatal("meta.Full set for owner")
+	}
+}
+
+func TestPickReusesOwnerTGForNextOwner(t *testing.T) {
+	root := t.TempDir()
+	owners := filepath.Join(root, "clan-owners.json")
+	if err := os.WriteFile(owners, []byte(`{"502":{"username":"newOwner","anarchy":502}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FLEET_OWNERS_FILE", owners)
+	t.Setenv("FLEET_BOTS_DIR", filepath.Join(root, "bots"))
+	_ = os.Mkdir(filepath.Join(root, "bots"), 0o755)
+
+	p := newFunauthPool()
+	p.accounts = map[string]*funauthAccount{
+		"tg1": {
+			meta:  funauthAccountMeta{ID: "tg1", Phone: "+1", Anarchy: 502},
+			ready: true,
+			api:   &tg.Client{},
+		},
+	}
+	p.nicks = map[string]string{"oldOwner": "tg1"}
+
+	acc, diag := p.pickForAnarchyBindDiag("newOwner", 502, nil)
+	if acc == nil || acc.meta.ID != "tg1" {
+		t.Fatalf("expected reuse tg1, got %v busy=%d full=%d", acc, diag.Busy, diag.Full)
 	}
 }

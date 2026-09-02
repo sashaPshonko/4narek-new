@@ -26,11 +26,23 @@ func TestDemandStrongEnoughForUpWithMin(t *testing.T) {
 	}
 }
 
-func TestRecoverMaxStepsFor(t *testing.T) {
-	if recoverMaxStepsFor(2) != corridorRecoverMaxStepsThin {
-		t.Fatalf("thin=%d", recoverMaxStepsFor(2))
+func TestRecoverPaidCap(t *testing.T) {
+	step := 100_000
+	paid := 2_500_000
+	if recoverPaidCap(paid, step) != paid+2*step {
+		t.Fatalf("cap=%d", recoverPaidCap(paid, step))
 	}
-	if recoverMaxStepsFor(3) != corridorRecoverMaxSteps {
-		t.Fatalf("normal=%d", recoverMaxStepsFor(3))
+	if recoverBlockedByPaidCap(paid, paid, step) {
+		t.Fatal("at last paid should still allow +K probe")
+	}
+	if !recoverBlockedByPaidCap(paid+2*step, paid, step) {
+		t.Fatal("at cap must block")
+	}
+	if !recoverBlockedByPaidCap(1_200_000, 0, step) {
+		t.Fatal("no sells → block recover")
+	}
+	// dump: current 1.2M, last paid 2.5M — recover must climb
+	if recoverBlockedByPaidCap(1_200_000, paid, step) {
+		t.Fatal("after dump below paid should recover")
 	}
 }

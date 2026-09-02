@@ -93,6 +93,38 @@ func loadFleetClanOwnersJSON(path string, out funauthRoster) {
 	}
 }
 
+func nickIsClanOwnerOf(nick string, anarchy int) bool {
+	nk := strings.ToLower(strings.TrimSpace(nick))
+	if nk == "" || anarchy <= 0 {
+		return false
+	}
+	r := currentClanOwnerRoster()
+	if r == nil || r[anarchy] == nil {
+		return false
+	}
+	_, ok := r[anarchy][nk]
+	return ok
+}
+
+func nickIsFarmBot(nick string) bool {
+	nk := strings.ToLower(strings.TrimSpace(nick))
+	if nk == "" {
+		return false
+	}
+	dir := fleetBotsDir()
+	if dir == "" {
+		return false
+	}
+	out := make(funauthRoster)
+	loadFleetBotsJSON(dir, out)
+	for _, set := range out {
+		if _, ok := set[nk]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 func fleetOwnersFile() string {
 	if p := strings.TrimSpace(os.Getenv("FLEET_OWNERS_FILE")); p != "" {
 		return p
