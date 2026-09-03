@@ -16,9 +16,8 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
-// stock_corridor_v8e — recover без BasePrice и без пола+N×step.
-// Потолок recover = max(sell за TTL) + K×step. Пол закупа ≠ рынок продажи
-// (после дампа пол низкий → шлемы залипали ~1.5M при продажах ~2.5M).
+// stock_corridor_v8f — v8e + не пилить over/dump без продаж (sword7 ночь 1.2→0.3);
+// зависший recover (stale/ceiling, лот есть, тишина) → −step, не hold вечно (яд3 4.79).
 // Demand / skim / deep без этого потолка. noBuy не сбрасывается крошками sales
 // и не resume из dead-циклов.
 // Цена < пола (minBuy+наценка) → поднимаем. Пустое не роняем.
@@ -33,63 +32,63 @@ const botTotalSlots = 32
 //
 // История: v1 15–25%; v2 try-veto; v3 lo=18% buy-veto; v4 weak_demand; v5 empty/night; v6–v7 …
 const (
-	stockBandLoFrac              = 0.18
-	stockBandHiFrac              = 0.25
-	stockSoftDownFrac            = 0.28
-	stockOverFrac                = 0.35
-	stockDumpFrac                = 0.50
+	stockBandLoFrac   = 0.18
+	stockBandHiFrac   = 0.25
+	stockSoftDownFrac = 0.28
+	stockOverFrac     = 0.35
+	stockDumpFrac     = 0.50
 	// позор: цель тоньше, hard↓ раньше — sell-коридор иначе не сливает 60–99% fill.
-	pozorBandLoFrac              = 0.10
-	pozorBandHiFrac              = 0.18
-	pozorSoftDownFrac            = 0.22
-	pozorOverFrac                = 0.25
-	pozorDumpFrac                = 0.40
-	corridorMaxUpStreak          = 1 // не два ↑ подряд
-	corridorUpCooldownCycles     = 1 // после ↑ ещё N циклов без ↑ (deep-↑ может обойти)
-	corridorMinSalesForUp        = 3 // дневной пол спроса на ↑
-	corridorNightMinSalesForUp   = 4 // ночь 03–09 MSK
-	corridorSoftDownEvery        = 1
-	corridorHardDownStepMult     = 2 // over/dump: −step×2
-	tryUpVetoMinTries            = 5
-	tryUpVetoPerSale             = 2
+	pozorBandLoFrac            = 0.10
+	pozorBandHiFrac            = 0.18
+	pozorSoftDownFrac          = 0.22
+	pozorOverFrac              = 0.25
+	pozorDumpFrac              = 0.40
+	corridorMaxUpStreak        = 1 // не два ↑ подряд
+	corridorUpCooldownCycles   = 1 // после ↑ ещё N циклов без ↑ (deep-↑ может обойти)
+	corridorMinSalesForUp      = 3 // дневной пол спроса на ↑
+	corridorNightMinSalesForUp = 4 // ночь 03–09 MSK
+	corridorSoftDownEvery      = 1
+	corridorHardDownStepMult   = 2 // over/dump: −step×2
+	tryUpVetoMinTries          = 5
+	tryUpVetoPerSale           = 2
 	// recover-↑ без BasePrice: можно ↑ при недоборе без sales, но не бесконечно в пустоту.
-	corridorMaxNoBuyUps          = 8 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
-	corridorRecoverProbeSteps    = 2 // recover ≤ max(sell в TTL) + K×step
-	corridorThinFleetMaxBots     = 2  // ≤ столько ботов в категории → мягче пороги спроса / recover
+	corridorMaxNoBuyUps       = 8 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
+	corridorRecoverProbeSteps = 2 // recover ≤ max(sell в TTL) + K×step
+	corridorThinFleetMaxBots  = 2 // ≤ столько ботов в категории → мягче пороги спроса / recover
 	// FunTime min: не доля, а +≥1кк при живых закупках.
 	// 02.09/16.07 шлем +1.0…2.0кк — глюк. Штаны 600→950 (+350к) — пол, пускаем.
-	serverMinAnomalousDelta      = 1_000_000
-	serverBoundLookCycles        = 3
-	serverBoundMinBuys           = 2
+	serverMinAnomalousDelta = 1_000_000
+	serverBoundLookCycles   = 3
+	serverBoundMinBuys      = 2
 )
 
 // AdjustReport — итог цикла adjustPrice для TG/логов.
 type AdjustReport struct {
-	Item              string
-	Action            string
-	Reason            string
-	Skipped           bool
-	PriceBefore       int
-	PriceAfter        int
-	NacenkaBefore     int
-	NacenkaAfter      int
-	Sales             int
-	Buys              int
-	TrySells          int
-	OnAH              int
-	Inv               int
-	Held              int
-	NormalSales       int
-	Share             int
-	Free              int
-	Need              int
-	PriceFloor        int
-	Step              int
-	Cooldown          int
-	NacenkaSumNow     int
-	NacenkaSumPrev    int
-	GoodStreak        int
-	BlockNacenkaUp    bool
+	Item           string
+	Action         string
+	Reason         string
+	Skipped        bool
+	PriceBefore    int
+	PriceAfter     int
+	NacenkaBefore  int
+	NacenkaAfter   int
+	Sales          int
+	Buys           int
+	TrySells       int
+	OnAH           int
+	Inv            int
+	Held           int
+	NormalSales    int
+	Share          int
+	Free           int
+	Need           int
+	PriceFloor     int
+	Step           int
+	Cooldown       int
+	NacenkaSumNow  int
+	NacenkaSumPrev int
+	GoodStreak     int
+	BlockNacenkaUp bool
 }
 
 // typeRelistDisabled — go-типы в режиме «без перевыставления» (FLEET_ABSORB_TYPES, через запятую).
@@ -132,18 +131,18 @@ const (
 
 // ItemAdjustState — состояние контроллера цены между циклами.
 type ItemAdjustState struct {
-	GoodStreak           int  `json:"good_streak"`
-	ExperimentCheck      bool `json:"experiment_check"`
-	LastCycleProfit      int  `json:"last_cycle_profit"`
-	LastCycleNacenkaSum  int  `json:"last_cycle_nacenka_sum"`
-	StockVsSalesCooldown int  `json:"stock_vs_sales_cooldown"`
-	FillPriceCooldown    int  `json:"fill_price_cooldown"`
-	CorridorUpStreak     int `json:"corridor_up_streak"`      // подряд ↑ в stock_corridor
-	CorridorDeadStreak   int `json:"corridor_dead_streak"`    // подряд sales=0 && buys=0
-	CorridorDownCooldown int `json:"corridor_down_cooldown"`  // циклы до следующего soft↓
-	CorridorUpCooldown   int `json:"corridor_up_cooldown"`    // циклы до следующего ↑
-	CorridorNoBuyUpStreak int `json:"corridor_no_buy_up_streak"` // ↑ подряд без buys (антиvacuum)
-	LastCycleSales       int `json:"last_cycle_sales"`        // sales прошлого цикла
+	GoodStreak            int  `json:"good_streak"`
+	ExperimentCheck       bool `json:"experiment_check"`
+	LastCycleProfit       int  `json:"last_cycle_profit"`
+	LastCycleNacenkaSum   int  `json:"last_cycle_nacenka_sum"`
+	StockVsSalesCooldown  int  `json:"stock_vs_sales_cooldown"`
+	FillPriceCooldown     int  `json:"fill_price_cooldown"`
+	CorridorUpStreak      int  `json:"corridor_up_streak"`        // подряд ↑ в stock_corridor
+	CorridorDeadStreak    int  `json:"corridor_dead_streak"`      // подряд sales=0 && buys=0
+	CorridorDownCooldown  int  `json:"corridor_down_cooldown"`    // циклы до следующего soft↓
+	CorridorUpCooldown    int  `json:"corridor_up_cooldown"`      // циклы до следующего ↑
+	CorridorNoBuyUpStreak int  `json:"corridor_no_buy_up_streak"` // ↑ подряд без buys (антиvacuum)
+	LastCycleSales        int  `json:"last_cycle_sales"`          // sales прошлого цикла
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -348,6 +347,24 @@ func recoverBlockedByPaidCap(price, lastPaid, step int) bool {
 		return true
 	}
 	return price >= cap
+}
+
+// hardDownHasSales — over/dump ×2 только если в цикле кто-то купил.
+// Иначе ночной/мёртвый перезапас режет цену в пол (sword7 1.2кк→300к при sales=0).
+func hardDownHasSales(sales int) bool {
+	return sales > 0
+}
+
+// shouldEaseStaleUnsold — recover нельзя, вещь висит, сделок нет → щупаем −step.
+// held=0 не роняем (vacuum). trySells или 3 мёртвых цикла — не сразу с первого hold.
+func shouldEaseStaleUnsold(held, sales, buys, deadStreak, trySells int, recoverStuck bool) bool {
+	if !recoverStuck || held <= 0 || sales > 0 || buys > 0 {
+		return false
+	}
+	if trySells > 0 {
+		return true
+	}
+	return deadStreak >= 3
 }
 
 func countTradesInRange(item, kind string, start, end time.Time) int {
@@ -683,9 +700,13 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 func actionReasonRU(action string) string {
 	switch action {
 	case "corridor_price_down_dump":
-		return "corridor_v6: held ≥ dump% share → −цена×2 (dump залипшего перезапаса)"
+		return "corridor_v8f: held ≥ dump% и sales>0 → −цена×2"
 	case "corridor_price_down_over":
-		return "corridor_v6: held ≥ over% share → −цена×2 (жёсткий перезапас)"
+		return "corridor_v8f: held ≥ over% и sales>0 → −цена×2"
+	case "corridor_hold_over_idle":
+		return "corridor_v8f: перезапас, но sales=0 — не дампим в пол"
+	case "corridor_price_down_stale":
+		return "corridor_v8f: recover застрял, лот не уходит → −step"
 	case "corridor_price_down_soft":
 		return "corridor_v6: held > hi → −цена (слив хвоста выше полосы)"
 	case "corridor_price_down_hi":
@@ -1038,8 +1059,8 @@ func adjustPrice(item string) AdjustReport {
 			notes = append(notes, note+" · floor")
 			if action == "" {
 				action = "hold"
+			}
 		}
-	}
 	}
 	applyUp := func(label, note string) {
 		newPrice = priceBefore + step
@@ -1074,17 +1095,27 @@ func adjustPrice(item string) AdjustReport {
 		notes = append(notes, "share=0 — нет базы для коридора")
 
 	case totalHeld >= targetDump:
-		applyDown("corridor_price_down_dump",
-			fmt.Sprintf("held=%d ≥ dump=%d (%.0f%% share=%d ×%d)",
-				totalHeld, targetDump, stockLoad*100, share, corridorHardDownStepMult),
-			corridorHardDownStepMult)
-		state.CorridorDownCooldown = 0
+		if !hardDownHasSales(sales) {
+			action = "corridor_hold_over_idle"
+			notes = append(notes, fmt.Sprintf("held=%d ≥ dump=%d sales=0 — не дампим в пол", totalHeld, targetDump))
+		} else {
+			applyDown("corridor_price_down_dump",
+				fmt.Sprintf("held=%d ≥ dump=%d (%.0f%% share=%d ×%d)",
+					totalHeld, targetDump, stockLoad*100, share, corridorHardDownStepMult),
+				corridorHardDownStepMult)
+			state.CorridorDownCooldown = 0
+		}
 
 	case totalHeld >= targetOver:
-		applyDown("corridor_price_down_over",
-			fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d ×%d)",
-				totalHeld, targetOver, stockLoad*100, share, corridorHardDownStepMult),
-			corridorHardDownStepMult)
+		if !hardDownHasSales(sales) {
+			action = "corridor_hold_over_idle"
+			notes = append(notes, fmt.Sprintf("held=%d ≥ over=%d sales=0 — не дампим в пол", totalHeld, targetOver))
+		} else {
+			applyDown("corridor_price_down_over",
+				fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d ×%d)",
+					totalHeld, targetOver, stockLoad*100, share, corridorHardDownStepMult),
+				corridorHardDownStepMult)
+		}
 
 	case totalHeld > targetHi:
 		trySoftDown("corridor_price_down_soft",
@@ -1159,6 +1190,10 @@ func adjustPrice(item string) AdjustReport {
 					totalHeld, targetLo, state.CorridorNoBuyUpStreak, corridorMaxNoBuyUps)
 			}
 			applyUp(label, note)
+		case shouldEaseStaleUnsold(totalHeld, sales, buys, state.CorridorDeadStreak, trySells, overCap || noBuyBlocked):
+			applyDown("corridor_price_down_stale",
+				fmt.Sprintf("held=%d < lo=%d recover застрял sales=0 dead=%d try=%d — −step",
+					totalHeld, targetLo, state.CorridorDeadStreak, trySells), 1)
 		case overCap && paidMax <= 0:
 			action = "corridor_hold_recover_stale"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d — нет sell за %s, recover ↑ запрещён",
@@ -1331,50 +1366,50 @@ func adjustPrice(item string) AdjustReport {
 
 	onlineForCap, _ := fetchOnlineSnapshot()
 	logCapitalCycleLocked(CapitalCycleRow{
-		Policy:          capitalPolicy,
-		Item:            item,
-		Category:        cfg.Type,
-		Action:          actionTaken,
-		Winner:          actionTaken,
-		Dump:            0,
-		Fill:            stockLoad,
-		Skim:            0,
-		Threshold:       float64(targetHi),
-		Sales:           sales,
-		Buys:            buys,
-		TrySells:        trySells,
-		OnAH:            onAH,
-		Inv:             invCount,
-		Held:            totalHeld,
-		Share:           share,
-		Free:            free,
-		Need:            need,
-		NormalSales:     cfg.NormalSales,
-		NormalCount:     stockNorm,
-		TryRatio:        tryRatio,
-		StockLoad:       stockLoad,
-		Underbuy:        underbuyOK,
-		PriceBefore:     priceBefore,
-		PriceAfter:      newPrice,
-		NacenkaBefore:   nacenkaBefore,
-		NacenkaAfter:    nacenka,
-		NacenkaSumNow:   nacenkaSumNow,
-		NacenkaSumPrev:  nacenkaSumPrev,
-		PriceFloor:      priceFloor,
-		Step:            step,
-		Cooldown:        state.StockVsSalesCooldown,
-		PlayersOnline:   onlineForCap,
-		Notes:           strings.Join(notes, " · "),
-		ProfitNow:       profitNow,
-		CheapFrac:       0,
-		CheapN:          0,
-		MinBuyHistory:   minPrice,
-		BotsCategory:    aggregateBotsPerTypeLocked()[cfg.Type],
-		CycleMinutes:    cfg.AnalysisTime.Minutes(),
-		GoodStreak:      state.CorridorUpStreak,
-		DumpBlockedCD:   false,
-		DecisionAt:      now,
-		CycleDuration:   cfg.AnalysisTime,
+		Policy:         capitalPolicy,
+		Item:           item,
+		Category:       cfg.Type,
+		Action:         actionTaken,
+		Winner:         actionTaken,
+		Dump:           0,
+		Fill:           stockLoad,
+		Skim:           0,
+		Threshold:      float64(targetHi),
+		Sales:          sales,
+		Buys:           buys,
+		TrySells:       trySells,
+		OnAH:           onAH,
+		Inv:            invCount,
+		Held:           totalHeld,
+		Share:          share,
+		Free:           free,
+		Need:           need,
+		NormalSales:    cfg.NormalSales,
+		NormalCount:    stockNorm,
+		TryRatio:       tryRatio,
+		StockLoad:      stockLoad,
+		Underbuy:       underbuyOK,
+		PriceBefore:    priceBefore,
+		PriceAfter:     newPrice,
+		NacenkaBefore:  nacenkaBefore,
+		NacenkaAfter:   nacenka,
+		NacenkaSumNow:  nacenkaSumNow,
+		NacenkaSumPrev: nacenkaSumPrev,
+		PriceFloor:     priceFloor,
+		Step:           step,
+		Cooldown:       state.StockVsSalesCooldown,
+		PlayersOnline:  onlineForCap,
+		Notes:          strings.Join(notes, " · "),
+		ProfitNow:      profitNow,
+		CheapFrac:      0,
+		CheapN:         0,
+		MinBuyHistory:  minPrice,
+		BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
+		CycleMinutes:   cfg.AnalysisTime.Minutes(),
+		GoodStreak:     state.CorridorUpStreak,
+		DumpBlockedCD:  false,
+		DecisionAt:     now,
+		CycleDuration:  cfg.AnalysisTime,
 	})
 
 	shadowSnap := mlAdjustSnapshot{}
@@ -1398,38 +1433,38 @@ func adjustPrice(item string) AdjustReport {
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice: totalHeld < targetLo && !trySellsBlockUp(sales, trySells) && state.CorridorNoBuyUpStreak < corridorMaxNoBuyUps && buys <= sales && (sales > buys || !overCap) && ((sales > buys && demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo))) || (!nightMSK && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo)))),
+			CanRaisePrice:  totalHeld < targetLo && !trySellsBlockUp(sales, trySells) && state.CorridorNoBuyUpStreak < corridorMaxNoBuyUps && buys <= sales && (sales > buys || !overCap) && ((sales > buys && demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo))) || (!nightMSK && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo)))),
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  online,
 		}
 	}
 
 	rep = AdjustReport{
-		Item:            item,
-		Action:          actionTaken,
-		Reason:          reason,
-		Skipped:         false,
-		PriceBefore:     priceBefore,
-		PriceAfter:      newPrice,
-		NacenkaBefore:   nacenkaBefore,
-		NacenkaAfter:    nacenka,
-		Sales:           sales,
-		Buys:            buys,
-		TrySells:        trySells,
-		OnAH:            onAH,
-		Inv:             invCount,
-		Held:            totalHeld,
-		NormalSales:     cfg.NormalSales,
-		Share:           share,
-		Free:            free,
-		Need:            need,
-		PriceFloor:      sellPriceFloor(minPrice, nacenka),
-		Step:            step,
-		Cooldown:        state.StockVsSalesCooldown,
-		NacenkaSumNow:   nacenkaSumNow,
-		NacenkaSumPrev:  nacenkaSumPrev,
-		GoodStreak:      state.CorridorUpStreak,
-		BlockNacenkaUp:  underbuyOK,
+		Item:           item,
+		Action:         actionTaken,
+		Reason:         reason,
+		Skipped:        false,
+		PriceBefore:    priceBefore,
+		PriceAfter:     newPrice,
+		NacenkaBefore:  nacenkaBefore,
+		NacenkaAfter:   nacenka,
+		Sales:          sales,
+		Buys:           buys,
+		TrySells:       trySells,
+		OnAH:           onAH,
+		Inv:            invCount,
+		Held:           totalHeld,
+		NormalSales:    cfg.NormalSales,
+		Share:          share,
+		Free:           free,
+		Need:           need,
+		PriceFloor:     sellPriceFloor(minPrice, nacenka),
+		Step:           step,
+		Cooldown:       state.StockVsSalesCooldown,
+		NacenkaSumNow:  nacenkaSumNow,
+		NacenkaSumPrev: nacenkaSumPrev,
+		GoodStreak:     state.CorridorUpStreak,
+		BlockNacenkaUp: underbuyOK,
 	}
 
 	needBroadcast := changed

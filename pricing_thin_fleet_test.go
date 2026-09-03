@@ -75,3 +75,30 @@ func TestRecoverPaidCap(t *testing.T) {
 		t.Fatal("after dump below paid should recover")
 	}
 }
+
+func TestHardDownHasSales(t *testing.T) {
+	if hardDownHasSales(0) {
+		t.Fatal("без продаж не дампим")
+	}
+	if !hardDownHasSales(1) {
+		t.Fatal("с продажей over можно")
+	}
+}
+
+func TestShouldEaseStaleUnsold(t *testing.T) {
+	if shouldEaseStaleUnsold(0, 0, 0, 5, 0, true) {
+		t.Fatal("пустое не роняем")
+	}
+	if shouldEaseStaleUnsold(1, 0, 0, 0, 0, true) {
+		t.Fatal("первый цикл без try — ещё hold")
+	}
+	if !shouldEaseStaleUnsold(1, 0, 0, 0, 2, true) {
+		t.Fatal("висит на АХ — −step")
+	}
+	if !shouldEaseStaleUnsold(1, 0, 0, 3, 0, true) {
+		t.Fatal("3 мёртвых цикла — −step")
+	}
+	if shouldEaseStaleUnsold(1, 0, 0, 3, 0, false) {
+		t.Fatal("recover не застрял")
+	}
+}
