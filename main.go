@@ -1208,13 +1208,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			Seller        string          `json:"seller"`
 			Anarchy       any             `json:"anarchy"`
 			SeenBy        string          `json:"seen_by"`
-		}
-		if msg.Action != "add" {
-			log.Printf("[WS incoming] %s", string(rawMsg))
+			Lots          []ahBookWire    `json:"lots"`
 		}
 		if err := json.Unmarshal(rawMsg, &msg); err != nil {
 			log.Printf("json unmarshal error: %v", err)
 			continue
+		}
+		if msg.Action != "add" && msg.Action != "ah_lot" && msg.Action != "ah_lots" {
+			log.Printf("[WS incoming] %s", string(rawMsg))
 		}
 
 		runSafe("ws:message", func() {
@@ -1247,6 +1248,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	Seller        string          `json:"seller"`
 	Anarchy       any             `json:"anarchy"`
 	SeenBy        string          `json:"seen_by"`
+	Lots          []ahBookWire    `json:"lots"`
 }) {
 	mutex.Lock()
 	enchJSON := tradeEnchantsJSON(msg.Enchants)
@@ -1298,8 +1300,17 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		saveDailyDataNoMessageUpdate()
 
 	case "ah_lot":
-		insertAhBookLotLocked(msg.Uuid, msg.GoType, msg.ItemID, msg.Price, msg.Durability, msg.Seller, enchJSON, anarchyInt(msg.Anarchy), msg.SeenBy)
 		mutex.Unlock()
+		insertAhBookBatch([]ahBookWire{{
+			Uuid: msg.Uuid, GoType: msg.GoType, ItemID: msg.ItemID, Price: msg.Price,
+			Durability: msg.Durability, Seller: msg.Seller, Enchants: msg.Enchants,
+			Anarchy: msg.Anarchy, SeenBy: msg.SeenBy,
+		}})
+
+	case "ah_lots":
+		rows := msg.Lots
+		mutex.Unlock()
+		insertAhBookBatch(rows)
 
 	case "info":
 		mutex.Unlock()

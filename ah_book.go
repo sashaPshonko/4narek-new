@@ -47,27 +47,53 @@ func isFleetSellerLocked(seller string) bool {
 	return false
 }
 
-func insertAhBookLotLocked(uuid, goType, itemID string, price int, durability *float64, seller, enchJSON string, anarchy int, seenBy string) {
-	if mlDB == nil {
+type ahBookWire struct {
+	Uuid       string       `json:"uuid"`
+	GoType     string       `json:"go_type"`
+	ItemID     string       `json:"item_id"`
+	Price      int          `json:"price"`
+	Durability *float64     `json:"durability"`
+	Seller     string       `json:"seller"`
+	Enchants   []ItemEffect `json:"enchants"`
+	Anarchy    any          `json:"anarchy"`
+	SeenBy     string       `json:"seen_by"`
+	enchJSON   string       `json:"-"`
+}
+
+func insertAhBookBatch(rows []ahBookWire) {
+	if mlDB == nil || len(rows) == 0 {
 		return
 	}
-	uuid = strings.TrimSpace(uuid)
-	if uuid == "" || itemID == "" {
-		return
+	mutex.RLock()
+	keep := make([]ahBookWire, 0, len(rows))
+	for _, r := range rows {
+		if isFleetSellerLocked(r.Seller) {
+			continue
+		}
+		keep = append(keep, r)
 	}
-	if isFleetSellerLocked(seller) {
-		return
-	}
-	var dur any
-	if durability != nil {
-		dur = *durability
-	}
-	_, err := mlDB.Exec(
-		`INSERT OR IGNORE INTO ah_book_lots (uuid, ts, go_type, item_id, price, durability, seller, enchants_json, anarchy, seen_by)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		uuid, time.Now().UTC().Format(time.RFC3339), goType, itemID, price, dur, strings.TrimSpace(seller), enchJSON, anarchy, seenBy,
-	)
-	if err != nil {
-		log.Printf("[ah_book] insert: %v", err)
+	mutex.RUnlock()
+	ts := time.Now().UTC().Format(time.RFC3339)
+	for _, r := range keep {
+		uuid := strings.TrimSpace(r.Uuid)
+		if uuid == "" || r.ItemID == "" {
+			continue
+		}
+		ench := r.enchJSON
+		if ench == "" {
+			ench = tradeEnchantsJSON(r.Enchants)
+		}
+		var dur any
+		if r.Durability != nil {
+			dur = *r.Durability
+		}
+		_, err := mlDB.Exec(
+			`INSERT OR IGNORE INTO ah_book_lots (uuid, ts, go_type, item_id, price, durability, seller, enchants_json, anarchy, seen_by)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			uuid, ts, r.GoType, r.ItemID, r.Price, dur, strings.TrimSpace(r.Seller), ench, anarchyInt(r.Anarchy), r.SeenBy,
+		)
+		if err != nil {
+			log.Printf("[ah_book] insert: %v", err)
+		}
 	}
 }
