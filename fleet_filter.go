@@ -28,9 +28,6 @@ func currentFleetRoster() funauthRoster {
 		fleetNickRoster = r
 		return r
 	}
-	if r := loadFunauthRosterFile(false); len(r) > 0 {
-		fleetNickRoster = r
-	}
 	return fleetNickRoster
 }
 

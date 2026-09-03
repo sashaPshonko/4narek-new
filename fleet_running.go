@@ -152,7 +152,7 @@ func currentClanOwnerRoster() funauthRoster {
 	return out
 }
 
-// loadFleetRunningNicks — ники из bots/*.json + clan-owners.json (текущий запуск), не funauth_roster.
+// loadFleetRunningNicks — ники из bots/*.json + clan-owners.json (текущий запуск).
 func loadFleetRunningNicks() funauthRoster {
 	dir := fleetBotsDir()
 	if dir == "" {
@@ -179,5 +179,5 @@ func loadFleetNickRoster() {
 		log.Printf("[fleet] running nicks: %d anarchy(ies), %d nicks from %s", len(r), n, fleetBotsDir())
 		return
 	}
-	fleetNickRoster = loadFunauthRoster()
+	log.Printf("[fleet] running nicks: пусто (нет %s)", fleetBotsDir())
 }

@@ -222,9 +222,6 @@ func (p *funauthPool) init() {
 	p.loadNicks()
 	p.loadVerified()
 	p.roster = loadFleetRunningNicks()
-	if len(p.roster) == 0 {
-		p.roster = loadFunauthRoster()
-	}
 	p.cleanupOrphanAnarchies()
 	p.syncAllRosterFull()
 	entries, err := os.ReadDir(p.dir)
@@ -237,7 +234,7 @@ func (p *funauthPool) init() {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		if e.Name() == funauthNicksFile || e.Name() == funauthVerifiedFile || e.Name() == funauthRosterFile {
+		if e.Name() == funauthNicksFile || e.Name() == funauthVerifiedFile {
 			continue
 		}
 		path := filepath.Join(p.dir, e.Name())

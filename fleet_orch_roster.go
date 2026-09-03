@@ -11,7 +11,7 @@ type orchBotNick struct {
 	Anarchy  any    `json:"anarchy"`
 }
 
-// clientOrchBots — список ников с оркестратора (fleet/presence), не funauth_roster.json.
+// clientOrchBots — список ников с оркестратора (fleet/presence).
 var clientOrchBots = make(map[*websocket.Conn][]orchBotNick)
 
 func mergeClientOrchBotsLocked() funauthRoster {

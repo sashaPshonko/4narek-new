@@ -119,12 +119,14 @@ func initMLLog() {
 		mlDBPath = defaultMLDBPath
 	}
 	_ = os.MkdirAll(filepath.Dir(mlDBPath), 0755)
+	log.Printf("[ML] opening %s", mlDBPath)
 
 	db, err := sql.Open("sqlite", mlOpenDSN(mlDBPath))
 	if err != nil {
 		log.Printf("[ML] open: %v", err)
 		return
 	}
+	log.Printf("[ML] ping…")
 	if err := db.Ping(); err != nil {
 		log.Printf("[ML] ping: %v", err)
 		_ = db.Close()
@@ -132,13 +134,6 @@ func initMLLog() {
 	}
 	db.SetMaxOpenConns(1) // один writer — меньше шанс порчи при гонках
 	_, _ = db.Exec(`PRAGMA wal_autocheckpoint=1000`)
-
-	if issues := mlQuickCheckIssues(db); len(issues) > 0 {
-		for _, s := range issues {
-			log.Printf("[ML] quick_check on open: %s", s)
-		}
-		log.Printf("[ML] БД подозрительна — пишем всё равно (heal ниже), восстановите из ml_data/backups/ при необходимости")
-	}
 
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS trade_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -177,7 +172,10 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	initAhBookTable()
 	initCapitalTables()
 	initMLShadowTable()
-	healMLDatabase(db)
+	if os.Getenv("ML_HEAL_ON_START") == "1" {
+		log.Printf("[ML] ML_HEAL_ON_START=1 — PRAGMA quick_check (минуты на большой БД)")
+		healMLDatabase(db)
+	}
 	reloadCapitalPendingFromDB()
 	startMLBackupLoop()
 	log.Printf("[ML] SQLite %s (schema v%d + capital_cycles/fwd + stock_snapshots + server_price_events)", mlDBPath, mlSchemaVersion)

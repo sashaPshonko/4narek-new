@@ -1,56 +1,11 @@
 package main
 
 import (
-	"encoding/json"
-	"log"
-	"os"
-	"strconv"
 	"strings"
 )
 
-const funauthRosterFile = "funauth_roster.json"
-
-// anarchy → lowercased nicks (owner + bots).
+// funauthRoster — anarchy → lowercased nicks. Живые ники из bots/*.json / presence.
 type funauthRoster map[int]map[string]struct{}
-
-func loadFunauthRoster() funauthRoster {
-	return loadFunauthRosterFile(true)
-}
-
-func loadFunauthRosterFile(logOK bool) funauthRoster {
-	path := funauthRosterFile
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		log.Printf("[funauth] roster %s: %v (anarchy lookup only)", path, err)
-		return nil
-	}
-	var rawMap map[string][]string
-	if err := json.Unmarshal(raw, &rawMap); err != nil {
-		log.Printf("[funauth] roster parse: %v", err)
-		return nil
-	}
-	out := make(funauthRoster, len(rawMap))
-	for key, nicks := range rawMap {
-		an, err := strconv.Atoi(strings.TrimSpace(key))
-		if err != nil || an <= 0 {
-			continue
-		}
-		set := make(map[string]struct{}, len(nicks))
-		for _, n := range nicks {
-			nk := strings.ToLower(strings.TrimSpace(n))
-			if nk != "" {
-				set[nk] = struct{}{}
-			}
-		}
-		if len(set) > 0 {
-			out[an] = set
-		}
-	}
-	if logOK {
-		log.Printf("[funauth] roster: %d anarchy(ies)", len(out))
-	}
-	return out
-}
 
 func (r funauthRoster) anarchyForNick(nick string) int {
 	if len(r) == 0 {

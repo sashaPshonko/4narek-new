@@ -252,6 +252,12 @@ func runServer() {
 	loadRuntimeState()
 	loadFleetBanPersist()
 	loadFleetNickRoster()
+
+	// HTTP сразу: /funauth и /ws не ждут SQLite (quick_check на 480МБ вешал старт).
+	goImmortal("broadcastBroker", broadcastBroker)
+	goImmortal("cacheCleanup", startCacheCleanup)
+	goImmortal("httpServer", startHTTPServer)
+
 	initMLLog()
 	setupMLShutdown()
 	
@@ -261,22 +267,11 @@ func runServer() {
 		log.Printf("[xray] %v — FunAuth без SOCKS", err)
 	}
 
-	// Funauth ОСТАВЛЯЕМ
+	// Funauth ОСТАВЛЯЕМ (если HTTP ещё не вызвал — Once)
 	initFunauth()
 
-	// Запускаем брокер рассылки
-	goImmortal("broadcastBroker", broadcastBroker)
-
-	// Запускаем очистку кэша
-	goImmortal("cacheCleanup", startCacheCleanup)
-
-	// WebSocket / HTTP
-	goImmortal("httpServer", startHTTPServer)
-
-	// Проверка смены дня
 	goImmortal("dayChange", func() { checkDayChange(loc) })
 
-	// Таймеры предметов
 	startItemTimers()
 
 	select {}
