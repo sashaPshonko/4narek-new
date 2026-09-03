@@ -239,8 +239,18 @@ func insertAhBookBatch(rows []ahBookWire) {
 		}
 		seller := strings.TrimSpace(r.Seller)
 		_, err := mlDB.Exec(
-			`INSERT OR IGNORE INTO ah_book_lots (uuid, ts, go_type, item_id, price, durability, seller, enchants_json, anarchy, seen_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, durability, seller, enchants_json, anarchy, seen_by)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(uuid) DO UPDATE SET
+			   ts = excluded.ts,
+			   go_type = excluded.go_type,
+			   item_id = excluded.item_id,
+			   price = excluded.price,
+			   durability = excluded.durability,
+			   seller = excluded.seller,
+			   enchants_json = excluded.enchants_json,
+			   anarchy = excluded.anarchy,
+			   seen_by = excluded.seen_by`,
 			uuid, ts, r.GoType, r.ItemID, r.Price, dur, seller, ench, anarchyInt(r.Anarchy), r.SeenBy,
 		)
 		if err != nil {
@@ -252,6 +262,108 @@ func insertAhBookBatch(rows []ahBookWire) {
 		}
 	}
 	maybeBanAhBookWallSellers(pairs)
+}
+
+// ahBookMinSince — min(price) лотов SKU с ts≥since, без забаненных витрин.
+func ahBookMinSince(itemID string, since time.Time) (minPrice, n int, ok bool) {
+	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
+		return 0, 0, false
+	}
+	err := mlDB.QueryRow(`
+SELECT COUNT(*), COALESCE(MIN(a.price), 0) FROM ah_book_lots a
+WHERE a.item_id = ? AND a.ts >= ?
+AND NOT EXISTS (
+	SELECT 1 FROM ah_book_seller_bans b
+	WHERE b.seller = lower(trim(a.seller))
+)`, itemID, since.UTC().Format(time.RFC3339)).Scan(&n, &minPrice)
+	if err != nil {
+		log.Printf("[ah_book] min since: %v", err)
+		return 0, 0, false
+	}
+	if n < ahBookMinLotsInWindow || minPrice <= 0 {
+		return minPrice, n, false
+	}
+	return minPrice, n, true
+}
+
+// ahBookAnyMinSince — min всех лотов SKU в окне (витрины тоже). Для проверки мин АХ:
+// на ФТ куча дорогих слотов, медиана ≈ витрина, смотрим низ.
+func ahBookAnyMinSince(itemID string, since time.Time) (minPrice, n int, ok bool) {
+	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
+		return 0, 0, false
+	}
+	err := mlDB.QueryRow(
+		`SELECT COUNT(*), COALESCE(MIN(price), 0) FROM ah_book_lots
+WHERE item_id = ? AND ts >= ? AND price > 0`,
+		itemID, since.UTC().Format(time.RFC3339),
+	).Scan(&n, &minPrice)
+	if err != nil {
+		log.Printf("[ah_book] any min since: %v", err)
+		return 0, 0, false
+	}
+	if n < ahBookMinLotsInWindow || minPrice <= 0 {
+		return minPrice, n, false
+	}
+	return minPrice, n, true
+}
+
+func ahBookLatestBannedSellerPrices(itemID string, floor int, since time.Time) []int {
+	if mlDB == nil || strings.TrimSpace(itemID) == "" || floor <= 0 {
+		return nil
+	}
+	rows, err := mlDB.Query(`
+SELECT lower(trim(a.seller)), a.price
+FROM ah_book_lots a
+WHERE a.item_id = ? AND a.ts >= ? AND trim(a.seller) != '' AND a.price >= ?
+AND EXISTS (
+	SELECT 1 FROM ah_book_seller_bans b
+	WHERE b.seller = lower(trim(a.seller))
+)
+ORDER BY a.ts DESC`, itemID, since.UTC().Format(time.RFC3339), floor)
+	if err != nil {
+		log.Printf("[ah_book] seller prices: %v", err)
+		return nil
+	}
+	defer rows.Close()
+	latest := map[string]int{}
+	for rows.Next() {
+		var seller string
+		var price int
+		if err := rows.Scan(&seller, &price); err != nil {
+			continue
+		}
+		if _, seen := latest[seller]; seen {
+			continue
+		}
+		latest[seller] = price
+	}
+	out := make([]int, 0, len(latest))
+	for _, p := range latest {
+		out = append(out, p)
+	}
+	return out
+}
+
+// ahBookSellerClipTarget — max цены задокументированных селлеров в окне,
+// у которых цена ∈ [floor, sell). ok если таких ≥ ahBookSellerClipMin.
+func ahBookSellerClipTarget(itemID string, sell, floor int, since time.Time) (tgt, nBelow int, ok bool) {
+	if sell <= 0 || floor <= 0 {
+		return 0, 0, false
+	}
+	latest := ahBookLatestBannedSellerPrices(itemID, floor, since)
+	maxBelow := 0
+	for _, p := range latest {
+		if p < sell {
+			nBelow++
+			if p > maxBelow {
+				maxBelow = p
+			}
+		}
+	}
+	if nBelow < ahBookSellerClipMin || maxBelow <= 0 {
+		return 0, nBelow, false
+	}
+	return maxBelow, nBelow, true
 }
 
 // ahBookMinOfLastN — min(price) среди последних n лотов SKU (по ts), без забаненных витрин.

@@ -29,7 +29,7 @@ func TestIsFleetSellerLocked(t *testing.T) {
 }
 
 func TestShouldRaiseFromAhBook(t *testing.T) {
-	n := ahBookRaiseSample
+	n := ahBookMinLotsInWindow
 	minAsk := 1_000_000
 	nac := 300_000
 	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false, false) {
@@ -39,7 +39,7 @@ func TestShouldRaiseFromAhBook(t *testing.T) {
 		t.Fatal("уже на min+наценка — не трогаем")
 	}
 	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, false, false, false) {
-		t.Fatal("меньше 50 — рано")
+		t.Fatal("мало лотов в окне — рано")
 	}
 	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, true, false, false) {
 		t.Fatal("dump — не поднимаем")
@@ -201,5 +201,156 @@ func TestAhBookTimesHitWall(t *testing.T) {
 	times[5] = base.Add(20 * time.Minute)
 	if ahBookTimesHitWall(times) {
 		t.Fatal("6-й через 20 мин — не стена")
+	}
+}
+
+func TestAhBookUpsertRefreshesTsAndPrice(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); mlDB = nil })
+	mlDB = db
+	initAhBookTable()
+	item := "шлем-1.21"
+	old := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		"same", old, "netherite_armor-1.21", item, 2_200_000, "Laymix777")
+	if err != nil {
+		t.Fatal(err)
+	}
+	insertAhBookBatch([]ahBookWire{{
+		Uuid: "same", GoType: "netherite_armor-1.21", ItemID: item, Price: 2_100_000, Seller: "Laymix777",
+	}})
+	var n, price int
+	var ts string
+	_ = db.QueryRow(`SELECT COUNT(*), price, ts FROM ah_book_lots WHERE uuid = 'same'`).Scan(&n, &price, &ts)
+	if n != 1 {
+		t.Fatalf("повтор не плодит строк, got %d", n)
+	}
+	if price != 2_100_000 {
+		t.Fatalf("цена с АХ обновилась, got %d", price)
+	}
+	if ts <= old {
+		t.Fatalf("ts должен стать свежим: old=%s new=%s", old, ts)
+	}
+}
+
+func TestAhBookMinSince(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); mlDB = nil })
+	mlDB = db
+	initAhBookTable()
+	item := "шлем-1.21"
+	now := time.Now().UTC()
+	for i := 0; i < 12; i++ {
+		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+			fmt.Sprintf("n-%d", i), now.Add(-time.Minute).Format(time.RFC3339), "armor", item, 1_000_000+i, "p")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		"old", now.Add(-time.Hour).Format(time.RFC3339), "armor", item, 100_000, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	minP, n, ok := ahBookMinSince(item, now.Add(-ahBookRaiseWindow))
+	if !ok || n != 12 || minP != 1_000_000 {
+		t.Fatalf("min=%d n=%d ok=%v", minP, n, ok)
+	}
+}
+
+func TestAhBookSellerClipTarget(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); mlDB = nil })
+	mlDB = db
+	initAhBookTable()
+	item := "шлем-1.21"
+	now := time.Now().UTC()
+	ts := now.Format(time.RFC3339)
+	_, _ = db.Exec(`INSERT INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
+		"shop_a", ts, item, 10, 900)
+	_, _ = db.Exec(`INSERT INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
+		"shop_b", ts, item, 10, 900)
+	_, _ = db.Exec(`INSERT INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
+		"dump", ts, item, 10, 900)
+	_, _ = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		"a", ts, "armor", item, 2_200_000, "shop_a")
+	_, _ = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		"b", ts, "armor", item, 2_500_000, "shop_b")
+	_, _ = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		"d", ts, "armor", item, 400_000, "dump")
+	floor := 1_600_000
+	sell := 2_800_000
+	tgt, n, ok := ahBookSellerClipTarget(item, sell, floor, now.Add(-ahBookRaiseWindow))
+	if !ok || n != 2 || tgt != 2_500_000 {
+		t.Fatalf("tgt=%d n=%d ok=%v want 2500000 / 2", tgt, n, ok)
+	}
+	_, n, ok = ahBookSellerClipTarget(item, 1_600_000, floor, now.Add(-ahBookRaiseWindow))
+	if ok {
+		t.Fatalf("все селлеры выше нас — без клипа, n=%d", n)
+	}
+}
+
+func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); mlDB = nil })
+	mlDB = db
+	initAhBookTable()
+	item := "шлем-1.21"
+	now := time.Now().UTC()
+	ts := now.Format(time.RFC3339)
+	for i := 0; i < 10; i++ {
+		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+			fmt.Sprintf("wall-%d", i), ts, "armor", item, 2_200_000, "shop")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+			fmt.Sprintf("cheap-%d", i), ts, "armor", item, 1_600_000, "player")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	prevCfg := itemsConfig
+	itemsConfig = map[string]ItemConfig{item: {Nacenka: 300_000}}
+	t.Cleanup(func() { itemsConfig = prevCfg })
+	prevHist := data.TradeHistory
+	data.TradeHistory = map[string][]TradeLog{}
+	t.Cleanup(func() { data.TradeHistory = prevHist })
+	cycle := 10 * time.Minute
+	cap := 1_600_000 + 300_000
+	if !serverFunTimeRaiseAnomalous(3_500_000, 3_550_000, item, cycle, now) {
+		t.Fatal("↑ выше низа+наценка — не пишем")
+	}
+	if !serverFunTimeRaiseAnomalous(1_600_000, cap+1, item, cycle, now) {
+		t.Fatal("↑ на 1 над низом+наценка")
+	}
+	if serverFunTimeRaiseAnomalous(1_600_000, cap, item, cycle, now) {
+		t.Fatal("ровно низ+наценка, закупок нет — можно")
+	}
+	if serverFunTimeRaiseAnomalous(3_500_000, 2_000_000, item, cycle, now) {
+		t.Fatal("это ↓ с глюка, не блокируем")
+	}
+	data.TradeHistory = map[string][]TradeLog{
+		item: {
+			{Time: now.Add(-5 * time.Minute), Type: "buy", Price: 1},
+			{Time: now.Add(-12 * time.Minute), Type: "buy", Price: 1},
+		},
+	}
+	if !serverFunTimeRaiseAnomalous(1_600_000, cap, item, cycle, now) {
+		t.Fatal("закуп ≥ продаж — не поднимаем даже к низу+наценка")
 	}
 }

@@ -29,29 +29,62 @@ func TestDemandStrongEnoughForUpWithMin(t *testing.T) {
 	}
 }
 
-func TestServerFunTimeRaiseAnomalous(t *testing.T) {
+func TestServerMinBuyBlocksUp(t *testing.T) {
 	now := time.Date(2026, 9, 2, 19, 13, 0, 0, time.UTC)
+	item := "шлем-1.21"
+	cycle := 10 * time.Minute
 	prev := data.TradeHistory
+	t.Cleanup(func() { data.TradeHistory = prev })
+	data.TradeHistory = map[string][]TradeLog{
+		item: {{Time: now.Add(-5 * time.Minute), Type: "buy", Price: 1}},
+	}
+	if serverMinBuyBlocksUp(item, cycle, now) {
+		t.Fatal("одна покупка — шум")
+	}
+	data.TradeHistory = map[string][]TradeLog{
+		item: {
+			{Time: now.Add(-5 * time.Minute), Type: "buy", Price: 1},
+			{Time: now.Add(-15 * time.Minute), Type: "buy", Price: 1},
+			{Time: now.Add(-6 * time.Minute), Type: "sell", Price: 1},
+			{Time: now.Add(-7 * time.Minute), Type: "sell", Price: 1},
+			{Time: now.Add(-8 * time.Minute), Type: "sell", Price: 1},
+		},
+	}
+	if serverMinBuyBlocksUp(item, cycle, now) {
+		t.Fatal("продаём больше чем закупаем — FunTime ↑ не режем закупками")
+	}
+	data.TradeHistory = map[string][]TradeLog{
+		item: {
+			{Time: now.Add(-5 * time.Minute), Type: "buy", Price: 1},
+			{Time: now.Add(-15 * time.Minute), Type: "buy", Price: 1},
+			{Time: now.Add(-6 * time.Minute), Type: "sell", Price: 1},
+		},
+	}
+	if !serverMinBuyBlocksUp(item, cycle, now) {
+		t.Fatal("закуп не меньше продаж — не поднимаем")
+	}
+}
+
+func TestServerFunTimeRaiseAnomalousNoBook(t *testing.T) {
+	now := time.Date(2026, 9, 2, 19, 13, 0, 0, time.UTC)
+	oldDB := mlDB
+	mlDB = nil
+	t.Cleanup(func() { mlDB = oldDB })
+	cycle := 10 * time.Minute
+	prev := data.TradeHistory
+	data.TradeHistory = map[string][]TradeLog{}
+	t.Cleanup(func() { data.TradeHistory = prev })
+	if serverFunTimeRaiseAnomalous(1_599_911, 3_550_011, "шлем-1.21", cycle, now) {
+		t.Fatal("без книги и без закупок — не угадываем")
+	}
 	data.TradeHistory = map[string][]TradeLog{
 		"шлем-1.21": {
 			{Time: now.Add(-5 * time.Minute), Type: "buy", Price: 1},
 			{Time: now.Add(-12 * time.Minute), Type: "buy", Price: 1},
 		},
-		"штаны-1.21": {
-			{Time: now.Add(-5 * time.Minute), Type: "buy", Price: 1},
-			{Time: now.Add(-8 * time.Minute), Type: "buy", Price: 1},
-		},
 	}
-	t.Cleanup(func() { data.TradeHistory = prev })
-	cycle := 10 * time.Minute
 	if !serverFunTimeRaiseAnomalous(1_599_911, 3_550_011, "шлем-1.21", cycle, now) {
-		t.Fatal("шлем +2кк при закупках")
-	}
-	if serverFunTimeRaiseAnomalous(600_005, 950_005, "штаны-1.21", cycle, now) {
-		t.Fatal("штаны +350к — пол, не скачок")
-	}
-	if serverFunTimeRaiseAnomalous(1_599_911, 3_550_011, "пусто", cycle, now) {
-		t.Fatal("нет закупок — могли занизить, мин принимаем")
+		t.Fatal("живой закуп — не поднимаем даже без книги")
 	}
 }
 

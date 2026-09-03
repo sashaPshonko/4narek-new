@@ -16,8 +16,8 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
-// stock_corridor_v8i — v8h + ↑ к min(последние 50 ah_book) + наценка + шаг
-// (перекуп: ask книги = себестоимость; не в dump).
+// stock_corridor_v8k — v8j + замок set_min (FunTime не поднимает каталог втупую).
+// stock_corridor_v8j — v8i, но пол книги = min за 3 мин; ↓ к ≥2 селлерам ≥min+наценка.
 //
 // stock_corridor_v8h — v8g + полоса на малом share (броня 1 тип / 6 id, share≈21):
 // 18–25% давало lo/hi = 4–5, медиана held=2 → вечный недобор и deep-↑ (lo/2=2).
@@ -60,12 +60,11 @@ const (
 	corridorMaxIdleHardDowns = 1 // over/dump при sales=0: один щуп, не цепочка в пол
 	corridorPaidBandGapSteps = 3 // в полосе цена ≤ paid−N×step → ↑ к якорю (и ночью)
 	corridorMinBandSpan      = 4 // hi−lo; share=21 иначе полоса 4–5 шт. (позор не трогаем)
-	ahBookRaiseSample        = 50
-	// FunTime min: не доля, а +≥1кк при живых закупках.
-	// 02.09/16.07 шлем +1.0…2.0кк — глюк. Штаны 600→950 (+350к) — пол, пускаем.
-	serverMinAnomalousDelta = 1_000_000
-	serverBoundLookCycles   = 3
-	serverBoundMinBuys      = 2
+	ahBookRaiseWindow     = 3 * time.Minute // низ АХ «сейчас»; 10 мин слишком длинно
+	ahBookMinLotsInWindow = 10 // меньше — окно пустое, min не считаем
+	ahBookSellerClipMin   = 2  // честных селлеров ниже нас → клип к max из них
+	serverBoundLookCycles = 3 // окно закупок для set_min
+	serverBoundMinBuys    = 2 // одна покупка — шум
 )
 
 // AdjustReport — итог цикла adjustPrice для TG/логов.
@@ -378,38 +377,37 @@ func priceFarBelowPaid(price, paidMax, step int) bool {
 	return price <= paidMax-corridorPaidBandGapSteps*step
 }
 
-func countTradesInRange(item, kind string, start, end time.Time) int {
-	n := 0
-	for _, trade := range data.TradeHistory[item] {
-		if trade.Type != kind {
-			continue
-		}
-		if !trade.Time.After(start) || trade.Time.After(end) {
-			continue
-		}
-		n++
+// serverFunTimeRaiseAnomalous — set_min: не поднимать каталог.
+// Закупаем не меньше, чем продаём (≥2 buy за 3 цикла) — не ↑.
+// Иначе не выше низа книги + наценка.
+func serverFunTimeRaiseAnomalous(ours, proposed int, item string, cycle time.Duration, now time.Time) bool {
+	if proposed <= ours {
+		return false
 	}
-	return n
+	if serverMinBuyBlocksUp(item, cycle, now) {
+		return true
+	}
+	since := now.Add(-ahBookRaiseWindow)
+	minAsk, n, ok := ahBookAnyMinSince(item, since)
+	if !ok || n < ahBookMinLotsInWindow || minAsk <= 0 {
+		return false
+	}
+	return proposed > minAsk+getNacenka(item)
 }
 
-func recentBuysPresent(item string, cycle time.Duration, now time.Time) bool {
+func serverMinBuyBlocksUp(item string, cycle time.Duration, now time.Time) bool {
 	if item == "" {
 		return false
 	}
 	if cycle <= 0 {
 		cycle = 10 * time.Minute
 	}
-	start := now.Add(-time.Duration(serverBoundLookCycles) * cycle)
-	return countTradesInRange(item, "buy", start, now) >= serverBoundMinBuys
-}
-
-// serverFunTimeRaiseAnomalous — мин (и редкий max↑): FunTime поднял нас на ≥1кк,
-// и мы в это время ещё закупались → наша цена в рынке, это не «занизили».
-func serverFunTimeRaiseAnomalous(ours, proposed int, item string, cycle time.Duration, now time.Time) bool {
-	if proposed-ours < serverMinAnomalousDelta {
+	since := now.Add(-time.Duration(serverBoundLookCycles) * cycle)
+	buys := countRecentBuys(item, since)
+	if buys < serverBoundMinBuys {
 		return false
 	}
-	return recentBuysPresent(item, cycle, now)
+	return buys >= countRecentSales(item, since)
 }
 
 // trySellsBlockUp — рынок уже отказывается от цены: ↑ запрещён даже при недоборе стока.
@@ -673,9 +671,9 @@ func ahBookRaiseTarget(minAsk, nacenka, step int) int {
 	return minAsk + nacenka + step
 }
 
-// shouldRaiseFromAhBook — селл ниже min(50)+наценка; dump / ↓ цикла / были buys — не трогаем.
+// shouldRaiseFromAhBook — селл ниже min(окно)+наценка; dump / ↓ цикла / были buys — не трогаем.
 func shouldRaiseFromAhBook(sell, minAsk, nacenka, n int, dumpZone, alreadyDown, hadBuys bool) bool {
-	if n < ahBookRaiseSample || minAsk <= 0 || dumpZone || alreadyDown || hadBuys {
+	if n < ahBookMinLotsInWindow || minAsk <= 0 || dumpZone || alreadyDown || hadBuys {
 		return false
 	}
 	return sell < minAsk+nacenka
@@ -752,7 +750,9 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_floor":
 		return "corridor_v8c: цена ниже пола (minBuy+наценка) → поднимаем"
 	case "corridor_price_up_ah_book":
-		return "corridor_v8i: селл < min(50 ah_book)+наценка → к min+наценка+шаг"
+		return "corridor_v8j: селл < min(3 мин ah_book)+наценка → к min+наценка+шаг"
+	case "corridor_price_down_ah_sellers":
+		return "corridor_v8j: ≥2 селлера ниже нас, но ≥min(3 мин)+наценка → к max из них"
 	case "corridor_hold_recover_ceiling":
 		return "corridor_v8e: recover упёрся в max(sell за окно)+K×step"
 	case "corridor_hold_recover_stale":
@@ -1292,15 +1292,29 @@ func adjustPrice(item string) AdjustReport {
 
 	dumpZone := totalHeld >= targetDump
 	alreadyDown := strings.Contains(action, "price_down")
-	if minAsk, bookOK := ahBookMinOfLastN(item, ahBookRaiseSample); bookOK {
-		if shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, ahBookRaiseSample, dumpZone, alreadyDown, buys > 0) {
-			tgt := ahBookRaiseTarget(minAsk, nacenka, step)
-			if tgt > newPrice {
+	bookSince := now.Add(-ahBookRaiseWindow)
+	minAsk, bookN, bookOK := ahBookMinSince(item, bookSince)
+	if bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, dumpZone, alreadyDown, buys > 0) {
+		tgt := ahBookRaiseTarget(minAsk, nacenka, step)
+		if tgt > newPrice {
+			newPrice = tgt
+			action = "corridor_price_up_ah_book"
+			changed = true
+			notes = append(notes, fmt.Sprintf("ah_book min3=%d n=%d → селл %d < min+наценка %d → %d",
+				minAsk, bookN, priceBefore, minAsk+nacenka, tgt))
+		}
+	}
+	if bookOK {
+		floor := minAsk + nacenka
+		if tgt, nSell, clipOK := ahBookSellerClipTarget(item, newPrice, floor, bookSince); clipOK && tgt < newPrice {
+			if tgt < priceFloor {
+				tgt = priceFloor
+			}
+			if tgt < newPrice {
 				newPrice = tgt
-				action = "corridor_price_up_ah_book"
+				action = "corridor_price_down_ah_sellers"
 				changed = true
-				notes = append(notes, fmt.Sprintf("ah_book min=%d n=%d → селл %d < min+наценка %d → %d",
-					minAsk, ahBookRaiseSample, priceBefore, minAsk+nacenka, tgt))
+				notes = append(notes, fmt.Sprintf("ah_sellers n=%d floor=%d → клип к max=%d", nSell, floor, tgt))
 			}
 		}
 	}
