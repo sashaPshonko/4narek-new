@@ -32,20 +32,23 @@ func TestShouldRaiseFromAhBook(t *testing.T) {
 	n := ahBookRaiseSample
 	minAsk := 1_000_000
 	nac := 300_000
-	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false) {
+	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false, false) {
 		t.Fatal("селл ниже min+наценка — поднимаем")
 	}
-	if shouldRaiseFromAhBook(minAsk+nac, minAsk, nac, n, false, false) {
+	if shouldRaiseFromAhBook(minAsk+nac, minAsk, nac, n, false, false, false) {
 		t.Fatal("уже на min+наценка — не трогаем")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, false, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, false, false, false) {
 		t.Fatal("меньше 50 — рано")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, true, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, true, false, false) {
 		t.Fatal("dump — не поднимаем")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, true) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, true, false) {
 		t.Fatal("уже ↓ в этом цикле")
+	}
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false, true) {
+		t.Fatal("были покупки — не поднимаем")
 	}
 }
 

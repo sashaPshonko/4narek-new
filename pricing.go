@@ -673,9 +673,9 @@ func ahBookRaiseTarget(minAsk, nacenka, step int) int {
 	return minAsk + nacenka + step
 }
 
-// shouldRaiseFromAhBook — селл ниже min(50)+наценка; dump оверстока не трогаем.
-func shouldRaiseFromAhBook(sell, minAsk, nacenka, n int, dumpZone, alreadyDown bool) bool {
-	if n < ahBookRaiseSample || minAsk <= 0 || dumpZone || alreadyDown {
+// shouldRaiseFromAhBook — селл ниже min(50)+наценка; dump / ↓ цикла / были buys — не трогаем.
+func shouldRaiseFromAhBook(sell, minAsk, nacenka, n int, dumpZone, alreadyDown, hadBuys bool) bool {
+	if n < ahBookRaiseSample || minAsk <= 0 || dumpZone || alreadyDown || hadBuys {
 		return false
 	}
 	return sell < minAsk+nacenka
@@ -1293,7 +1293,7 @@ func adjustPrice(item string) AdjustReport {
 	dumpZone := totalHeld >= targetDump
 	alreadyDown := strings.Contains(action, "price_down")
 	if minAsk, bookOK := ahBookMinOfLastN(item, ahBookRaiseSample); bookOK {
-		if shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, ahBookRaiseSample, dumpZone, alreadyDown) {
+		if shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, ahBookRaiseSample, dumpZone, alreadyDown, buys > 0) {
 			tgt := ahBookRaiseTarget(minAsk, nacenka, step)
 			if tgt > newPrice {
 				newPrice = tgt
