@@ -97,3 +97,24 @@ func insertAhBookBatch(rows []ahBookWire) {
 		}
 	}
 }
+
+// ahBookMinOfLastN — min(price) среди последних n лотов SKU (по ts). ok только при ровно n строках.
+func ahBookMinOfLastN(itemID string, n int) (minPrice int, ok bool) {
+	if mlDB == nil || n <= 0 || strings.TrimSpace(itemID) == "" {
+		return 0, false
+	}
+	var cnt int
+	var minP int
+	err := mlDB.QueryRow(`
+SELECT COUNT(*), COALESCE(MIN(price), 0) FROM (
+	SELECT price FROM ah_book_lots WHERE item_id = ? ORDER BY ts DESC LIMIT ?
+)`, itemID, n).Scan(&cnt, &minP)
+	if err != nil {
+		log.Printf("[ah_book] min last: %v", err)
+		return 0, false
+	}
+	if cnt < n || minP <= 0 {
+		return 0, false
+	}
+	return minP, true
+}

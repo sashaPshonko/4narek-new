@@ -16,6 +16,9 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8i — v8h + ↑ к min(последние 50 ah_book) + наценка + шаг
+// (перекуп: ask книги = себестоимость; не в dump).
+//
 // stock_corridor_v8h — v8g + полоса на малом share (броня 1 тип / 6 id, share≈21):
 // 18–25% давало lo/hi = 4–5, медиана held=2 → вечный недобор и deep-↑ (lo/2=2).
 // Мин. ширина полосы вниз; deep только held=0. Over idle / paid-climb как в v8g.
@@ -57,6 +60,7 @@ const (
 	corridorMaxIdleHardDowns = 1 // over/dump при sales=0: один щуп, не цепочка в пол
 	corridorPaidBandGapSteps = 3 // в полосе цена ≤ paid−N×step → ↑ к якорю (и ночью)
 	corridorMinBandSpan      = 4 // hi−lo; share=21 иначе полоса 4–5 шт. (позор не трогаем)
+	ahBookRaiseSample        = 50
 	// FunTime min: не доля, а +≥1кк при живых закупках.
 	// 02.09/16.07 шлем +1.0…2.0кк — глюк. Штаны 600→950 (+350к) — пол, пускаем.
 	serverMinAnomalousDelta = 1_000_000
@@ -658,6 +662,25 @@ func sellPriceFloor(minBuy, nacenka int) int {
 	return minBuy + nacenka
 }
 
+// ahBookRaiseTarget — селл = самый дешёвый ask из выборки + наша наценка + шаг.
+func ahBookRaiseTarget(minAsk, nacenka, step int) int {
+	if minAsk <= 0 {
+		return 0
+	}
+	if step < 0 {
+		step = 0
+	}
+	return minAsk + nacenka + step
+}
+
+// shouldRaiseFromAhBook — селл ниже min(50)+наценка; dump оверстока не трогаем.
+func shouldRaiseFromAhBook(sell, minAsk, nacenka, n int, dumpZone, alreadyDown bool) bool {
+	if n < ahBookRaiseSample || minAsk <= 0 || dumpZone || alreadyDown {
+		return false
+	}
+	return sell < minAsk+nacenka
+}
+
 // countItemsInCategoryLocked — сколько id в items_config с данным go-типом. Только под mutex.Lock.
 func countItemsInCategoryLocked(minecraftType string) int {
 	n := 0
@@ -728,6 +751,8 @@ func actionReasonRU(action string) string {
 		return "corridor_v8: held в полосе + сильный разбор → +цена (probe прибыли)"
 	case "corridor_price_up_floor":
 		return "corridor_v8c: цена ниже пола (minBuy+наценка) → поднимаем"
+	case "corridor_price_up_ah_book":
+		return "corridor_v8i: селл < min(50 ah_book)+наценка → к min+наценка+шаг"
 	case "corridor_hold_recover_ceiling":
 		return "corridor_v8e: recover упёрся в max(sell за окно)+K×step"
 	case "corridor_hold_recover_stale":
@@ -1262,6 +1287,21 @@ func adjustPrice(item string) AdjustReport {
 		default:
 			action = "corridor_hold_band"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] share=%d", totalHeld, targetLo, targetHi, share))
+		}
+	}
+
+	dumpZone := totalHeld >= targetDump
+	alreadyDown := strings.Contains(action, "price_down")
+	if minAsk, bookOK := ahBookMinOfLastN(item, ahBookRaiseSample); bookOK {
+		if shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, ahBookRaiseSample, dumpZone, alreadyDown) {
+			tgt := ahBookRaiseTarget(minAsk, nacenka, step)
+			if tgt > newPrice {
+				newPrice = tgt
+				action = "corridor_price_up_ah_book"
+				changed = true
+				notes = append(notes, fmt.Sprintf("ah_book min=%d n=%d → селл %d < min+наценка %d → %d",
+					minAsk, ahBookRaiseSample, priceBefore, minAsk+nacenka, tgt))
+			}
 		}
 	}
 
