@@ -1393,7 +1393,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		oldPrice := data.Prices[msg.Type]
 		now := time.Now()
 		if serverFunTimeRaiseAnomalous(oldPrice, msg.Price, msg.Type, cfg.AnalysisTime, now) {
-			log.Printf("[CONFIG] %s: min АХ %d vs наша %d — живой закуп или выше низа книги+наценка, каталог не поднимаем", msg.Type, msg.Price, oldPrice)
+			log.Printf("[CONFIG] %s: min АХ %d vs наша %d — живой закуп или выше p10 книги+наценка, каталог не поднимаем", msg.Type, msg.Price, oldPrice)
 			mutex.Unlock()
 			return
 		}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"sort"
 	"strings"
 	"time"
 )
@@ -286,25 +287,39 @@ AND NOT EXISTS (
 	return minPrice, n, true
 }
 
-// ahBookAnyMinSince — min всех лотов SKU в окне (витрины тоже). Для проверки мин АХ:
-// на ФТ куча дорогих слотов, медиана ≈ витрина, смотрим низ.
-func ahBookAnyMinSince(itemID string, since time.Time) (minPrice, n int, ok bool) {
+// ahBookP10Since — 10-й процентиль цен SKU в окне (витрины тоже).
+// Для set_min: сырой min = дампы, медиана = витрины.
+func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {
 	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
 		return 0, 0, false
 	}
-	err := mlDB.QueryRow(
-		`SELECT COUNT(*), COALESCE(MIN(price), 0) FROM ah_book_lots
-WHERE item_id = ? AND ts >= ? AND price > 0`,
+	rows, err := mlDB.Query(
+		`SELECT price FROM ah_book_lots WHERE item_id = ? AND ts >= ? AND price > 0`,
 		itemID, since.UTC().Format(time.RFC3339),
-	).Scan(&n, &minPrice)
+	)
 	if err != nil {
-		log.Printf("[ah_book] any min since: %v", err)
+		log.Printf("[ah_book] p10 since: %v", err)
 		return 0, 0, false
 	}
-	if n < ahBookMinLotsInWindow || minPrice <= 0 {
-		return minPrice, n, false
+	defer rows.Close()
+	var ps []int
+	for rows.Next() {
+		var p int
+		if err := rows.Scan(&p); err != nil {
+			continue
+		}
+		ps = append(ps, p)
 	}
-	return minPrice, n, true
+	n = len(ps)
+	if n < ahBookMinLotsInWindow {
+		return 0, n, false
+	}
+	sort.Ints(ps)
+	p10 = ps[n/10]
+	if p10 <= 0 {
+		return p10, n, false
+	}
+	return p10, n, true
 }
 
 func ahBookLatestBannedSellerPrices(itemID string, floor int, since time.Time) []int {

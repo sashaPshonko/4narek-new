@@ -310,19 +310,17 @@ func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
 	item := "шлем-1.21"
 	now := time.Now().UTC()
 	ts := now.Format(time.RFC3339)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 11; i++ {
 		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
 			fmt.Sprintf("wall-%d", i), ts, "armor", item, 2_200_000, "shop")
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	for i := 0; i < 2; i++ {
-		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-			fmt.Sprintf("cheap-%d", i), ts, "armor", item, 1_600_000, "player")
-		if err != nil {
-			t.Fatal(err)
-		}
+	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		"dump", ts, "armor", item, 300_000, "dump")
+	if err != nil {
+		t.Fatal(err)
 	}
 	prevCfg := itemsConfig
 	itemsConfig = map[string]ItemConfig{item: {Nacenka: 300_000}}
@@ -331,15 +329,19 @@ func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
 	data.TradeHistory = map[string][]TradeLog{}
 	t.Cleanup(func() { data.TradeHistory = prevHist })
 	cycle := 10 * time.Minute
-	cap := 1_600_000 + 300_000
-	if !serverFunTimeRaiseAnomalous(3_500_000, 3_550_000, item, cycle, now) {
-		t.Fatal("↑ выше низа+наценка — не пишем")
+	p10, n, ok := ahBookP10Since(item, now.Add(-ahBookRaiseWindow))
+	if !ok || n != 12 || p10 != 2_200_000 {
+		t.Fatalf("p10=%d n=%d ok=%v want 2.2M (дамп не должен быть полом)", p10, n, ok)
+	}
+	cap := p10 + 300_000
+	if !serverFunTimeRaiseAnomalous(1_600_000, 3_550_000, item, cycle, now) {
+		t.Fatal("глюк выше p10+наценка")
+	}
+	if serverFunTimeRaiseAnomalous(1_600_000, 1_900_000, item, cycle, now) {
+		t.Fatal("1.9 < p10+наценка — сырой min бы отсёк, p10 нет")
 	}
 	if !serverFunTimeRaiseAnomalous(1_600_000, cap+1, item, cycle, now) {
-		t.Fatal("↑ на 1 над низом+наценка")
-	}
-	if serverFunTimeRaiseAnomalous(1_600_000, cap, item, cycle, now) {
-		t.Fatal("ровно низ+наценка, закупок нет — можно")
+		t.Fatal("↑ над p10+наценка")
 	}
 	if serverFunTimeRaiseAnomalous(3_500_000, 2_000_000, item, cycle, now) {
 		t.Fatal("это ↓ с глюка, не блокируем")
@@ -350,7 +352,7 @@ func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
 			{Time: now.Add(-12 * time.Minute), Type: "buy", Price: 1},
 		},
 	}
-	if !serverFunTimeRaiseAnomalous(1_600_000, cap, item, cycle, now) {
-		t.Fatal("закуп ≥ продаж — не поднимаем даже к низу+наценка")
+	if !serverFunTimeRaiseAnomalous(1_600_000, 1_900_000, item, cycle, now) {
+		t.Fatal("закуп ≥ продаж — не поднимаем даже ниже p10")
 	}
 }

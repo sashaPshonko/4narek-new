@@ -379,7 +379,7 @@ func priceFarBelowPaid(price, paidMax, step int) bool {
 
 // serverFunTimeRaiseAnomalous — set_min: не поднимать каталог.
 // Закупаем не меньше, чем продаём (≥2 buy за 3 цикла) — не ↑.
-// Иначе не выше низа книги + наценка.
+// Иначе не выше p10 книги + наценка (не сырой min: дампы).
 func serverFunTimeRaiseAnomalous(ours, proposed int, item string, cycle time.Duration, now time.Time) bool {
 	if proposed <= ours {
 		return false
@@ -388,11 +388,11 @@ func serverFunTimeRaiseAnomalous(ours, proposed int, item string, cycle time.Dur
 		return true
 	}
 	since := now.Add(-ahBookRaiseWindow)
-	minAsk, n, ok := ahBookAnyMinSince(item, since)
-	if !ok || n < ahBookMinLotsInWindow || minAsk <= 0 {
+	p10, n, ok := ahBookP10Since(item, since)
+	if !ok || n < ahBookMinLotsInWindow || p10 <= 0 {
 		return false
 	}
-	return proposed > minAsk+getNacenka(item)
+	return proposed > p10+getNacenka(item)
 }
 
 func serverMinBuyBlocksUp(item string, cycle time.Duration, now time.Time) bool {
