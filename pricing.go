@@ -16,8 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
-// stock_corridor_v8f — v8e + не пилить over/dump без продаж (sword7 ночь 1.2→0.3);
-// зависший recover (stale/ceiling, лот есть, тишина) → −step, не hold вечно (яд3 4.79).
+// stock_corridor_v8g — по БД с авг: over↓ при sales=0 лучше hold (мечи fwd 2.5 vs 1.4),
+// но цепочка idle-over бьёт в пол, hold_band <500k → fwd≈0. Один idle hard↓, дальше ждать
+// продажу. В полосе цена << lastPaid → ↑ к якорю даже ночью. Stale−step откатили:
+// recover_stale fwd≈0, hold_dead лучше чем recover-↑ без sales.
 // Demand / skim / deep без этого потолка. noBuy не сбрасывается крошками sales
 // и не resume из dead-циклов.
 // Цена < пола (minBuy+наценка) → поднимаем. Пустое не роняем.
@@ -55,6 +57,8 @@ const (
 	corridorMaxNoBuyUps       = 8 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
 	corridorRecoverProbeSteps = 2 // recover ≤ max(sell в TTL) + K×step
 	corridorThinFleetMaxBots  = 2 // ≤ столько ботов в категории → мягче пороги спроса / recover
+	corridorMaxIdleHardDowns  = 1 // over/dump при sales=0: один щуп, не цепочка в пол
+	corridorPaidBandGapSteps  = 3 // в полосе цена ≤ paid−N×step → ↑ к якорю (и ночью)
 	// FunTime min: не доля, а +≥1кк при живых закупках.
 	// 02.09/16.07 шлем +1.0…2.0кк — глюк. Штаны 600→950 (+350к) — пол, пускаем.
 	serverMinAnomalousDelta = 1_000_000
@@ -142,6 +146,7 @@ type ItemAdjustState struct {
 	CorridorDownCooldown  int  `json:"corridor_down_cooldown"`    // циклы до следующего soft↓
 	CorridorUpCooldown    int  `json:"corridor_up_cooldown"`      // циклы до следующего ↑
 	CorridorNoBuyUpStreak int  `json:"corridor_no_buy_up_streak"` // ↑ подряд без buys (антиvacuum)
+	IdleHardDownStreak    int  `json:"idle_hard_down_streak"`     // подряд over/dump при sales=0
 	LastCycleSales        int  `json:"last_cycle_sales"`          // sales прошлого цикла
 }
 
@@ -349,22 +354,21 @@ func recoverBlockedByPaidCap(price, lastPaid, step int) bool {
 	return price >= cap
 }
 
-// hardDownHasSales — over/dump ×2 только если в цикле кто-то купил.
-// Иначе ночной/мёртвый перезапас режет цену в пол (sword7 1.2кк→300к при sales=0).
-func hardDownHasSales(sales int) bool {
-	return sales > 0
-}
-
-// shouldEaseStaleUnsold — recover нельзя, вещь висит, сделок нет → щупаем −step.
-// held=0 не роняем (vacuum). trySells или 3 мёртвых цикла — не сразу с первого hold.
-func shouldEaseStaleUnsold(held, sales, buys, deadStreak, trySells int, recoverStuck bool) bool {
-	if !recoverStuck || held <= 0 || sales > 0 || buys > 0 {
-		return false
-	}
-	if trySells > 0 {
+// allowHardDown — over/dump. С продажами — всегда (fwd лучше hold). Без продаж — один щуп,
+// не 4×−200к до пола (sword7).
+func allowHardDown(sales, idleStreak int) bool {
+	if sales > 0 {
 		return true
 	}
-	return deadStreak >= 3
+	return idleStreak < corridorMaxIdleHardDowns
+}
+
+// priceFarBelowPaid — в полосе сидим на полу, рынок только что платил дороже.
+func priceFarBelowPaid(price, paidMax, step int) bool {
+	if paidMax <= 0 || step <= 0 || price <= 0 {
+		return false
+	}
+	return price <= paidMax-corridorPaidBandGapSteps*step
 }
 
 func countTradesInRange(item, kind string, start, end time.Time) int {
@@ -700,13 +704,13 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 func actionReasonRU(action string) string {
 	switch action {
 	case "corridor_price_down_dump":
-		return "corridor_v8f: held ≥ dump% и sales>0 → −цена×2"
+		return "corridor_v8g: held ≥ dump% → −цена×2 (без продаж — макс. 1 щуп подряд)"
 	case "corridor_price_down_over":
-		return "corridor_v8f: held ≥ over% и sales>0 → −цена×2"
+		return "corridor_v8g: held ≥ over% → −цена×2 (без продаж — макс. 1 щуп подряд)"
 	case "corridor_hold_over_idle":
-		return "corridor_v8f: перезапас, но sales=0 — не дампим в пол"
-	case "corridor_price_down_stale":
-		return "corridor_v8f: recover застрял, лот не уходит → −step"
+		return "corridor_v8g: перезапас, sales=0 после idle-щупа — ждём продажу"
+	case "corridor_price_up_paid":
+		return "corridor_v8g: в полосе цена << lastPaid → ↑ к якорю (и ночью)"
 	case "corridor_price_down_soft":
 		return "corridor_v6: held > hi → −цена (слив хвоста выше полосы)"
 	case "corridor_price_down_hi":
@@ -1095,9 +1099,9 @@ func adjustPrice(item string) AdjustReport {
 		notes = append(notes, "share=0 — нет базы для коридора")
 
 	case totalHeld >= targetDump:
-		if !hardDownHasSales(sales) {
+		if !allowHardDown(sales, state.IdleHardDownStreak) {
 			action = "corridor_hold_over_idle"
-			notes = append(notes, fmt.Sprintf("held=%d ≥ dump=%d sales=0 — не дампим в пол", totalHeld, targetDump))
+			notes = append(notes, fmt.Sprintf("held=%d ≥ dump=%d sales=0 idleHard=%d — ждём продажу, не цепочку в пол", totalHeld, targetDump, state.IdleHardDownStreak))
 		} else {
 			applyDown("corridor_price_down_dump",
 				fmt.Sprintf("held=%d ≥ dump=%d (%.0f%% share=%d ×%d)",
@@ -1107,9 +1111,9 @@ func adjustPrice(item string) AdjustReport {
 		}
 
 	case totalHeld >= targetOver:
-		if !hardDownHasSales(sales) {
+		if !allowHardDown(sales, state.IdleHardDownStreak) {
 			action = "corridor_hold_over_idle"
-			notes = append(notes, fmt.Sprintf("held=%d ≥ over=%d sales=0 — не дампим в пол", totalHeld, targetOver))
+			notes = append(notes, fmt.Sprintf("held=%d ≥ over=%d sales=0 idleHard=%d — ждём продажу, не цепочку в пол", totalHeld, targetOver, state.IdleHardDownStreak))
 		} else {
 			applyDown("corridor_price_down_over",
 				fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d ×%d)",
@@ -1190,10 +1194,6 @@ func adjustPrice(item string) AdjustReport {
 					totalHeld, targetLo, state.CorridorNoBuyUpStreak, corridorMaxNoBuyUps)
 			}
 			applyUp(label, note)
-		case shouldEaseStaleUnsold(totalHeld, sales, buys, state.CorridorDeadStreak, trySells, overCap || noBuyBlocked):
-			applyDown("corridor_price_down_stale",
-				fmt.Sprintf("held=%d < lo=%d recover застрял sales=0 dead=%d try=%d — −step",
-					totalHeld, targetLo, state.CorridorDeadStreak, trySells), 1)
 		case overCap && paidMax <= 0:
 			action = "corridor_hold_recover_stale"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d — нет sell за %s, recover ↑ запрещён",
@@ -1227,6 +1227,11 @@ func adjustPrice(item string) AdjustReport {
 			sales > buys &&
 			demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) &&
 			!trySellsBlockUp(sales, trySells)
+		paidClimb := priceFarBelowPaid(priceBefore, paidMax, step) &&
+			buys <= sales &&
+			!trySellsBlockUp(sales, trySells) &&
+			state.CorridorNoBuyUpStreak < corridorMaxNoBuyUps &&
+			state.CorridorUpCooldown == 0
 		switch {
 		case trySellsBlockUp(sales, trySells):
 			action = "corridor_hold_skim_veto"
@@ -1236,6 +1241,10 @@ func adjustPrice(item string) AdjustReport {
 			action = "corridor_hold_skim_veto"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] buys=%d > sales=%d — набиваем, skim ↑ запрещён",
 				totalHeld, targetLo, targetHi, buys, sales))
+		case paidClimb:
+			applyUp("corridor_price_up_paid",
+				fmt.Sprintf("held=%d в [%d,%d] price=%d << paid=%d night=%v — ↑ к якорю",
+					totalHeld, targetLo, targetHi, priceBefore, paidMax, nightMSK))
 		case nightMSK:
 			action = "corridor_hold_band"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] night — skim выкл", totalHeld, targetLo, targetHi))
@@ -1292,7 +1301,8 @@ func adjustPrice(item string) AdjustReport {
 		state.CorridorDeadStreak = 0
 		state.CorridorDownCooldown = 0
 		state.CorridorUpCooldown = corridorUpCooldownCycles
-		isRecover := strings.Contains(action, "recover")
+		state.IdleHardDownStreak = 0
+		isRecover := strings.Contains(action, "recover") || strings.Contains(action, "price_up_paid")
 		if buys > 0 || !isRecover {
 			state.CorridorNoBuyUpStreak = 0
 		} else {
@@ -1307,6 +1317,11 @@ func adjustPrice(item string) AdjustReport {
 			if buys > 0 {
 				state.CorridorNoBuyUpStreak = 0
 			}
+		}
+		if sales > 0 {
+			state.IdleHardDownStreak = 0
+		} else if strings.Contains(action, "price_down_over") || strings.Contains(action, "price_down_dump") {
+			state.IdleHardDownStreak++
 		}
 		if state.CorridorUpCooldown > 0 {
 			state.CorridorUpCooldown--

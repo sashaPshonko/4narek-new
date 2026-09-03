@@ -76,29 +76,27 @@ func TestRecoverPaidCap(t *testing.T) {
 	}
 }
 
-func TestHardDownHasSales(t *testing.T) {
-	if hardDownHasSales(0) {
-		t.Fatal("без продаж не дампим")
+func TestAllowHardDown(t *testing.T) {
+	if !allowHardDown(2, 5) {
+		t.Fatal("с продажами всегда можно")
 	}
-	if !hardDownHasSales(1) {
-		t.Fatal("с продажей over можно")
+	if !allowHardDown(0, 0) {
+		t.Fatal("первый idle щуп")
+	}
+	if allowHardDown(0, 1) {
+		t.Fatal("второй idle — стоп цепочки")
 	}
 }
 
-func TestShouldEaseStaleUnsold(t *testing.T) {
-	if shouldEaseStaleUnsold(0, 0, 0, 5, 0, true) {
-		t.Fatal("пустое не роняем")
+func TestPriceFarBelowPaid(t *testing.T) {
+	step := 100_000
+	if !priceFarBelowPaid(300_000, 1_200_000, step) {
+		t.Fatal("300к vs paid 1.2кк")
 	}
-	if shouldEaseStaleUnsold(1, 0, 0, 0, 0, true) {
-		t.Fatal("первый цикл без try — ещё hold")
+	if priceFarBelowPaid(1_100_000, 1_200_000, step) {
+		t.Fatal("рядом с paid — не far")
 	}
-	if !shouldEaseStaleUnsold(1, 0, 0, 0, 2, true) {
-		t.Fatal("висит на АХ — −step")
-	}
-	if !shouldEaseStaleUnsold(1, 0, 0, 3, 0, true) {
-		t.Fatal("3 мёртвых цикла — −step")
-	}
-	if shouldEaseStaleUnsold(1, 0, 0, 3, 0, false) {
-		t.Fatal("recover не застрял")
+	if priceFarBelowPaid(300_000, 0, step) {
+		t.Fatal("нет якоря")
 	}
 }
