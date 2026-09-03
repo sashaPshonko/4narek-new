@@ -174,6 +174,7 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_decisions_ts ON ml_decisions(logged_ts)`)
 
 	mlDB = db
+	initAhBookTable()
 	initCapitalTables()
 	initMLShadowTable()
 	healMLDatabase(db)

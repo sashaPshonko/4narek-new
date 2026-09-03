@@ -1202,6 +1202,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			WindowStartMs int64           `json:"window_start_ms"`
 			WindowEndMs   int64           `json:"window_end_ms"`
 			WindowMs      int64           `json:"window_ms"`
+			Uuid          string          `json:"uuid"`
+			GoType        string          `json:"go_type"`
+			ItemID        string          `json:"item_id"`
+			Seller        string          `json:"seller"`
+			Anarchy       any             `json:"anarchy"`
+			SeenBy        string          `json:"seen_by"`
 		}
 		if msg.Action != "add" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
@@ -1235,6 +1241,12 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	WindowStartMs int64           `json:"window_start_ms"`
 	WindowEndMs   int64           `json:"window_end_ms"`
 	WindowMs      int64           `json:"window_ms"`
+	Uuid          string          `json:"uuid"`
+	GoType        string          `json:"go_type"`
+	ItemID        string          `json:"item_id"`
+	Seller        string          `json:"seller"`
+	Anarchy       any             `json:"anarchy"`
+	SeenBy        string          `json:"seen_by"`
 }) {
 	mutex.Lock()
 	enchJSON := tradeEnchantsJSON(msg.Enchants)
@@ -1284,6 +1296,10 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		logTradeEventML(msg.Type, "try-sell", msg.Price, "", nil)
 		mutex.Unlock()
 		saveDailyDataNoMessageUpdate()
+
+	case "ah_lot":
+		insertAhBookLotLocked(msg.Uuid, msg.GoType, msg.ItemID, msg.Price, msg.Durability, msg.Seller, enchJSON, anarchyInt(msg.Anarchy), msg.SeenBy)
+		mutex.Unlock()
 
 	case "info":
 		mutex.Unlock()
