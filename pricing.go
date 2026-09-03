@@ -16,13 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
-// stock_corridor_v8g — по БД с авг: over↓ при sales=0 лучше hold (мечи fwd 2.5 vs 1.4),
-// но цепочка idle-over бьёт в пол, hold_band <500k → fwd≈0. Один idle hard↓, дальше ждать
-// продажу. В полосе цена << lastPaid → ↑ к якорю даже ночью. Stale−step откатили:
-// recover_stale fwd≈0, hold_dead лучше чем recover-↑ без sales.
-// Demand / skim / deep без этого потолка. noBuy не сбрасывается крошками sales
-// и не resume из dead-циклов.
-// Цена < пола (minBuy+наценка) → поднимаем. Пустое не роняем.
+// stock_corridor_v8h — v8g + полоса на малом share (броня 1 тип / 6 id, share≈21):
+// 18–25% давало lo/hi = 4–5, медиана held=2 → вечный недобор и deep-↑ (lo/2=2).
+// Мин. ширина полосы вниз; deep только held=0. Over idle / paid-climb как в v8g.
+// Demand / skim / noBuy без потолка. Цена < пола → поднимаем. Пустое не роняем.
 //
 // v7→v8 (29.07): в [lo,hi] всегда был hold → цена залипала в «удобном» равновесии
 // (шлемы 1.2M вместо прибыльных ~2.5M). Skim: если сток в полосе и рынок реально
@@ -57,8 +54,9 @@ const (
 	corridorMaxNoBuyUps       = 8 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
 	corridorRecoverProbeSteps = 2 // recover ≤ max(sell в TTL) + K×step
 	corridorThinFleetMaxBots  = 2 // ≤ столько ботов в категории → мягче пороги спроса / recover
-	corridorMaxIdleHardDowns  = 1 // over/dump при sales=0: один щуп, не цепочка в пол
-	corridorPaidBandGapSteps  = 3 // в полосе цена ≤ paid−N×step → ↑ к якорю (и ночью)
+	corridorMaxIdleHardDowns = 1 // over/dump при sales=0: один щуп, не цепочка в пол
+	corridorPaidBandGapSteps = 3 // в полосе цена ≤ paid−N×step → ↑ к якорю (и ночью)
+	corridorMinBandSpan      = 4 // hi−lo; share=21 иначе полоса 4–5 шт. (позор не трогаем)
 	// FunTime min: не доля, а +≥1кк при живых закупках.
 	// 02.09/16.07 шлем +1.0…2.0кк — глюк. Штаны 600→950 (+350к) — пол, пускаем.
 	serverMinAnomalousDelta = 1_000_000
@@ -296,6 +294,18 @@ func stockTargets(share int, band stockBandFracs) (lo, hi, soft, over, dump int)
 	if hi <= lo {
 		hi = lo + 1
 	}
+	// Обычный коридор: на малом share (броня после merge) не оставлять полосу в 1–2 слота.
+	if band.lo >= stockBandLoFrac-1e-9 && hi-lo < corridorMinBandSpan {
+		need := corridorMinBandSpan - (hi - lo)
+		down := (need + 1) / 2
+		up := need - down
+		lo -= down
+		hi += up
+		if lo < 1 {
+			hi += 1 - lo
+			lo = 1
+		}
+	}
 	if soft <= hi {
 		soft = hi + 1
 	}
@@ -308,16 +318,9 @@ func stockTargets(share int, band stockBandFracs) (lo, hi, soft, over, dump int)
 	return lo, hi, soft, over, dump
 }
 
-// deepUnderstock — held далеко ниже lo (≤ половины lo): тонкий сток, имеет смысл чинить ↑ быстрее.
+// deepUnderstock — витрина пустая. lo/2 при share≈21 = held=2, это норма брони, не «глубокий недобор».
 func deepUnderstock(totalHeld, targetLo int) bool {
-	if totalHeld <= 0 || targetLo <= 0 {
-		return false
-	}
-	thresh := targetLo / 2
-	if thresh < 1 {
-		thresh = 1
-	}
-	return totalHeld <= thresh
+	return totalHeld == 0 && targetLo > 0
 }
 
 // lastPaidSellMax — самая дорогая фактическая продажа в окне (не BasePrice, не пол закупа).
@@ -704,13 +707,13 @@ func blockNacenkaRaise(share, totalHeld, sales, buys int) bool {
 func actionReasonRU(action string) string {
 	switch action {
 	case "corridor_price_down_dump":
-		return "corridor_v8g: held ≥ dump% → −цена×2 (без продаж — макс. 1 щуп подряд)"
+		return "corridor_v8h: held ≥ dump% → −цена×2 (без продаж — макс. 1 щуп подряд)"
 	case "corridor_price_down_over":
-		return "corridor_v8g: held ≥ over% → −цена×2 (без продаж — макс. 1 щуп подряд)"
+		return "corridor_v8h: held ≥ over% → −цена×2 (без продаж — макс. 1 щуп подряд)"
 	case "corridor_hold_over_idle":
-		return "corridor_v8g: перезапас, sales=0 после idle-щупа — ждём продажу"
+		return "corridor_v8h: перезапас, sales=0 после idle-щупа — ждём продажу"
 	case "corridor_price_up_paid":
-		return "corridor_v8g: в полосе цена << lastPaid → ↑ к якорю (и ночью)"
+		return "corridor_v8h: в полосе цена << lastPaid → ↑ к якорю (и ночью)"
 	case "corridor_price_down_soft":
 		return "corridor_v6: held > hi → −цена (слив хвоста выше полосы)"
 	case "corridor_price_down_hi":
@@ -718,7 +721,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_demand":
 		return "corridor_v8: held < lo, сильный спрос (день≥3 / ночь≥4) → +цена"
 	case "corridor_price_up_deep":
-		return "corridor_v8: held ≤ lo/2 днём + сильный спрос → +цена (обход up_cd)"
+		return "corridor_v8h: held=0 днём + сильный спрос → +цена (обход up_cd)"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
 		return "corridor_v8e: недобор, recover ≤ max(sell)+K×step (без BasePrice)"
 	case "corridor_price_up_skim":
@@ -1171,12 +1174,8 @@ func adjustPrice(item string) AdjustReport {
 				totalHeld, targetLo, sales, buys, prevCycleSales, nightMSK)
 			if bypassUpCD && (state.CorridorUpCooldown > 0 || state.CorridorUpStreak >= corridorMaxUpStreak) {
 				upLabel = "corridor_price_up_deep"
-				half := targetLo / 2
-				if half < 1 {
-					half = 1
-				}
-				upNote = fmt.Sprintf("held=%d ≤ lo/2=%d sales=%d > buys=%d — deep-↑ обход cd/streak",
-					totalHeld, half, sales, buys)
+				upNote = fmt.Sprintf("held=0 < lo=%d sales=%d > buys=%d — deep-↑ обход cd/streak",
+					targetLo, sales, buys)
 			}
 			applyUp(upLabel, upNote)
 		case sales > buys && state.CorridorUpStreak >= corridorMaxUpStreak:

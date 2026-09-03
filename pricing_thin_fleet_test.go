@@ -88,6 +88,41 @@ func TestAllowHardDown(t *testing.T) {
 	}
 }
 
+func TestStockTargetsSmallShareWidensDown(t *testing.T) {
+	def := stockBandFracs{
+		lo: stockBandLoFrac, hi: stockBandHiFrac, soft: stockSoftDownFrac,
+		over: stockOverFrac, dump: stockDumpFrac,
+	}
+	lo, hi, _, _, _ := stockTargets(21, def)
+	if lo != 2 || hi != 6 {
+		t.Fatalf("armor share=21 band [%d,%d] want [2,6]", lo, hi)
+	}
+	lo48, hi48, _, _, _ := stockTargets(48, def)
+	if lo48 < 8 || hi48-lo48 < corridorMinBandSpan {
+		t.Fatalf("large share [%d,%d]", lo48, hi48)
+	}
+	poz := stockBandFracs{
+		lo: pozorBandLoFrac, hi: pozorBandHiFrac, soft: pozorSoftDownFrac,
+		over: pozorOverFrac, dump: pozorDumpFrac,
+	}
+	plo, phi, _, _, _ := stockTargets(10, poz)
+	if plo != 1 || phi != 2 {
+		t.Fatalf("pozor share=10 must stay 10–18%% [%d,%d]", plo, phi)
+	}
+}
+
+func TestDeepUnderstockOnlyEmpty(t *testing.T) {
+	if !deepUnderstock(0, 4) {
+		t.Fatal("empty is deep")
+	}
+	if deepUnderstock(2, 4) {
+		t.Fatal("held=2 at lo=4 is normal armor, not deep")
+	}
+	if deepUnderstock(1, 4) {
+		t.Fatal("held=1 is not empty")
+	}
+}
+
 func TestPriceFarBelowPaid(t *testing.T) {
 	step := 100_000
 	if !priceFarBelowPaid(300_000, 1_200_000, step) {
