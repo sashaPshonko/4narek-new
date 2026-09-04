@@ -1295,29 +1295,41 @@ func adjustPrice(item string) AdjustReport {
 	dumpZone := totalHeld >= targetDump
 	alreadyDown := strings.Contains(action, "price_down")
 	bookSince := now.Add(-ahBookRaiseWindow)
+	// sqlite книги — вне mutex.Lock (иначе WS/sales клинят на ah_book + mlDBMu).
+	mutex.Unlock()
 	minAsk, bookN, bookOK := ahBookMinSince(item, bookSince)
-	if bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, dumpZone, alreadyDown, buys > 0) {
-		tgt := ahBookRaiseTarget(minAsk, nacenka, step)
-		if tgt > newPrice {
-			newPrice = tgt
-			action = "corridor_price_up_ah_book"
-			changed = true
-			notes = append(notes, fmt.Sprintf("ah_book min3=%d n=%d → селл %d < min+наценка %d → %d",
-				minAsk, bookN, priceBefore, minAsk+nacenka, tgt))
-		}
+	raiseFromBook := bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, dumpZone, alreadyDown, buys > 0)
+	var raiseTgt int
+	if raiseFromBook {
+		raiseTgt = ahBookRaiseTarget(minAsk, nacenka, step)
 	}
+	var clipTgt, clipN int
+	var clipOK bool
 	if bookOK {
-		floor := minAsk + nacenka
-		if tgt, nSell, clipOK := ahBookSellerClipTarget(item, newPrice, floor, bookSince); clipOK && tgt < newPrice {
-			if tgt < priceFloor {
-				tgt = priceFloor
-			}
-			if tgt < newPrice {
-				newPrice = tgt
-				action = "corridor_price_down_ah_sellers"
-				changed = true
-				notes = append(notes, fmt.Sprintf("ah_sellers n=%d floor=%d → клип к max=%d", nSell, floor, tgt))
-			}
+		probe := newPrice
+		if raiseTgt > probe {
+			probe = raiseTgt
+		}
+		clipTgt, clipN, clipOK = ahBookSellerClipTarget(item, probe, minAsk+nacenka, bookSince)
+	}
+	mutex.Lock()
+	if raiseFromBook && raiseTgt > newPrice {
+		newPrice = raiseTgt
+		action = "corridor_price_up_ah_book"
+		changed = true
+		notes = append(notes, fmt.Sprintf("ah_book min3=%d n=%d → селл %d < min+наценка %d → %d",
+			minAsk, bookN, priceBefore, minAsk+nacenka, raiseTgt))
+	}
+	if clipOK && clipTgt < newPrice {
+		tgt := clipTgt
+		if tgt < priceFloor {
+			tgt = priceFloor
+		}
+		if tgt < newPrice {
+			newPrice = tgt
+			action = "corridor_price_down_ah_sellers"
+			changed = true
+			notes = append(notes, fmt.Sprintf("ah_sellers n=%d floor=%d → клип к max=%d", clipN, minAsk+nacenka, tgt))
 		}
 	}
 

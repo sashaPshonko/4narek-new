@@ -19,6 +19,7 @@ func initAhBookTable() {
 	if mlDB == nil {
 		return
 	}
+	mlDBMu.Lock()
 	_, err := mlDB.Exec(`
 CREATE TABLE IF NOT EXISTS ah_book_lots (
 	uuid TEXT PRIMARY KEY,
@@ -33,13 +34,16 @@ CREATE TABLE IF NOT EXISTS ah_book_lots (
 	seen_by TEXT
 )`)
 	if err != nil {
+		mlDBMu.Unlock()
 		log.Printf("[ah_book] schema: %v", err)
 		return
 	}
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_ah_book_item_ts ON ah_book_lots(item_id, ts)`)
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_ah_book_go_ts ON ah_book_lots(go_type, ts)`)
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_ah_book_seller_item_ts ON ah_book_lots(seller, item_id, ts)`)
-	if err := ensureAhBookSellerBanTable(); err != nil {
+	err = ensureAhBookSellerBanTableLocked()
+	mlDBMu.Unlock()
+	if err != nil {
 		log.Printf("[ah_book] ban schema: %v", err)
 		return
 	}
@@ -50,6 +54,12 @@ func ensureAhBookSellerBanTable() error {
 	if mlDB == nil {
 		return nil
 	}
+	mlDBMu.Lock()
+	defer mlDBMu.Unlock()
+	return ensureAhBookSellerBanTableLocked()
+}
+
+func ensureAhBookSellerBanTableLocked() error {
 	_, err := mlDB.Exec(`
 CREATE TABLE IF NOT EXISTS ah_book_seller_bans (
 	seller TEXT PRIMARY KEY,
@@ -85,10 +95,12 @@ func banAhBookSeller(seller, itemID string, n int) {
 	if mlDB == nil || key == "" || n < ahBookWallMinLots {
 		return
 	}
+	mlDBMu.Lock()
 	res, err := mlDB.Exec(
 		`INSERT OR IGNORE INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
 		key, time.Now().UTC().Format(time.RFC3339), itemID, n, int(ahBookWallWindow.Seconds()),
 	)
+	mlDBMu.Unlock()
 	if err != nil {
 		log.Printf("[ah_book] ban insert %s: %v", key, err)
 		return
@@ -104,10 +116,12 @@ func countAhBookSellerSKUSince(seller, itemID string, since time.Time) int {
 		return 0
 	}
 	var n int
+	mlDBMu.Lock()
 	err := mlDB.QueryRow(
 		`SELECT COUNT(*) FROM ah_book_lots WHERE lower(trim(seller)) = ? AND item_id = ? AND ts >= ?`,
 		ahBookSellerKey(seller), itemID, since.UTC().Format(time.RFC3339),
 	).Scan(&n)
+	mlDBMu.Unlock()
 	if err != nil {
 		log.Printf("[ah_book] wall count: %v", err)
 		return 0
@@ -155,46 +169,62 @@ func backfillAhBookSellerBans() {
 	if mlDB == nil {
 		return
 	}
+	mlDBMu.Lock()
 	rows, err := mlDB.Query(`
 SELECT trim(seller), item_id, ts FROM ah_book_lots
 WHERE trim(seller) != ''
 ORDER BY lower(trim(seller)), item_id, ts`)
 	if err != nil {
+		mlDBMu.Unlock()
 		log.Printf("[ah_book] ban backfill: %v", err)
 		return
 	}
-	defer rows.Close()
-	type grp struct {
-		seller, item string
-		times        []time.Time
+	type hit struct {
+		seller, itemID string
+		times          []time.Time
 	}
-	var cur grp
+	var cur hit
 	flush := func() {
 		if ahBookTimesHitWall(cur.times) {
-			banAhBookSeller(cur.seller, cur.item, len(cur.times))
+			// ban without re-entering mlDBMu — already held
+			key := ahBookSellerKey(cur.seller)
+			if key == "" || len(cur.times) < ahBookWallMinLots {
+				return
+			}
+			res, err := mlDB.Exec(
+				`INSERT OR IGNORE INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
+				key, time.Now().UTC().Format(time.RFC3339), cur.itemID, len(cur.times), int(ahBookWallWindow.Seconds()),
+			)
+			if err != nil {
+				log.Printf("[ah_book] ban insert %s: %v", key, err)
+				return
+			}
+			if aff, _ := res.RowsAffected(); aff == 1 {
+				log.Printf("[ah_book] seller ban forever %s sku=%s n=%d window=%s", key, cur.itemID, len(cur.times), ahBookWallWindow)
+			}
 		}
 	}
 	for rows.Next() {
-		var seller, item, ts string
-		if err := rows.Scan(&seller, &item, &ts); err != nil {
+		var seller, itemID, tsStr string
+		if err := rows.Scan(&seller, &itemID, &tsStr); err != nil {
 			continue
 		}
-		t, err := time.Parse(time.RFC3339, ts)
+		ts, err := time.Parse(time.RFC3339, tsStr)
 		if err != nil {
-			continue
+			ts, _ = time.Parse(time.RFC3339Nano, tsStr)
 		}
-		if cur.seller != "" && (ahBookSellerKey(seller) != ahBookSellerKey(cur.seller) || item != cur.item) {
+		if cur.seller != "" && (cur.seller != seller || cur.itemID != itemID) {
 			flush()
-			cur = grp{}
+			cur = hit{}
 		}
-		if cur.seller == "" {
-			cur.seller, cur.item = seller, item
-		}
-		cur.times = append(cur.times, t)
+		cur.seller, cur.itemID = seller, itemID
+		cur.times = append(cur.times, ts)
 	}
 	if cur.seller != "" {
 		flush()
 	}
+	_ = rows.Close()
+	mlDBMu.Unlock()
 }
 
 type ahBookWire struct {
@@ -225,6 +255,7 @@ func insertAhBookBatch(rows []ahBookWire) {
 	mutex.RUnlock()
 	ts := time.Now().UTC().Format(time.RFC3339)
 	pairs := make([][2]string, 0, len(keep))
+	mlDBMu.Lock()
 	for _, r := range keep {
 		uuid := strings.TrimSpace(r.Uuid)
 		if uuid == "" || r.ItemID == "" {
@@ -262,6 +293,7 @@ func insertAhBookBatch(rows []ahBookWire) {
 			pairs = append(pairs, [2]string{seller, r.ItemID})
 		}
 	}
+	mlDBMu.Unlock()
 	maybeBanAhBookWallSellers(pairs)
 }
 
@@ -270,6 +302,7 @@ func ahBookMinSince(itemID string, since time.Time) (minPrice, n int, ok bool) {
 	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
 		return 0, 0, false
 	}
+	mlDBMu.Lock()
 	err := mlDB.QueryRow(`
 SELECT COUNT(*), COALESCE(MIN(a.price), 0) FROM ah_book_lots a
 WHERE a.item_id = ? AND a.ts >= ?
@@ -277,6 +310,7 @@ AND NOT EXISTS (
 	SELECT 1 FROM ah_book_seller_bans b
 	WHERE b.seller = lower(trim(a.seller))
 )`, itemID, since.UTC().Format(time.RFC3339)).Scan(&n, &minPrice)
+	mlDBMu.Unlock()
 	if err != nil {
 		log.Printf("[ah_book] min since: %v", err)
 		return 0, 0, false
@@ -293,15 +327,16 @@ func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {
 	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
 		return 0, 0, false
 	}
+	mlDBMu.Lock()
 	rows, err := mlDB.Query(
 		`SELECT price FROM ah_book_lots WHERE item_id = ? AND ts >= ? AND price > 0`,
 		itemID, since.UTC().Format(time.RFC3339),
 	)
 	if err != nil {
+		mlDBMu.Unlock()
 		log.Printf("[ah_book] p10 since: %v", err)
 		return 0, 0, false
 	}
-	defer rows.Close()
 	var ps []int
 	for rows.Next() {
 		var p int
@@ -310,6 +345,8 @@ func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {
 		}
 		ps = append(ps, p)
 	}
+	_ = rows.Close()
+	mlDBMu.Unlock()
 	n = len(ps)
 	if n < ahBookMinLotsInWindow {
 		return 0, n, false
@@ -326,6 +363,7 @@ func ahBookLatestBannedSellerPrices(itemID string, floor int, since time.Time) [
 	if mlDB == nil || strings.TrimSpace(itemID) == "" || floor <= 0 {
 		return nil
 	}
+	mlDBMu.Lock()
 	rows, err := mlDB.Query(`
 SELECT lower(trim(a.seller)), a.price
 FROM ah_book_lots a
@@ -336,10 +374,10 @@ AND EXISTS (
 )
 ORDER BY a.ts DESC`, itemID, since.UTC().Format(time.RFC3339), floor)
 	if err != nil {
+		mlDBMu.Unlock()
 		log.Printf("[ah_book] seller prices: %v", err)
 		return nil
 	}
-	defer rows.Close()
 	latest := map[string]int{}
 	for rows.Next() {
 		var seller string
@@ -352,6 +390,8 @@ ORDER BY a.ts DESC`, itemID, since.UTC().Format(time.RFC3339), floor)
 		}
 		latest[seller] = price
 	}
+	_ = rows.Close()
+	mlDBMu.Unlock()
 	out := make([]int, 0, len(latest))
 	for _, p := range latest {
 		out = append(out, p)
@@ -389,6 +429,7 @@ func ahBookMinOfLastN(itemID string, n int) (minPrice int, ok bool) {
 	}
 	var cnt int
 	var minP int
+	mlDBMu.Lock()
 	err := mlDB.QueryRow(`
 SELECT COUNT(*), COALESCE(MIN(price), 0) FROM (
 	SELECT a.price FROM ah_book_lots a
@@ -399,6 +440,7 @@ SELECT COUNT(*), COALESCE(MIN(price), 0) FROM (
 	)
 	ORDER BY a.ts DESC LIMIT ?
 )`, itemID, n).Scan(&cnt, &minP)
+	mlDBMu.Unlock()
 	if err != nil {
 		log.Printf("[ah_book] min last: %v", err)
 		return 0, false

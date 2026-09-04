@@ -1390,8 +1390,15 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		}
 		oldPrice := data.Prices[msg.Type]
 		now := time.Now()
-		if serverFunTimeRaiseAnomalous(oldPrice, msg.Price, msg.Type, cfg.AnalysisTime, now) {
+		cycle := cfg.AnalysisTime
+		mutex.Unlock()
+		if serverFunTimeRaiseAnomalous(oldPrice, msg.Price, msg.Type, cycle, now) {
 			log.Printf("[CONFIG] %s: min АХ %d vs наша %d — живой закуп или выше p10 книги+наценка, каталог не поднимаем", msg.Type, msg.Price, oldPrice)
+			return
+		}
+		mutex.Lock()
+		if data.Prices[msg.Type] != oldPrice {
+			// уже сдвинули пока проверяли книгу
 			mutex.Unlock()
 			return
 		}
