@@ -569,13 +569,13 @@ func closeForwardWindowLocked(p *mlPendingDecision) {
 	adj := make([]mlIntervention, len(p.CurrentWindowInterventions))
 	copy(adj, p.CurrentWindowInterventions)
 
-	online, onlineMax := fetchOnlineSnapshot()
+	// online снимаем в tryAdvanceCategoryMLOutcomes вне Lock — тут только память.
 	p.ForwardCycles = append(p.ForwardCycles, mlForwardCycle{
 		Index:             idx + 1,
 		Start:             since.UTC().Format(time.RFC3339),
 		End:               until.UTC().Format(time.RFC3339),
-		PlayersOnline:     online,
-		PlayersMax:        onlineMax,
+		PlayersOnline:     -1,
+		PlayersMax:        -1,
 		TriggerItem:       triggerSnap,
 		CategoryItems:     categorySnaps,
 		ServerPriceClamps: externalEventsToML(p.CategoryType, since, until),
@@ -591,6 +591,8 @@ func closeForwardWindowLocked(p *mlPendingDecision) {
 
 // tryAdvanceCategoryMLOutcomes — в начале adjustPrice. SQL flush без удержания mutex.Lock.
 func tryAdvanceCategoryMLOutcomes(categoryType string, now time.Time) {
+	online, onlineMax := fetchOnlineSnapshot()
+
 	mutex.Lock()
 	p, ok := mlPendingByCategory[categoryType]
 	if !ok {
@@ -608,6 +610,10 @@ func tryAdvanceCategoryMLOutcomes(categoryType string, now time.Time) {
 			break
 		}
 		closeForwardWindowLocked(p)
+		if n := len(p.ForwardCycles); n > 0 {
+			p.ForwardCycles[n-1].PlayersOnline = online
+			p.ForwardCycles[n-1].PlayersMax = onlineMax
+		}
 	}
 
 	var flush *mlPendingDecision

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"time"
 
 	"github.com/Tnze/go-mc/bot"
 )
@@ -19,7 +20,24 @@ func mcServerAddr() string {
 
 func fetchOnlineSnapshot() (playersOnline, playersMax int) {
 	playersOnline, playersMax = -1, -1
-	respJSON, _, err := bot.PingAndList(mcServerAddr())
+	type pingResult struct {
+		json []byte
+		err  error
+	}
+	ch := make(chan pingResult, 1)
+	go func() {
+		j, _, err := bot.PingAndList(mcServerAddr())
+		ch <- pingResult{j, err}
+	}()
+	var respJSON []byte
+	var err error
+	select {
+	case r := <-ch:
+		respJSON, err = r.json, r.err
+	case <-time.After(3 * time.Second):
+		log.Printf("[online] ping %s: timeout 3s", mcServerAddr())
+		return playersOnline, playersMax
+	}
 	if err != nil {
 		log.Printf("[online] ping %s: %v", mcServerAddr(), err)
 		return playersOnline, playersMax

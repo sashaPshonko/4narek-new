@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -53,15 +54,21 @@ CREATE TABLE IF NOT EXISTS ah_book_lots (
 	if skipAhBookBackfillOnInit {
 		return
 	}
-	// Не на критическом пути старта и не goImmortal: SQLITE_BUSY иначе крутит рестарт вечно.
-	go func() {
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				logPanic("ahBookBackfill", recovered)
-			}
+	// Backfill на старте больше не гоняем: держит mlDBMu, гоняется с initCapitalTables
+	// (HTTP уже поднят) и вешает /sales. Живые витрины — maybeBanAhBookWallSellers.
+	// Разовый прогон: AH_BOOK_BACKFILL=1.
+	if os.Getenv("AH_BOOK_BACKFILL") == "1" {
+		go func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					logPanic("ahBookBackfill", recovered)
+				}
+			}()
+			backfillAhBookSellerBans()
 		}()
-		backfillAhBookSellerBans()
-	}()
+		return
+	}
+	log.Printf("[ah_book] startup backfill off (AH_BOOK_BACKFILL=1 to force)")
 }
 
 func ensureAhBookSellerBanTable() error {
