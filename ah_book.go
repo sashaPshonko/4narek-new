@@ -14,6 +14,9 @@ const (
 	ahBookWallWindow  = 15 * time.Minute
 )
 
+// skipAhBookBackfillOnInit — тесты; иначе async backfill гоняется с db.Exec без mlDBMu.
+var skipAhBookBackfillOnInit bool
+
 // ah_lot — снимок чужого лота с АХ. В adjustPrice не входит.
 func initAhBookTable() {
 	if mlDB == nil {
@@ -47,10 +50,18 @@ CREATE TABLE IF NOT EXISTS ah_book_lots (
 		log.Printf("[ah_book] ban schema: %v", err)
 		return
 	}
-	// Не на критическом пути старта: иначе mlDBMu занят и /sales висит.
-	goImmortal("ahBookBackfill", func() {
+	if skipAhBookBackfillOnInit {
+		return
+	}
+	// Не на критическом пути старта и не goImmortal: SQLITE_BUSY иначе крутит рестарт вечно.
+	go func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logPanic("ahBookBackfill", recovered)
+			}
+		}()
 		backfillAhBookSellerBans()
-	})
+	}()
 }
 
 func ensureAhBookSellerBanTable() error {

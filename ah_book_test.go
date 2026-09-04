@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+func init() {
+	skipAhBookBackfillOnInit = true
+}
+
 func TestIsFleetSellerLocked(t *testing.T) {
 	old := fleetNickRoster
 	fleetNickRoster = funauthRoster{
