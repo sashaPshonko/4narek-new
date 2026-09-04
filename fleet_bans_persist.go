@@ -27,6 +27,7 @@ var (
 )
 
 func loadFleetBanPersist() {
+	ensureFleetPersistLoop()
 	raw, err := os.ReadFile(fleetBansPersistPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -56,11 +57,19 @@ func loadFleetBanPersist() {
 }
 
 func saveFleetBanPersist() {
+	// Асинхронно: presence держит mutex.Lock, синхронный write на диск клинил весь Go.
+	select {
+	case fleetSaveReq <- struct{}{}:
+	default:
+	}
+}
+
+func saveFleetBanPersistSync() {
 	fleetPersistMu.RLock()
 	snap := fleetBansPersistFile{
-		Bots:       persistedBannedBots,
-		ClanOwners: persistedClanOwnerBans,
-		IPs:        persistedBannedIPs,
+		Bots:       cloneBannedBotMap(persistedBannedBots),
+		ClanOwners: cloneClanOwnerMap(persistedClanOwnerBans),
+		IPs:        cloneBannedIPMap(persistedBannedIPs),
 		UpdatedAt:  time.Now(),
 	}
 	fleetPersistMu.RUnlock()
@@ -81,6 +90,69 @@ func saveFleetBanPersist() {
 	if err := os.Rename(tmp, fleetBansPersistPath); err != nil {
 		_ = os.WriteFile(fleetBansPersistPath, raw, 0o644)
 	}
+}
+
+func cloneBannedBotMap(in map[string]bannedBotView) map[string]bannedBotView {
+	if in == nil {
+		return map[string]bannedBotView{}
+	}
+	out := make(map[string]bannedBotView, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneClanOwnerMap(in map[string]clanOwnerView) map[string]clanOwnerView {
+	if in == nil {
+		return map[string]clanOwnerView{}
+	}
+	out := make(map[string]clanOwnerView, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneBannedIPMap(in map[string]bannedIPView) map[string]bannedIPView {
+	if in == nil {
+		return map[string]bannedIPView{}
+	}
+	out := make(map[string]bannedIPView, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+var (
+	fleetSaveReq     = make(chan struct{}, 1)
+	fleetSaveOnce    sync.Once
+)
+
+func ensureFleetPersistLoop() {
+	fleetSaveOnce.Do(func() {
+		go func() {
+			for range fleetSaveReq {
+				saveFleetBanPersistSync()
+				// coalesce бурст presence
+				for {
+					select {
+					case <-fleetSaveReq:
+						continue
+					default:
+					}
+					break
+				}
+				// один финальный flush после drain
+				select {
+				case <-fleetSaveReq:
+					saveFleetBanPersistSync()
+				default:
+				}
+			}
+		}()
+	})
 }
 
 func banUserKey(username string) string {

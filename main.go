@@ -1209,7 +1209,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			log.Printf("json unmarshal error: %v", err)
 			continue
 		}
-		if msg.Action != "add" && msg.Action != "ah_lot" && msg.Action != "ah_lots" {
+		if msg.Action == "presence" {
+			log.Printf("[WS incoming] presence items=%d inv=%d banned=%d owners=%d bots=%d active=%v",
+				len(msg.Items), len(msg.Inventory), len(msg.Banned), len(msg.ClanOwners), len(msg.Bots), msg.ActiveTypes)
+		} else if msg.Action != "add" && msg.Action != "ah_lot" && msg.Action != "ah_lots" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
 		}
 
@@ -1259,10 +1262,10 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy", Price: msg.Price})
 		data.BuySum[msg.Type] += msg.Price
 		addPriceToHistory(msg.Type, msg.Price)
-		logTradeEventML(msg.Type, "buy", msg.Price, enchJSON, msg.Durability)
 		surge := maybeBuySurgePriceDownLocked(msg.Type)
-		tryAdvanceCapitalForwardsLocked(time.Now())
 		mutex.Unlock()
+		logTradeEventML(msg.Type, "buy", msg.Price, enchJSON, msg.Durability)
+		tryAdvanceCapitalForwards(time.Now())
 		saveDailyDataNoMessageUpdate()
 		if surge.Dropped {
 			publishPriceUpdate()
@@ -1279,9 +1282,9 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			Nacenka: getNacenka(msg.Type),
 		})
 		data.SellSum[msg.Type] += msg.Price
-		logTradeEventML(msg.Type, "sell", msg.Price, enchJSON, msg.Durability)
-		tryAdvanceCapitalForwardsLocked(time.Now())
 		mutex.Unlock()
+		logTradeEventML(msg.Type, "sell", msg.Price, enchJSON, msg.Durability)
+		tryAdvanceCapitalForwards(time.Now())
 		saveDailyDataNoMessageUpdate()
 
 	case "try-sell":
@@ -1290,8 +1293,8 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{
 			Time: time.Now(), Type: "try-sell", Price: msg.Price,
 		})
-		logTradeEventML(msg.Type, "try-sell", msg.Price, "", nil)
 		mutex.Unlock()
+		logTradeEventML(msg.Type, "try-sell", msg.Price, "", nil)
 		saveDailyDataNoMessageUpdate()
 
 	case "ah_lot":
@@ -1398,6 +1401,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		recordExternalPriceChangeLocked(msg.Type, "server_min", oldPrice, msg.Price)
 		log.Printf("[CONFIG] %s: min -> цена %d -> %d (clamp: только ↑ на цикл)", msg.Type, oldPrice, msg.Price)
 		mutex.Unlock()
+		logServerPriceEvent(msg.Type, "server_min", oldPrice, msg.Price)
 		publishPrices()
 		saveDailyDataNoMessageUpdate()
 
@@ -1426,6 +1430,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			log.Printf("[CONFIG] %s: max -> цена %d -> %d (оборот слабый, каталог могли занизить)", msg.Type, oldPrice, msg.Price)
 		}
 		mutex.Unlock()
+		logServerPriceEvent(msg.Type, "server_max", oldPrice, msg.Price)
 		publishPrices()
 		saveDailyDataNoMessageUpdate()
 

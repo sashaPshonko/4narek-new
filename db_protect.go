@@ -52,29 +52,35 @@ func mlBackupInterval() time.Duration {
 	return time.Duration(hours) * time.Hour
 }
 
-// backupMLDatabase — консистентный снимок через VACUUM INTO (безопасно при живом WAL).
-// Не копировать pricing.db руками со -wal/-shm: получите битый файл.
+// backupMLDatabase — VACUUM INTO на отдельном соединении, без mlDBMu.
+// Иначе бэкап на 500MB держит весь trade/sales путь часами.
 func backupMLDatabase() error {
-	mlDBMu.Lock()
-	defer mlDBMu.Unlock()
-	if mlDB == nil {
-		return fmt.Errorf("db not open")
-	}
 	dir := mlBackupDir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 	stamp := time.Now().UTC().Format("20060102-150405")
 	dest := filepath.Join(dir, "pricing-"+stamp+".db")
+	db, err := sql.Open("sqlite", mlOpenDSN(mlDBPath))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
 	q := fmt.Sprintf(`VACUUM INTO '%s'`, strings.ReplaceAll(dest, `'`, `''`))
-	if _, err := mlDB.Exec(q); err != nil {
+	if _, err := db.Exec(q); err != nil {
 		return err
 	}
 	log.Printf("[ML] backup → %s", dest)
 	rotateBackups(dir, "pricing-", ".db", mlBackupKeep())
-	if err := compactMLDatabaseLocked(); err != nil {
-		log.Printf("[ML] compact after backup: %v", err)
+	// Мягкий checkpoint на основном conn — коротко под mlDBMu.
+	mlDBMu.Lock()
+	if mlDB != nil {
+		if err := compactMLDatabaseLocked(); err != nil {
+			log.Printf("[ML] compact after backup: %v", err)
+		}
 	}
+	mlDBMu.Unlock()
 	return nil
 }
 

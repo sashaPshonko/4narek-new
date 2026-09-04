@@ -230,7 +230,8 @@ type CapitalCycleRow struct {
 	CycleDuration                         time.Duration
 }
 
-func logCapitalCycleLocked(row CapitalCycleRow) {
+// logCapitalCycle — INSERT capital_cycles + snapshot. Не держать mutex.Lock: внутри sqlite.
+func logCapitalCycle(row CapitalCycleRow) {
 	if mlDB == nil {
 		return
 	}
@@ -286,12 +287,15 @@ INSERT INTO capital_cycles (
 	}
 	cycle := row.CycleDuration
 	if cycle <= 0 {
+		mutex.RLock()
 		if cfg, ok := itemsConfig[row.Item]; ok {
 			cycle = cfg.AnalysisTime
 		} else {
 			cycle = 10 * time.Minute
 		}
+		mutex.RUnlock()
 	}
+	mutex.Lock()
 	capitalPending = append(capitalPending, capitalPendingForward{
 		ID:            id,
 		Item:          row.Item,
@@ -301,33 +305,36 @@ INSERT INTO capital_cycles (
 		WindowStart:   ts,
 		OutcomeCycles: 0,
 	})
+	mutex.Unlock()
 
-	logStockSnapshotCategoryLocked(row.Category, row.Item, "capital_cycle")
+	logStockSnapshotCategory(row.Category, row.Item, "capital_cycle")
 }
 
-func logStockSnapshotCategoryLocked(categoryType, triggerItem, source string) {
+func logStockSnapshotCategory(categoryType, triggerItem, source string) {
 	if mlDB == nil {
 		return
 	}
 	ts := time.Now().UTC().Format(time.RFC3339)
-	type row struct {
+	type snapRow struct {
 		item, cat     string
 		ah, inv, held int
 		price, nac    int
 	}
-	var rows []row
+	mutex.RLock()
+	var rows []snapRow
 	for id, conf := range itemsConfig {
 		if conf.Type != categoryType {
 			continue
 		}
 		ah := getItemCount(id)
 		inv := getInventoryCount(id)
-		rows = append(rows, row{
+		rows = append(rows, snapRow{
 			item: id, cat: conf.Type,
 			ah: ah, inv: inv, held: ah + inv,
 			price: data.Prices[id], nac: getNacenka(id),
 		})
 	}
+	mutex.RUnlock()
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
 	for _, r := range rows {
@@ -339,16 +346,19 @@ VALUES (?,?,?,?,?,?,?,?,?,?)`,
 	}
 }
 
-func logServerPriceEventLocked(item, kind string, priceBefore, priceAfter int) {
+// logServerPriceEvent — sqlite; не вызывать под mutex.Lock.
+func logServerPriceEvent(item, kind string, priceBefore, priceAfter int) {
 	if mlDB == nil {
 		return
 	}
+	mutex.RLock()
 	cat := ""
 	if cfg, ok := itemsConfig[item]; ok {
 		cat = cfg.Type
 	}
-	ts := time.Now().UTC().Format(time.RFC3339)
 	nac := getNacenka(item)
+	mutex.RUnlock()
+	ts := time.Now().UTC().Format(time.RFC3339)
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
 	_, err := mlDB.Exec(`
@@ -361,13 +371,28 @@ VALUES (?,?,?,?,?,?,?,?)`,
 	}
 }
 
-// tryAdvanceCapitalForwardsLocked — дописывает fwd_* в capital_cycles после 1..3 окон.
-// fwd_done = сколько окон уже закрыто (0..3). Готово к обучению: fwd_done=3.
-// Вызывать под mutex.Lock в начале adjustPrice (и можно с тикера).
-func tryAdvanceCapitalForwardsLocked(now time.Time) {
-	if mlDB == nil || len(capitalPending) == 0 {
+type capitalFwdUpdate struct {
+	query    string
+	profit   int
+	sells    int
+	buys     int
+	trySells int
+	held     int
+	id       int64
+	finalize bool
+}
+
+// tryAdvanceCapitalForwards — fwd_* после окон. Сама берёт mutex на снимок; SQL без Lock.
+func tryAdvanceCapitalForwards(now time.Time) {
+	if mlDB == nil {
 		return
 	}
+	mutex.Lock()
+	if len(capitalPending) == 0 {
+		mutex.Unlock()
+		return
+	}
+	var upds []capitalFwdUpdate
 	remain := capitalPending[:0]
 	for _, p := range capitalPending {
 		for p.OutcomeCycles < capitalForwardCycles {
@@ -387,25 +412,37 @@ func tryAdvanceCapitalForwardsLocked(now time.Time) {
 			default:
 				query = `UPDATE capital_cycles SET fwd_profit_3=?, fwd_sells_3=?, fwd_buys_3=?, fwd_try_3=?, fwd_held_3=?, fwd_done=3 WHERE id=?`
 			}
-			mlDBMu.Lock()
-			_, err := mlDB.Exec(query, st.Profit, st.Sells, st.Buys, st.TrySells, held, p.ID)
-			mlDBMu.Unlock()
-			if err != nil {
-				log.Printf("[ML] capital fwd update id=%d n=%d: %v", p.ID, n, err)
-			}
+			upds = append(upds, capitalFwdUpdate{
+				query: query, profit: st.Profit, sells: st.Sells, buys: st.Buys,
+				trySells: st.TrySells, held: held, id: p.ID,
+			})
 			p.OutcomeCycles = n
 			p.WindowStart = windowEnd
 		}
 		if p.OutcomeCycles >= capitalForwardCycles {
-			finalizeCapitalForwardLocked(p.ID)
+			upds = append(upds, capitalFwdUpdate{id: p.ID, finalize: true})
 			continue
 		}
 		remain = append(remain, p)
 	}
 	capitalPending = remain
+	mutex.Unlock()
+
+	for _, u := range upds {
+		if u.finalize {
+			finalizeCapitalForward(u.id)
+			continue
+		}
+		mlDBMu.Lock()
+		_, err := mlDB.Exec(u.query, u.profit, u.sells, u.buys, u.trySells, u.held, u.id)
+		mlDBMu.Unlock()
+		if err != nil {
+			log.Printf("[ML] capital fwd update id=%d: %v", u.id, err)
+		}
+	}
 }
 
-func finalizeCapitalForwardLocked(id int64) {
+func finalizeCapitalForward(id int64) {
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
 	var p1, p2, p3 int

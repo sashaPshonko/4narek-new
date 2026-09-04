@@ -589,10 +589,12 @@ func closeForwardWindowLocked(p *mlPendingDecision) {
 	p.OutcomeCycles++
 }
 
-// tryAdvanceCategoryMLOutcomesLocked — в начале adjustPrice.
-func tryAdvanceCategoryMLOutcomesLocked(categoryType string, now time.Time) {
+// tryAdvanceCategoryMLOutcomes — в начале adjustPrice. SQL flush без удержания mutex.Lock.
+func tryAdvanceCategoryMLOutcomes(categoryType string, now time.Time) {
+	mutex.Lock()
 	p, ok := mlPendingByCategory[categoryType]
 	if !ok {
+		mutex.Unlock()
 		return
 	}
 	cycle := p.CycleDuration
@@ -608,17 +610,25 @@ func tryAdvanceCategoryMLOutcomesLocked(categoryType string, now time.Time) {
 		closeForwardWindowLocked(p)
 	}
 
+	var flush *mlPendingDecision
 	if p.OutcomeCycles >= mlForwardCycles {
-		flushMLDecisionLocked(p, now)
+		flush = p
 		delete(mlPendingByCategory, categoryType)
+	}
+	mutex.Unlock()
+
+	if flush != nil {
+		flushMLDecision(flush, now)
 	}
 }
 
-func flushMLDecisionLocked(p *mlPendingDecision, now time.Time) {
+func flushMLDecision(p *mlPendingDecision, now time.Time) {
 	if mlDB == nil {
 		return
 	}
+	mutex.RLock()
 	payload := buildFinalPayloadJSON(p, now)
+	mutex.RUnlock()
 
 	var d1, d2, d3 int
 	if len(p.ForwardCycles) > 0 {
@@ -659,13 +669,14 @@ func recordMLInterventionLocked(
 		interventionFromAdjust(item, priceBefore, priceAfter, nacenkaBefore, nacenkaAfter, ts))
 }
 
-// queueMLDecisionLocked — конец adjustPrice.
+// queueMLDecisionLocked — конец adjustPrice (только память). online* — уже снятые вне Lock.
 func queueMLDecisionLocked(
 	item string,
 	cfg ItemConfig,
 	action string,
 	priceBefore, priceAfter, nacenkaBefore, nacenkaAfter int,
 	now time.Time,
+	online, onlineMax int,
 ) {
 	if pending, busy := mlPendingByCategory[cfg.Type]; busy {
 		recordMLInterventionLocked(pending, item, priceBefore, priceAfter, nacenkaBefore, nacenkaAfter, now)
@@ -676,7 +687,6 @@ func queueMLDecisionLocked(
 	decAt := now
 	beforeStart := decAt.Add(-cycle)
 
-	online, onlineMax := fetchOnlineSnapshot()
 	p := &mlPendingDecision{
 		CategoryType:         cfg.Type,
 		TriggerItem:          item,
@@ -697,10 +707,12 @@ func queueMLDecisionLocked(
 	mlPendingByCategory[cfg.Type] = p
 }
 
+// logTradeEventML — sqlite. Не вызывать под mutex.Lock (берёт RLock сам).
 func logTradeEventML(item, eventType string, price int, enchantsJSON string, durability *float64) {
 	if mlDB == nil {
 		return
 	}
+	mutex.RLock()
 	cfg, ok := itemsConfig[item]
 	category := ""
 	if ok {
@@ -711,6 +723,7 @@ func logTradeEventML(item, eventType string, price int, enchantsJSON string, dur
 		nac = getNacenka(item)
 	}
 	refPrice := data.Prices[item]
+	mutex.RUnlock()
 	ts := time.Now().UTC().Format(time.RFC3339)
 	var dur any
 	if durability != nil {

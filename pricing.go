@@ -942,8 +942,13 @@ func adjustPrice(item string) AdjustReport {
 		return AdjustReport{Item: item, Action: "skip", Reason: "нет в items_config", Skipped: true}
 	}
 
-	mutex.Lock()
 	now := time.Now()
+	// Сеть + sqlite до mutex.Lock — иначе клинит весь WS/HTTP на ping FunTime / БД.
+	tryAdvanceCategoryMLOutcomes(cfg.Type, now)
+	tryAdvanceCapitalForwards(now)
+	onlineForCap, onlineMaxForML := fetchOnlineSnapshot()
+
+	mutex.Lock()
 	swordTimes[item] = now
 	if data.LastCycleAt == nil {
 		data.LastCycleAt = make(map[string]time.Time)
@@ -982,9 +987,6 @@ func adjustPrice(item string) AdjustReport {
 	trySells := countRecentTrySells(item, lastUpdate)
 	profitNow := profitInWindow(item, lastUpdate)
 	state := data.AdjustState[item]
-
-	tryAdvanceCategoryMLOutcomesLocked(cfg.Type, now)
-	tryAdvanceCapitalForwardsLocked(now)
 
 	newPrice := data.Prices[item]
 	priceBefore := newPrice
@@ -1430,10 +1432,10 @@ func adjustPrice(item string) AdjustReport {
 		item, cfg, actionTaken,
 		priceBefore, newPrice, nacenkaBefore, nacenka,
 		now,
+		onlineForCap, onlineMaxForML,
 	)
 
-	onlineForCap, _ := fetchOnlineSnapshot()
-	logCapitalCycleLocked(CapitalCycleRow{
+	capitalRow := CapitalCycleRow{
 		Policy:         capitalPolicy,
 		Item:           item,
 		Category:       cfg.Type,
@@ -1478,11 +1480,10 @@ func adjustPrice(item string) AdjustReport {
 		DumpBlockedCD:  false,
 		DecisionAt:     now,
 		CycleDuration:  cfg.AnalysisTime,
-	})
+	}
 
 	shadowSnap := mlAdjustSnapshot{}
 	if mlShadowEnabled() {
-		online, _ := fetchOnlineSnapshot()
 		shadowSnap = mlAdjustSnapshot{
 			At:             now,
 			Item:           item,
@@ -1503,7 +1504,7 @@ func adjustPrice(item string) AdjustReport {
 			MinBuyHistory:  minPrice,
 			CanRaisePrice:  totalHeld < targetLo && !trySellsBlockUp(sales, trySells) && state.CorridorNoBuyUpStreak < corridorMaxNoBuyUps && buys <= sales && (sales > buys || !overCap) && ((sales > buys && demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo))) || (!nightMSK && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo)))),
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
-			PlayersOnline:  online,
+			PlayersOnline:  onlineForCap,
 		}
 	}
 
@@ -1537,6 +1538,8 @@ func adjustPrice(item string) AdjustReport {
 
 	needBroadcast := changed
 	mutex.Unlock()
+
+	logCapitalCycle(capitalRow)
 
 	if experimentTG != nil {
 		enqueueExperimentTelegram(*experimentTG)

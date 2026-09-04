@@ -25,7 +25,14 @@ func recordExternalPriceChangeLocked(item, kind string, priceBefore, priceAfter 
 		PriceAfter:  priceAfter,
 	})
 	pruneExternalPriceEventsLocked(time.Now().Add(-externalPriceRetain))
-	logServerPriceEventLocked(item, kind, priceBefore, priceAfter)
+}
+
+// recordExternalPriceChange — память под Lock, sqlite после Unlock.
+func recordExternalPriceChange(item, kind string, priceBefore, priceAfter int) {
+	mutex.Lock()
+	recordExternalPriceChangeLocked(item, kind, priceBefore, priceAfter)
+	mutex.Unlock()
+	logServerPriceEvent(item, kind, priceBefore, priceAfter)
 }
 
 func pruneExternalPriceEventsLocked(cutoff time.Time) {
