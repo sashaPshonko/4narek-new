@@ -47,7 +47,10 @@ CREATE TABLE IF NOT EXISTS ah_book_lots (
 		log.Printf("[ah_book] ban schema: %v", err)
 		return
 	}
-	backfillAhBookSellerBans()
+	// Не на критическом пути старта: иначе mlDBMu занят и /sales висит.
+	goImmortal("ahBookBackfill", func() {
+		backfillAhBookSellerBans()
+	})
 }
 
 func ensureAhBookSellerBanTable() error {
@@ -255,6 +258,8 @@ func insertAhBookBatch(rows []ahBookWire) {
 	mutex.RUnlock()
 	ts := time.Now().UTC().Format(time.RFC3339)
 	pairs := make([][2]string, 0, len(keep))
+	const unlockEvery = 25
+	n := 0
 	mlDBMu.Lock()
 	for _, r := range keep {
 		uuid := strings.TrimSpace(r.Uuid)
@@ -291,6 +296,12 @@ func insertAhBookBatch(rows []ahBookWire) {
 		}
 		if seller != "" {
 			pairs = append(pairs, [2]string{seller, r.ItemID})
+		}
+		n++
+		// Отпускаем mlDBMu — иначе sales/adjust голодают за ah_lots flood.
+		if n%unlockEvery == 0 {
+			mlDBMu.Unlock()
+			mlDBMu.Lock()
 		}
 	}
 	mlDBMu.Unlock()
