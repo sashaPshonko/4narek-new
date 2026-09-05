@@ -221,6 +221,7 @@ func (p *funauthPool) init() {
 	}
 	p.loadNicks()
 	p.loadVerified()
+	funauthBindProxies.init(p.dir)
 	p.roster = loadFleetRunningNicks()
 	p.cleanupOrphanAnarchies()
 	p.syncAllRosterFull()
@@ -234,7 +235,7 @@ func (p *funauthPool) init() {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		if e.Name() == funauthNicksFile || e.Name() == funauthVerifiedFile {
+		if e.Name() == funauthNicksFile || e.Name() == funauthVerifiedFile || e.Name() == funauthBindProxiesFile {
 			continue
 		}
 		path := filepath.Join(p.dir, e.Name())
@@ -896,14 +897,14 @@ func (p *funauthPool) connectAccount(meta funauthAccountMeta, socksURL string) {
 	p.mu.Unlock()
 }
 
-// ensureNickSOCKS переподключает TG-акк через SOCKS фермы/овнера на время bind/2fa.
+// ensureNickSOCKS переподключает TG-акк через рабочий SOCKS из bind_proxies.json (не ip.json ботов).
 func (p *funauthPool) ensureNickSOCKS(acc *funauthAccount, nick string) *funauthAccount {
 	if p == nil || acc == nil {
 		return acc
 	}
-	socks := lookupMCNickSOCKS(nick)
+	socks := pickBindSOCKS()
 	if socks == "" {
-		log.Printf("[funauth] %s: SOCKS фермы нет — остаёмся на xray", nick)
+		log.Printf("[funauth] %s: нет рабочего bind-прокси — остаёмся на xray", nick)
 		return acc
 	}
 	p.mu.Lock()
@@ -916,7 +917,7 @@ func (p *funauthPool) ensureNickSOCKS(acc *funauthAccount, nick string) *funauth
 	}
 	log.Printf("[funauth] %s: MTProto → %s", nick, socksURLHost(socks))
 	if !p.reconnectAccount(meta, socks) {
-		log.Printf("[funauth] %s: не поднялись через ферму — xray", nick)
+		log.Printf("[funauth] %s: не поднялись через bind-прокси — xray", nick)
 		p.mu.Lock()
 		cur := p.accounts[meta.ID]
 		p.mu.Unlock()

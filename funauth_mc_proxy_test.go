@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLookupMCNickSOCKS(t *testing.T) {
@@ -47,21 +48,38 @@ func TestLookupMCNickSOCKS(t *testing.T) {
 	}
 }
 
-func TestPickFarmLoginSOCKSSkips507(t *testing.T) {
-	root := t.TempDir()
-	bots := filepath.Join(root, "bots")
-	if err := os.Mkdir(bots, 0o755); err != nil {
-		t.Fatal(err)
+func TestPickBindSOCKSUsesCache(t *testing.T) {
+	prev := funauthBindProxies
+	t.Cleanup(func() { funauthBindProxies = prev })
+
+	bad := "socks5://u:p@10.0.0.1:50101"
+	good := "socks5://u:p@10.0.0.2:50101"
+	funauthBindProxies = &funauthBindProxyPool{
+		path:  filepath.Join(t.TempDir(), "bind_proxies.json"),
+		cache: make(map[string]bindProxyCacheEntry),
+		items: []funauthBindProxy{
+			{ID: "a", URL: bad},
+			{ID: "b", URL: good},
+		},
 	}
-	if err := os.WriteFile(filepath.Join(root, "ip.json"), []byte(`{
-  "502-2": "socks5://u:p@10.0.0.2:50101",
-  "507": "socks5://u:p@10.0.0.7:50101"
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("FLEET_BOTS_DIR", bots)
+	funauthBindProxies.remember(bad, false, "NotAllowed")
+	funauthBindProxies.remember(good, true, "")
+	// свежий TTL
+	funauthBindProxies.cache[bad] = bindProxyCacheEntry{ok: false, err: "NotAllowed", checkedAt: time.Now()}
+	funauthBindProxies.cache[good] = bindProxyCacheEntry{ok: true, checkedAt: time.Now()}
+
 	got := pickFarmLoginSOCKS()
-	if got != "socks5://u:p@10.0.0.2:50101" {
+	if got != good {
+		t.Fatalf("got %q want %q", got, good)
+	}
+}
+
+func TestNormalizeBindProxyURL(t *testing.T) {
+	got, err := normalizeBindProxyURL("privetnitron:pass@1.2.3.4:50101")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "socks5://privetnitron:pass@1.2.3.4:50101" {
 		t.Fatalf("got %q", got)
 	}
 }

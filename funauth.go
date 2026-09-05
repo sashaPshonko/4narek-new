@@ -239,6 +239,49 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 		_ = funauthPoolInst.remove(id)
 		funauthJSON(w, http.StatusOK, map[string]any{"ok": true})
 		return
+
+	case path == "/bind-proxies" && r.Method == http.MethodGet:
+		funauthJSON(w, http.StatusOK, funauthBindProxies.list())
+		return
+
+	case path == "/bind-proxies" && r.Method == http.MethodPost:
+		var body struct {
+			URL   string `json:"url"`
+			Label string `json:"label"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+			funauthJSONErr(w, http.StatusBadRequest, "bad json")
+			return
+		}
+		view, err := funauthBindProxies.add(body.URL, body.Label)
+		if err != nil {
+			if err.Error() == "already_exists" {
+				funauthJSONErr(w, http.StatusConflict, "already_exists")
+				return
+			}
+			funauthJSONErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		funauthJSON(w, http.StatusOK, map[string]any{"ok": true, "proxy": view})
+		return
+
+	case path == "/bind-proxies/check" && r.Method == http.MethodPost:
+		funauthJSON(w, http.StatusOK, map[string]any{"ok": true, "proxies": funauthBindProxies.checkAll()})
+		return
+
+	case strings.HasPrefix(path, "/bind-proxies/") && r.Method == http.MethodDelete:
+		id := strings.TrimPrefix(path, "/bind-proxies/")
+		id = strings.Trim(id, "/")
+		if id == "" {
+			funauthJSONErr(w, http.StatusBadRequest, "id_required")
+			return
+		}
+		if !funauthBindProxies.remove(id) {
+			funauthJSONErr(w, http.StatusNotFound, "not_found")
+			return
+		}
+		funauthJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
 	}
 
 	funauthJSONErr(w, http.StatusNotFound, "not_found")

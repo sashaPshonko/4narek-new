@@ -292,7 +292,7 @@
         <a href="/funauth/" data-nav="funauth">FunAuth</a>
         <a href="/fleet/" data-nav="fleet">Баны</a>
       </nav>
-      <p>Пул Telegram-аккаунтов для привязки Minecraft через @FunAuthBot. Трафик идёт через Reality SOCKS на :1080.</p>
+      <p>Пул Telegram-аккаунтов для привязки Minecraft через @FunAuthBot. MTProto для bind — через пул SOCKS ниже (не прокси ботов).</p>
       <div id="health">Загрузка…</div>
       <div id="rosterPending" class="hidden"></div>
     </header>
@@ -355,6 +355,21 @@
       </section>
 
       <section class="card wide">
+        <h2>SOCKS для bind</h2>
+        <p class="hint" style="margin:0 0 14px">Только FunAuth (Telegram). Прокси ботов в <code>ip.json</code> не трогаем. Перед bind берётся первый живой (проверка до DC Telegram).</p>
+        <label for="bindProxyUrl">socks5://user:pass@host:port</label>
+        <input id="bindProxyUrl" type="text" placeholder="socks5://user:pass@1.2.3.4:50101" autocomplete="off" spellcheck="false" />
+        <label for="bindProxyLabel" style="margin-top:12px">Метка (необязательно)</label>
+        <input id="bindProxyLabel" type="text" placeholder="nitron 502" autocomplete="off" />
+        <div class="row">
+          <button id="btnAddProxy" type="button">Добавить</button>
+          <button id="btnCheckProxies" class="ghost" type="button">Проверить все</button>
+        </div>
+        <div id="proxyMsg" class="msg"></div>
+        <div id="bindProxies"><p class="empty">Нет прокси</p></div>
+      </section>
+
+      <section class="card wide">
         <h2>Аккаунты</h2>
         <div id="accounts"><p class="empty">Пока пусто</p></div>
       </section>
@@ -398,21 +413,66 @@
       return '<span class="badge off">офлайн</span>';
     }
 
+    function proxyBadge(p) {
+      if (p.ok === true) return '<span class="badge ready">ok</span>';
+      if (p.ok === false) return '<span class="badge off">fail</span>';
+      return '<span class="badge">?</span>';
+    }
+
+    function renderBindProxies(list) {
+      if (!Array.isArray(list) || !list.length) {
+        $('bindProxies').innerHTML = '<p class="empty">Пул пуст — добавь nitron SOCKS выше</p>';
+        return;
+      }
+      $('bindProxies').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Host</th>
+              <th>Метка</th>
+              <th>Статус</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map((p) => `
+              <tr>
+                <td title="${esc(p.url || '')}">${esc(p.host || '')}</td>
+                <td>${esc(p.label || '—')}</td>
+                <td>${proxyBadge(p)}${p.err ? ' <span class="hint">' + esc(p.err).slice(0, 48) + '</span>' : ''}</td>
+                <td><button type="button" class="ghost" data-del-proxy="${esc(p.id)}">Удалить</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      $('bindProxies').querySelectorAll('[data-del-proxy]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          await api('/bind-proxies/' + btn.dataset.delProxy, { method: 'DELETE' });
+          refresh();
+        });
+      });
+    }
+
     async function refresh() {
       try {
-        const [health, accounts, queue] = await Promise.all([
+        const [health, accounts, queue, proxies] = await Promise.all([
           api('/health'),
           api('/accounts'),
           api('/queue'),
+          api('/bind-proxies'),
         ]);
         const needsBind = Array.isArray(health.needsBind) ? health.needsBind : [];
         const rosterTotal = Number(health.rosterTotal) || 0;
         const rosterBound = Number(health.rosterBound) || 0;
         const rosterPending = Number(health.rosterPending) || Math.max(0, rosterTotal - rosterBound);
+        const proxyOk = Array.isArray(proxies) ? proxies.filter((p) => p.ok === true).length : 0;
+        const proxyN = Array.isArray(proxies) ? proxies.length : 0;
         $('health').textContent =
           `${health.accounts ?? 0} акк. · ${health.ready ?? 0} готовых · очередь ${health.queue ?? 0}` +
           (rosterTotal ? ` · roster ${rosterBound}/${rosterTotal}` : '') +
-          (needsBind.length ? ` · в игре ждут ${needsBind.length}` : '');
+          (needsBind.length ? ` · в игре ждут ${needsBind.length}` : '') +
+          (proxyN ? ` · bind-прокси ${proxyOk}/${proxyN}` : '');
         $('health').classList.toggle('warn', rosterPending > 0 || needsBind.length > 0);
 
         const pendingEl = $('rosterPending');
@@ -432,6 +492,8 @@
           pendingEl.className = 'done';
           pendingEl.textContent = `Roster закрыт: все ${rosterTotal} аккаунтов привязаны`;
         }
+
+        renderBindProxies(proxies);
 
         if (!Array.isArray(accounts) || !accounts.length) {
           $('accounts').innerHTML = '<p class="empty">Пока пусто — добавь телефон слева</p>';
@@ -609,6 +671,45 @@
         setMsg($('bindMsg'), String(e.message || e), 'err');
       } finally {
         $('btnBind').disabled = false;
+      }
+    };
+
+    $('btnAddProxy').onclick = async () => {
+      const url = $('bindProxyUrl').value.trim();
+      const label = $('bindProxyLabel').value.trim();
+      if (!url) {
+        setMsg($('proxyMsg'), 'Вставь socks5://…', 'err');
+        return;
+      }
+      setMsg($('proxyMsg'), 'Добавляю…');
+      try {
+        const r = await api('/bind-proxies', {
+          method: 'POST',
+          body: JSON.stringify({ url, label }),
+        });
+        if (r.error) throw new Error(r.error);
+        $('bindProxyUrl').value = '';
+        setMsg($('proxyMsg'), 'Добавлен: ' + (r.proxy?.host || url), 'ok');
+        refresh();
+      } catch (e) {
+        setMsg($('proxyMsg'), String(e.message || e), 'err');
+      }
+    };
+
+    $('btnCheckProxies').onclick = async () => {
+      setMsg($('proxyMsg'), 'Проверка Telegram DC…');
+      $('btnCheckProxies').disabled = true;
+      try {
+        const r = await api('/bind-proxies/check', { method: 'POST', body: '{}' });
+        if (r.error) throw new Error(r.error);
+        const list = r.proxies || [];
+        const ok = list.filter((p) => p.ok === true).length;
+        setMsg($('proxyMsg'), `Живых: ${ok} / ${list.length}`, ok ? 'ok' : 'err');
+        renderBindProxies(list);
+      } catch (e) {
+        setMsg($('proxyMsg'), String(e.message || e), 'err');
+      } finally {
+        $('btnCheckProxies').disabled = false;
       }
     };
 

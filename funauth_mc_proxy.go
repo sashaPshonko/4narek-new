@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync/atomic"
 )
 
 type mcBotProxyRow struct {
@@ -114,8 +113,6 @@ func lookupOwnerJSONSOCKS(ownersPath, ownerIPPath, nickLower string) string {
 	return ""
 }
 
-var farmLoginRR uint32
-
 func farmSlotUnused(slot string) bool {
 	s := strings.TrimSpace(slot)
 	switch s {
@@ -158,16 +155,6 @@ func listFarmLoginSOCKS() []string {
 		out = append(out, p.url)
 	}
 	return out
-}
-
-// pickFarmLoginSOCKS — жилой SOCKS фермы для логина TG (не казахский xray). Пусто → xray.
-func pickFarmLoginSOCKS() string {
-	list := listFarmLoginSOCKS()
-	if len(list) == 0 {
-		return ""
-	}
-	i := atomic.AddUint32(&farmLoginRR, 1)
-	return list[int(i-1)%len(list)]
 }
 
 func socksURLHost(proxyURL string) string {
