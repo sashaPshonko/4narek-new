@@ -326,29 +326,29 @@ func insertAhBookBatch(rows []ahBookWire) {
 	maybeBanAhBookWallSellers(pairs)
 }
 
-// ahBookMinSince — min(price) лотов SKU с ts≥since, без забаненных витрин.
-// distinct — число разных цен в той же выборке (для soft-↑: тонкий скан → не поднимаем).
-func ahBookMinSince(itemID string, since time.Time) (minPrice, n, distinct int, ok bool) {
+// ahBookMinSince — min(price) по уникальным uuid SKU с ts≥since, без забаненных витрин.
+// n = COUNT(DISTINCT uuid); ok только при n ≥ ahBookMinLotsInWindow.
+func ahBookMinSince(itemID string, since time.Time) (minPrice, n int, ok bool) {
 	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
-		return 0, 0, 0, false
+		return 0, 0, false
 	}
 	mlDBMu.Lock()
 	err := mlDB.QueryRow(`
-SELECT COUNT(*), COALESCE(MIN(a.price), 0), COUNT(DISTINCT a.price) FROM ah_book_lots a
+SELECT COUNT(DISTINCT a.uuid), COALESCE(MIN(a.price), 0) FROM ah_book_lots a
 WHERE a.item_id = ? AND a.ts >= ?
 AND NOT EXISTS (
 	SELECT 1 FROM ah_book_seller_bans b
 	WHERE b.seller = lower(trim(a.seller))
-)`, itemID, since.UTC().Format(time.RFC3339)).Scan(&n, &minPrice, &distinct)
+)`, itemID, since.UTC().Format(time.RFC3339)).Scan(&n, &minPrice)
 	mlDBMu.Unlock()
 	if err != nil {
 		log.Printf("[ah_book] min since: %v", err)
-		return 0, 0, 0, false
+		return 0, 0, false
 	}
 	if n < ahBookMinLotsInWindow || minPrice <= 0 {
-		return minPrice, n, distinct, false
+		return minPrice, n, false
 	}
-	return minPrice, n, distinct, true
+	return minPrice, n, true
 }
 
 // ahBookP10Since — 10-й процентиль цен SKU в окне (витрины тоже).

@@ -34,28 +34,24 @@ func TestIsFleetSellerLocked(t *testing.T) {
 
 func TestShouldRaiseFromAhBook(t *testing.T) {
 	n := ahBookMinLotsInWindow
-	d := ahBookMinDistinctPrices
 	minAsk := 1_000_000
 	nac := 300_000
-	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, d, false, false, false) {
+	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false, false) {
 		t.Fatal("селл ниже min+наценка — поднимаем")
 	}
-	if shouldRaiseFromAhBook(minAsk+nac, minAsk, nac, n, d, false, false, false) {
+	if shouldRaiseFromAhBook(minAsk+nac, minAsk, nac, n, false, false, false) {
 		t.Fatal("уже на min+наценка — не трогаем")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, d, false, false, false) {
-		t.Fatal("мало лотов в окне — рано")
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, false, false, false) {
+		t.Fatal("мало uuid в окне — рано")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, d-1, false, false, false) {
-		t.Fatal("мало разных цен — тонкий скан")
-	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, d, true, false, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, true, false, false) {
 		t.Fatal("dump — не поднимаем")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, d, false, true, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, true, false) {
 		t.Fatal("уже ↓ в этом цикле")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, d, false, false, true) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false, true) {
 		t.Fatal("были покупки — не поднимаем")
 	}
 }
@@ -254,7 +250,7 @@ func TestAhBookMinSince(t *testing.T) {
 	initAhBookTable()
 	item := "шлем-1.21"
 	now := time.Now().UTC()
-	for i := 0; i < 12; i++ {
+	for i := 0; i < ahBookMinLotsInWindow; i++ {
 		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
 			fmt.Sprintf("n-%d", i), now.Add(-time.Minute).Format(time.RFC3339), "armor", item, 1_000_000+i, "p")
 		if err != nil {
@@ -266,9 +262,9 @@ func TestAhBookMinSince(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	minP, n, distinct, ok := ahBookMinSince(item, now.Add(-ahBookRaiseWindow))
-	if !ok || n != 12 || distinct != 12 || minP != 1_000_000 {
-		t.Fatalf("min=%d n=%d distinct=%d ok=%v", minP, n, distinct, ok)
+	minP, n, ok := ahBookMinSince(item, now.Add(-ahBookRaiseWindow))
+	if !ok || n != ahBookMinLotsInWindow || minP != 1_000_000 {
+		t.Fatalf("min=%d n=%d ok=%v", minP, n, ok)
 	}
 }
 
@@ -318,7 +314,7 @@ func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
 	item := "шлем-1.21"
 	now := time.Now().UTC()
 	ts := now.Format(time.RFC3339)
-	for i := 0; i < 11; i++ {
+	for i := 0; i < ahBookMinLotsInWindow; i++ {
 		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
 			fmt.Sprintf("wall-%d", i), ts, "armor", item, 2_200_000, "shop")
 		if err != nil {
@@ -337,9 +333,10 @@ func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
 	data.TradeHistory = map[string][]TradeLog{}
 	t.Cleanup(func() { data.TradeHistory = prevHist })
 	cycle := 10 * time.Minute
+	wantN := ahBookMinLotsInWindow + 1
 	p10, n, ok := ahBookP10Since(item, now.Add(-ahBookRaiseWindow))
-	if !ok || n != 12 || p10 != 2_200_000 {
-		t.Fatalf("p10=%d n=%d ok=%v want 2.2M (дамп не должен быть полом)", p10, n, ok)
+	if !ok || n != wantN || p10 != 2_200_000 {
+		t.Fatalf("p10=%d n=%d ok=%v want 2.2M n=%d (дамп не должен быть полом)", p10, n, ok, wantN)
 	}
 	cap := p10 + 300_000
 	if !serverFunTimeRaiseAnomalous(1_600_000, 3_550_000, item, cycle, now) {
