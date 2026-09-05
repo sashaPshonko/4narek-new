@@ -34,24 +34,28 @@ func TestIsFleetSellerLocked(t *testing.T) {
 
 func TestShouldRaiseFromAhBook(t *testing.T) {
 	n := ahBookMinLotsInWindow
+	d := ahBookMinDistinctPrices
 	minAsk := 1_000_000
 	nac := 300_000
-	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false, false) {
+	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, d, false, false, false) {
 		t.Fatal("селл ниже min+наценка — поднимаем")
 	}
-	if shouldRaiseFromAhBook(minAsk+nac, minAsk, nac, n, false, false, false) {
+	if shouldRaiseFromAhBook(minAsk+nac, minAsk, nac, n, d, false, false, false) {
 		t.Fatal("уже на min+наценка — не трогаем")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, false, false, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, d, false, false, false) {
 		t.Fatal("мало лотов в окне — рано")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, true, false, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, d-1, false, false, false) {
+		t.Fatal("мало разных цен — тонкий скан")
+	}
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, d, true, false, false) {
 		t.Fatal("dump — не поднимаем")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, true, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, d, false, true, false) {
 		t.Fatal("уже ↓ в этом цикле")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false, true) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, d, false, false, true) {
 		t.Fatal("были покупки — не поднимаем")
 	}
 }
@@ -126,7 +130,7 @@ func TestAhBookWallBanSameSKU(t *testing.T) {
 
 	item := "sword7-1.21"
 	var rows []ahBookWire
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 2; i++ {
 		rows = append(rows, ahBookWire{
 			Uuid: fmt.Sprintf("w-%d", i), GoType: "netherite_sword-1.21", ItemID: item,
 			Price: 2_200_000, Seller: "Laymix777",
@@ -136,13 +140,13 @@ func TestAhBookWallBanSameSKU(t *testing.T) {
 	var bans int
 	_ = db.QueryRow(`SELECT COUNT(*) FROM ah_book_seller_bans`).Scan(&bans)
 	if bans != 0 {
-		t.Fatalf("5 лотов — ещё не бан, got %d", bans)
+		t.Fatalf("2 лота — ещё не бан, got %d", bans)
 	}
 	insertAhBookBatch([]ahBookWire{{
-		Uuid: "w-5", GoType: "netherite_sword-1.21", ItemID: item, Price: 2_200_000, Seller: "Laymix777",
+		Uuid: "w-2", GoType: "netherite_sword-1.21", ItemID: item, Price: 2_200_000, Seller: "Laymix777",
 	}})
 	if err := db.QueryRow(`SELECT COUNT(*) FROM ah_book_seller_bans WHERE seller = 'laymix777'`).Scan(&bans); err != nil || bans != 1 {
-		t.Fatalf("6-й лот того же SKU — бан, bans=%d err=%v", bans, err)
+		t.Fatalf("3-й лот того же SKU — бан, bans=%d err=%v", bans, err)
 	}
 	// другой SKU того же ника — не второй бан
 	insertAhBookBatch([]ahBookWire{{
@@ -196,15 +200,15 @@ func TestAhBookMinSkipsBannedSeller(t *testing.T) {
 func TestAhBookTimesHitWall(t *testing.T) {
 	base := time.Now()
 	var times []time.Time
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 3; i++ {
 		times = append(times, base.Add(time.Duration(i)*time.Minute))
 	}
 	if !ahBookTimesHitWall(times) {
-		t.Fatal("6 за 5 минут — стена")
+		t.Fatal("3 за 2 минуты — стена")
 	}
-	times[5] = base.Add(20 * time.Minute)
+	times[2] = base.Add(20 * time.Minute)
 	if ahBookTimesHitWall(times) {
-		t.Fatal("6-й через 20 мин — не стена")
+		t.Fatal("3-й через 20 мин — не стена")
 	}
 }
 
@@ -262,9 +266,9 @@ func TestAhBookMinSince(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	minP, n, ok := ahBookMinSince(item, now.Add(-ahBookRaiseWindow))
-	if !ok || n != 12 || minP != 1_000_000 {
-		t.Fatalf("min=%d n=%d ok=%v", minP, n, ok)
+	minP, n, distinct, ok := ahBookMinSince(item, now.Add(-ahBookRaiseWindow))
+	if !ok || n != 12 || distinct != 12 || minP != 1_000_000 {
+		t.Fatalf("min=%d n=%d distinct=%d ok=%v", minP, n, distinct, ok)
 	}
 }
 
