@@ -65,6 +65,41 @@ func TestAhBookRaiseTarget(t *testing.T) {
 	}
 }
 
+func TestAhBookSoftDownTarget(t *testing.T) {
+	if got := ahBookSoftDownTarget(2_000_000, 300_000, 100_000); got != 2_400_000 {
+		t.Fatalf("got %d", got)
+	}
+	if ahBookSoftDownTarget(0, 300_000, 100_000) != 0 {
+		t.Fatal("пустой p10")
+	}
+}
+
+func TestShouldSoftDownFromAhBook(t *testing.T) {
+	n := ahBookMinLotsInWindow
+	p10 := 2_000_000
+	nac := 300_000
+	step := 100_000
+	// триггер: > p10+nac+2×step = 2.5M
+	if !shouldSoftDownFromAhBook(2_600_000, p10, nac, n, step, false, false) {
+		t.Fatal("селл явно выше рынка — снижаем")
+	}
+	if shouldSoftDownFromAhBook(2_500_000, p10, nac, n, step, false, false) {
+		t.Fatal("на границе мёртвой зоны — не трогаем")
+	}
+	if shouldSoftDownFromAhBook(2_400_000, p10, nac, n, step, false, false) {
+		t.Fatal("уже у цели soft-↓ — не трогаем")
+	}
+	if shouldSoftDownFromAhBook(2_600_000, p10, nac, n-1, step, false, false) {
+		t.Fatal("мало лотов — рано")
+	}
+	if shouldSoftDownFromAhBook(2_600_000, p10, nac, n, step, true, false) {
+		t.Fatal("уже ↑ из книги в этом цикле")
+	}
+	if shouldSoftDownFromAhBook(2_600_000, p10, nac, n, step, false, true) {
+		t.Fatal("были покупки — не снижаем")
+	}
+}
+
 func TestAhBookMinOfLastN(t *testing.T) {
 	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
 	if err != nil {
@@ -265,41 +300,6 @@ func TestAhBookMinSince(t *testing.T) {
 	minP, n, ok := ahBookMinSince(item, now.Add(-ahBookRaiseWindow))
 	if !ok || n != ahBookMinLotsInWindow || minP != 1_000_000 {
 		t.Fatalf("min=%d n=%d ok=%v", minP, n, ok)
-	}
-}
-
-func TestAhBookSellerClipTarget(t *testing.T) {
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close(); mlDB = nil })
-	mlDB = db
-	initAhBookTable()
-	item := "шлем-1.21"
-	now := time.Now().UTC()
-	ts := now.Format(time.RFC3339)
-	_, _ = db.Exec(`INSERT INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
-		"shop_a", ts, item, 10, 900)
-	_, _ = db.Exec(`INSERT INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
-		"shop_b", ts, item, 10, 900)
-	_, _ = db.Exec(`INSERT INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
-		"dump", ts, item, 10, 900)
-	_, _ = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-		"a", ts, "armor", item, 2_200_000, "shop_a")
-	_, _ = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-		"b", ts, "armor", item, 2_500_000, "shop_b")
-	_, _ = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-		"d", ts, "armor", item, 400_000, "dump")
-	floor := 1_600_000
-	sell := 2_800_000
-	tgt, n, ok := ahBookSellerClipTarget(item, sell, floor, now.Add(-ahBookRaiseWindow))
-	if !ok || n != 2 || tgt != 2_500_000 {
-		t.Fatalf("tgt=%d n=%d ok=%v want 2500000 / 2", tgt, n, ok)
-	}
-	_, n, ok = ahBookSellerClipTarget(item, 1_600_000, floor, now.Add(-ahBookRaiseWindow))
-	if ok {
-		t.Fatalf("все селлеры выше нас — без клипа, n=%d", n)
 	}
 }
 

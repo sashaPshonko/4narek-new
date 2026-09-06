@@ -389,68 +389,6 @@ func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {
 	return p10, n, true
 }
 
-func ahBookLatestBannedSellerPrices(itemID string, floor int, since time.Time) []int {
-	if mlDB == nil || strings.TrimSpace(itemID) == "" || floor <= 0 {
-		return nil
-	}
-	mlDBMu.Lock()
-	rows, err := mlDB.Query(`
-SELECT lower(trim(a.seller)), a.price
-FROM ah_book_lots a
-WHERE a.item_id = ? AND a.ts >= ? AND trim(a.seller) != '' AND a.price >= ?
-AND EXISTS (
-	SELECT 1 FROM ah_book_seller_bans b
-	WHERE b.seller = lower(trim(a.seller))
-)
-ORDER BY a.ts DESC`, itemID, since.UTC().Format(time.RFC3339), floor)
-	if err != nil {
-		mlDBMu.Unlock()
-		log.Printf("[ah_book] seller prices: %v", err)
-		return nil
-	}
-	latest := map[string]int{}
-	for rows.Next() {
-		var seller string
-		var price int
-		if err := rows.Scan(&seller, &price); err != nil {
-			continue
-		}
-		if _, seen := latest[seller]; seen {
-			continue
-		}
-		latest[seller] = price
-	}
-	_ = rows.Close()
-	mlDBMu.Unlock()
-	out := make([]int, 0, len(latest))
-	for _, p := range latest {
-		out = append(out, p)
-	}
-	return out
-}
-
-// ahBookSellerClipTarget — max цены задокументированных селлеров в окне,
-// у которых цена ∈ [floor, sell). ok если таких ≥ ahBookSellerClipMin.
-func ahBookSellerClipTarget(itemID string, sell, floor int, since time.Time) (tgt, nBelow int, ok bool) {
-	if sell <= 0 || floor <= 0 {
-		return 0, 0, false
-	}
-	latest := ahBookLatestBannedSellerPrices(itemID, floor, since)
-	maxBelow := 0
-	for _, p := range latest {
-		if p < sell {
-			nBelow++
-			if p > maxBelow {
-				maxBelow = p
-			}
-		}
-	}
-	if nBelow < ahBookSellerClipMin || maxBelow <= 0 {
-		return 0, nBelow, false
-	}
-	return maxBelow, nBelow, true
-}
-
 // ahBookMinOfLastN — min(price) среди последних n лотов SKU (по ts), без забаненных витрин.
 // ok только при ровно n строках.
 func ahBookMinOfLastN(itemID string, n int) (minPrice int, ok bool) {
