@@ -17,7 +17,7 @@ const ahStorageSlotsPerBot = 5
 const botTotalSlots = 32
 
 // stock_corridor_v8k — v8j + замок set_min (FunTime не поднимает каталог втупую).
-// stock_corridor_v8j — v8i, но пол книги = min за 5 мин; ↓ к ≥2 селлерам ≥min+наценка.
+// stock_corridor_v8j — v8i, но пол книги = min за цикл (~10 мин); ↓ к ≥2 селлерам ≥min+наценка.
 //
 // stock_corridor_v8h — v8g + полоса на малом share (броня 1 тип / 6 id, share≈21):
 // 18–25% давало lo/hi = 4–5, медиана held=2 → вечный недобор и deep-↑ (lo/2=2).
@@ -60,8 +60,8 @@ const (
 	corridorMaxIdleHardDowns = 1 // over/dump при sales=0: один щуп, не цепочка в пол
 	corridorPaidBandGapSteps = 3 // в полосе цена ≤ paid−N×step → ↑ к якорю (и ночью)
 	corridorMinBandSpan      = 4 // hi−lo; share=21 иначе полоса 4–5 шт. (позор не трогаем)
-	ahBookRaiseWindow       = 5 * time.Minute // мягкий низ АХ; шире 3 мин — меньше дёрганий на тонком скане
-	ahBookMinLotsInWindow   = 20 // уникальных uuid за окно; меньше — скан тонкий, min/↑ не считаем
+	ahBookRaiseWindow       = 10 * time.Minute // окно книги = типичный AnalysisTime цикл
+	ahBookMinLotsInWindow   = 40               // уникальных uuid за цикл; меньше — скан тонкий, min/↑ не считаем
 	ahBookSellerClipMin     = 2  // честных селлеров ниже нас → клип к max из них
 	serverBoundLookCycles = 3 // окно закупок для set_min
 	serverBoundMinBuys    = 2 // одна покупка — шум
@@ -750,9 +750,9 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_floor":
 		return "corridor_v8c: цена ниже пола (minBuy+наценка) → поднимаем"
 	case "corridor_price_up_ah_book":
-		return "corridor_v8j: селл < min(5 мин ah_book)+наценка, ≥20 uuid → к min+наценка+шаг"
+		return "corridor_v8j: селл < min(10 мин ah_book)+наценка, ≥40 uuid → к min+наценка+шаг"
 	case "corridor_price_down_ah_sellers":
-		return "corridor_v8j: ≥2 селлера ниже нас, но ≥min(5 мин)+наценка → к max из них"
+		return "corridor_v8j: ≥2 селлера ниже нас, но ≥min(10 мин)+наценка → к max из них"
 	case "corridor_hold_recover_ceiling":
 		return "corridor_v8e: recover упёрся в max(sell за окно)+K×step"
 	case "corridor_hold_recover_stale":
@@ -1317,7 +1317,7 @@ func adjustPrice(item string) AdjustReport {
 		newPrice = raiseTgt
 		action = "corridor_price_up_ah_book"
 		changed = true
-		notes = append(notes, fmt.Sprintf("ah_book min5=%d n=%d → селл %d < min+наценка %d → %d",
+		notes = append(notes, fmt.Sprintf("ah_book min10=%d n=%d → селл %d < min+наценка %d → %d",
 			minAsk, bookN, priceBefore, minAsk+nacenka, raiseTgt))
 	}
 	if clipOK && clipTgt < newPrice {
