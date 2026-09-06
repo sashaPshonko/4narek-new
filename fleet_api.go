@@ -20,6 +20,7 @@ type bannedBotView struct {
 	GoType   string `json:"go_type,omitempty"`
 	BannedAt string `json:"banned_at,omitempty"`
 	Reason   string `json:"reason,omitempty"`
+	Kind     string `json:"kind,omitempty"` // staff_check → «проверка» в UI
 	Source   string `json:"source,omitempty"` // оркестратор / анархия-группа
 	IP       string `json:"ip,omitempty"`
 }

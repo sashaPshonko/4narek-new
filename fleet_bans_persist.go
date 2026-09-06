@@ -174,6 +174,9 @@ func mergeBannedBotView(prev, next bannedBotView) bannedBotView {
 	} else if prev.Reason != "" && !reasonIsChatBan(out.Reason) && reasonIsChatBan(prev.Reason) {
 		out.Reason = prev.Reason
 	}
+	if out.Kind == "" && prev.Kind != "" {
+		out.Kind = prev.Kind
+	}
 	if out.GoType == "" && prev.GoType != "" {
 		out.GoType = prev.GoType
 	}
@@ -243,7 +246,8 @@ func prunePersistedOwnerBansNotInConfig(ownerRoster funauthRoster) {
 }
 
 func reasonIsChatBan(reason string) bool {
-	return strings.Contains(strings.ToLower(reason), "вы забанены")
+	r := strings.ToLower(reason)
+	return strings.Contains(r, "вы забанены") || strings.Contains(r, "проверка")
 }
 
 func ingestBannedBotsFromPresence(raw []bannedBotView) {

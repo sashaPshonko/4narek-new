@@ -144,6 +144,8 @@
     .anarchy.faults > header .cnt { color: var(--warn); }
     .pill.bad_password { background: var(--warn-bg); color: var(--warn); }
     .pill.proxy_error { background: #e8edf5; color: var(--muted); }
+    .pill.staff_check { background: #efe8ff; color: #5b3cc4; }
+    .ban-tag { margin-left: 6px; vertical-align: middle; }
     @media (max-width: 640px) { .kpi { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -236,13 +238,19 @@
       $("bannerModal").hidden = true;
     }
 
+    function isStaffCheckBan(b) {
+      if (String(b?.kind || "").toLowerCase() === "staff_check") return true;
+      return String(b?.reason || "").toLowerCase().includes("проверка");
+    }
+
     function formatBotLine(b) {
       const an = b.anarchy ?? "?";
       const type = b.go_type || "—";
       const when = b.banned_at || "—";
       const reason = (b.reason || "—").replace(/\s+/g, " ");
       const src = b.source === "persisted" ? " [persisted]" : "";
-      return `an${an}\t${b.username}\t${type}\t${when}\t${reason}${src}`;
+      const tag = isStaffCheckBan(b) ? " [проверка]" : "";
+      return `an${an}\t${b.username}\t${type}\t${when}\t${reason}${tag}${src}`;
     }
 
     function formatOwnerLine(o) {
@@ -418,10 +426,13 @@
             const rows = (a.banned || []).map((b) => {
               const type = b.go_type || "—";
               const persisted = b.source === "persisted" ? `<div class="src-persisted">из памяти сервера</div>` : "";
+              const checkPill = isStaffCheckBan(b)
+                ? `<span class="pill staff_check ban-tag">проверка</span>`
+                : "";
               return `
               <tr>
                 <td>
-                  <div class="nick">${escapeHtml(b.username)}</div>
+                  <div class="nick">${escapeHtml(b.username)}${checkPill}</div>
                   <div class="meta">${escapeHtml(type)}${b.ip ? " · " + escapeHtml(b.ip) : ""}</div>
                   ${persisted}
                 </td>
