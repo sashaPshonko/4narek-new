@@ -30,3 +30,15 @@ func TestLastPaidSellMaxEmpty(t *testing.T) {
 		t.Fatalf("empty=%d", got)
 	}
 }
+
+// Recover gate: near-paid = fair (hold_recover_fair), not priceFarBelowPaid.
+func TestRecoverUnderpriceGap(t *testing.T) {
+	step := 100_000
+	paid := 2_500_000
+	if priceFarBelowPaid(2_400_000, paid, step) {
+		t.Fatal("paid-1step is fair — recover must not treat as underpriced")
+	}
+	if !priceFarBelowPaid(2_000_000, paid, step) {
+		t.Fatal("paid-5step is underpriced — recover allowed")
+	}
+}

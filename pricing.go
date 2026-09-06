@@ -16,6 +16,7 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8m — v8l + recover-↑ только если цена занижена vs paid (не vacuum).
 // stock_corridor_v8l — v8k + soft-↓ к p10+наценка+шаг (вместо клипа к витринам).
 // stock_corridor_v8k — v8j + замок set_min (FunTime не поднимает каталог втупую).
 // stock_corridor_v8j — v8i, но пол книги = min за цикл (~10 мин); soft-↓ раньше клип к витринам.
@@ -54,8 +55,8 @@ const (
 	corridorHardDownStepMult   = 2 // over/dump: −step×2
 	tryUpVetoMinTries          = 5
 	tryUpVetoPerSale           = 2
-	// recover-↑ без BasePrice: можно ↑ при недоборе без sales, но не бесконечно в пустоту.
-	corridorMaxNoBuyUps       = 8 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
+	// recover-↑: только при цене << paid; без buys — короткая страховка, не главный гейт.
+	corridorMaxNoBuyUps       = 3 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
 	corridorRecoverProbeSteps = 2 // recover ≤ max(sell в TTL) + K×step
 	corridorThinFleetMaxBots  = 2 // ≤ столько ботов в категории → мягче пороги спроса / recover
 	corridorMaxIdleHardDowns = 1 // over/dump при sales=0: один щуп, не цепочка в пол
@@ -777,7 +778,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_deep":
 		return "corridor_v8h: held=0 днём + сильный спрос → +цена (обход up_cd)"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
-		return "corridor_v8e: недобор, recover ≤ max(sell)+K×step (без BasePrice)"
+		return "corridor_v8m: недобор + цена << paid → recover ≤ max(sell)+K×step"
 	case "corridor_price_up_skim":
 		return "corridor_v8: held в полосе + сильный разбор → +цена (probe прибыли)"
 	case "corridor_price_up_floor":
@@ -790,6 +791,8 @@ func actionReasonRU(action string) string {
 		return "corridor_v8e: recover упёрся в max(sell за окно)+K×step"
 	case "corridor_hold_recover_stale":
 		return "corridor_v8e: нет продаж в окне — recover ↑ запрещён (якорь протух)"
+	case "corridor_hold_recover_fair":
+		return "corridor_v8m: недобор, но цена не << paid — recover ↑ запрещён (не vacuum-↑)"
 	case "corridor_hold_recover_pause":
 		return "corridor_v8e: слишком много recover-↑ без buys → пауза (без resume)"
 	case "corridor_hold_band":
@@ -1191,21 +1194,25 @@ func adjustPrice(item string) AdjustReport {
 
 	case totalHeld < targetLo:
 		deep := deepUnderstock(totalHeld, targetLo)
-		bypassUpCD := deep && !nightMSK
+		// Цена занижена vs свежий paid — иначе недобор ≠ повод recover-↑ (vacuum).
+		underpriced := priceFarBelowPaid(priceBefore, paidMax, step)
+		// deep обход cd: только с живым спросом ИЛИ с доказанным занижением.
+		bypassUpCD := deep && !nightMSK && (sales > buys || underpriced)
 		// buy-veto только когда реально набиваем сток сильнее продаж.
 		// buys==sales (в т.ч. 1=1 при held≈0) — рынок забирает всё → ↑ можно.
 		liveBuyVeto := buys > sales
 		noBuyBlocked := state.CorridorNoBuyUpStreak >= corridorMaxNoBuyUps
-		// recover: недобор, нет try/buy-veto, не ночь. Потолок — max(sell в retain)+K×step.
+		// recover: недобор + цена << paid, нет try/buy-veto, не ночь. Потолок — paid+K×step.
 		recoverCDOK := state.CorridorUpCooldown == 0 || bypassUpCD
 		recoverStreakOK := state.CorridorUpStreak < corridorMaxUpStreak || bypassUpCD
-		recoverOK := !nightMSK &&
+		recoverBase := !nightMSK &&
 			recoverCDOK &&
 			recoverStreakOK &&
 			!trySellsBlockUp(sales, trySells) &&
 			!liveBuyVeto &&
 			!noBuyBlocked &&
 			!overCap
+		recoverOK := recoverBase && underpriced
 		switch {
 		case trySellsBlockUp(sales, trySells):
 			action = "corridor_hold_try_veto"
@@ -1244,15 +1251,19 @@ func adjustPrice(item string) AdjustReport {
 				totalHeld, targetLo, sales, state.CorridorUpStreak, corridorMaxUpStreak))
 		case recoverOK:
 			label := "corridor_price_up_recover"
-			note := fmt.Sprintf("held=%d < lo=%d sales=%d buys=%d paid=%d cap=%d noBuyUps=%d/%d — recover-↑",
-				totalHeld, targetLo, sales, buys, paidMax, recoverPaidCap(paidMax, step),
+			note := fmt.Sprintf("held=%d < lo=%d sales=%d buys=%d price=%d << paid=%d cap=%d noBuyUps=%d/%d — recover-↑",
+				totalHeld, targetLo, sales, buys, priceBefore, paidMax, recoverPaidCap(paidMax, step),
 				state.CorridorNoBuyUpStreak, corridorMaxNoBuyUps)
 			if bypassUpCD && (state.CorridorUpCooldown > 0 || state.CorridorUpStreak >= corridorMaxUpStreak) {
 				label = "corridor_price_up_recover_deep"
-				note = fmt.Sprintf("held=%d < lo=%d deep recover-↑ noBuyUps=%d/%d",
-					totalHeld, targetLo, state.CorridorNoBuyUpStreak, corridorMaxNoBuyUps)
+				note = fmt.Sprintf("held=%d < lo=%d price=%d << paid=%d deep recover-↑ noBuyUps=%d/%d",
+					totalHeld, targetLo, priceBefore, paidMax, state.CorridorNoBuyUpStreak, corridorMaxNoBuyUps)
 			}
 			applyUp(label, note)
+		case recoverBase && !underpriced:
+			action = "corridor_hold_recover_fair"
+			notes = append(notes, fmt.Sprintf("held=%d < lo=%d price=%d paid=%d — недобор, но не << paid (−%d×step), recover ↑ нет",
+				totalHeld, targetLo, priceBefore, paidMax, corridorPaidBandGapSteps))
 		case overCap && paidMax <= 0:
 			action = "corridor_hold_recover_stale"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d — нет sell за %s, recover ↑ запрещён",
@@ -1549,7 +1560,24 @@ func adjustPrice(item string) AdjustReport {
 			NormalSales:    cfg.NormalSales,
 			NormalCount:    stockNorm,
 			MinBuyHistory:  minPrice,
-			CanRaisePrice:  totalHeld < targetLo && !trySellsBlockUp(sales, trySells) && state.CorridorNoBuyUpStreak < corridorMaxNoBuyUps && buys <= sales && (sales > buys || !overCap) && ((sales > buys && demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo))) || (!nightMSK && (state.CorridorUpCooldown == 0 || deepUnderstock(totalHeld, targetLo)) && (state.CorridorUpStreak < corridorMaxUpStreak || deepUnderstock(totalHeld, targetLo)))),
+			CanRaisePrice: func() bool {
+				if totalHeld >= targetLo || trySellsBlockUp(sales, trySells) || buys > sales {
+					return false
+				}
+				if state.CorridorNoBuyUpStreak >= corridorMaxNoBuyUps {
+					return false
+				}
+				deep := deepUnderstock(totalHeld, targetLo)
+				under := priceFarBelowPaid(priceBefore, paidMax, step)
+				bypass := deep && !nightMSK && (sales > buys || under)
+				cdOK := state.CorridorUpCooldown == 0 || bypass
+				streakOK := state.CorridorUpStreak < corridorMaxUpStreak || bypass
+				if sales > buys {
+					return demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) && cdOK && streakOK
+				}
+				// recover: недобор без sales>buys — только заниженная цена
+				return !nightMSK && under && !overCap && cdOK && streakOK
+			}(),
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  onlineForCap,
 		}

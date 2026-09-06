@@ -1,4 +1,4 @@
-# Ценообразование 4narek: эксперименты classic → stock_corridor_v8k
+# Ценообразование 4narek: эксперименты classic → stock_corridor_v8m
 
 Документ для быстрого погружения. Код: `4narek-new/pricing.go`, политика в логе: `capital_log.go` → `capitalPolicy`. Метрики: `ml_data/pricing.db` → таблица `capital_cycles`.
 
@@ -185,7 +185,7 @@ Policy: `stock_corridor_v8`. Дальше буквы (v8h…v8j) — точеч�
 
 ---
 
-## Ветка: FunTime `set_min` / книга АХ (03.09.2026) ← текущее
+## Ветка: FunTime `set_min` / книга АХ (03.09.2026)
 
 Коридор **не** переписываем. Отдельный замок: FunTime не имеет права утащить **каталог Go** вверх (лот бот по-прежнему ставит по FunTime).
 
@@ -200,11 +200,25 @@ Policy: `stock_corridor_v8`. Дальше буквы (v8h…v8j) — точеч�
 
 Коридор книги (v8j→v8l): окно **10 мин**, ≥**40** uuid. ↑ к min+наценка+шаг; soft-↓ к **p10+наценка+шаг** если sell > p10+наценка+2×step, **не ниже min+наценка** (held не нужен; клип к витринам убран).
 
-Policy циклов: `stock_corridor_v8l`. На VPS до pull/рестарта с панели — ещё старое.
+**Смотреть (v8k):** `server_price_events` kind=`server_min` — пропали ли скачки ≥+1кк при buys≥sales; шлем не уезжает в 3.5 при закупках.
 
-**Смотреть:** `server_price_events` kind=`server_min` — пропали ли скачки ≥+1кк при buys≥sales; шлем не уезжает в 3.5 при закупках.
+---
 
-**Дальше (не в v8k):** не копировать границу FunTime 1:1; мерить fwd после редких принятых min.
+## stock_corridor_v8m (06.09.2026) ← текущее
+
+**Проблема:** `recover` / `recover_deep` при `held < lo` поднимали цену без доказательства, что она **занижена**. Пустой АХ из‑за «не берут» выглядел как недобор → ↑ в пустоту. Слепой запрет ↑ при низких sales резал бы и нормальный разбор.
+
+**Правило:**
+1. **Demand-↑** (`sales > buys`, strong demand) — без изменений (недобор с продажами).
+2. **Recover-↑** только если `priceFarBelowPaid` (цена ≤ paid − 3×step) + прежние veto/cap/ночь. Иначе `corridor_hold_recover_fair`.
+3. **Deep обход up_cd** только если `sales > buys` **или** цена занижена (не deep+пусто+fair price).
+4. Антиvacuum no-buy streak: **8 → 3** (страховка, не главный гейт).
+
+Policy циклов: `stock_corridor_v8m`. На VPS — `git pull` + рестарт Go **с панели**.
+
+**Смотреть:** `corridor_hold_recover_fair` vs `corridor_price_up_recover*`; vacuum-↑ (`recover` при sales=0 и цене ≈ paid) должны почти исчезнуть; demand-↑ на разборе витрины — остаться.
+
+**Дальше:** не копировать границу FunTime 1:1; мерить fwd после редких принятых min.
 
 ---
 
