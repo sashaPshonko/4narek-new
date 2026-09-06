@@ -672,15 +672,20 @@ func ahBookRaiseTarget(minAsk, nacenka, step int) int {
 	return minAsk + nacenka + step
 }
 
-// ahBookSoftDownTarget — селл к p10 книги + наценка + шаг (не сырой min: дампы).
-func ahBookSoftDownTarget(p10, nacenka, step int) int {
-	if p10 <= 0 {
+// ahBookSoftDownTarget — к p10+наценка+шаг, но не ниже min(книги без витрин)+наценка.
+func ahBookSoftDownTarget(p10, minAsk, nacenka, step int) int {
+	if p10 <= 0 || minAsk <= 0 {
 		return 0
 	}
 	if step < 0 {
 		step = 0
 	}
-	return p10 + nacenka + step
+	tgt := p10 + nacenka + step
+	floor := minAsk + nacenka
+	if tgt < floor {
+		tgt = floor
+	}
+	return tgt
 }
 
 // shouldRaiseFromAhBook — селл ниже min(окно)+наценка; dump / ↓ цикла / были buys / тонкий скан — не трогаем.
@@ -691,10 +696,14 @@ func shouldRaiseFromAhBook(sell, minAsk, nacenka, n int, dumpZone, alreadyDown, 
 	return sell < minAsk+nacenka
 }
 
-// shouldSoftDownFromAhBook — селл явно выше p10+наценка; ↑ цикла / buys / тонкий скан — не трогаем.
-// Триггер с люфтом 2×step, цель на 1×step над p10+наценка — без пилы с soft-↑ по min.
-func shouldSoftDownFromAhBook(sell, p10, nacenka, n, step int, alreadyUp, hadBuys bool) bool {
-	if n < ahBookMinLotsInWindow || p10 <= 0 || alreadyUp || hadBuys {
+// shouldSoftDownFromAhBook — селл явно выше p10+наценка и выше min+наценка; ↑ цикла / buys — не трогаем.
+// Триггер с люфтом 2×step; цель не ниже min+наценка (p10 может быть занижен дампами).
+func shouldSoftDownFromAhBook(sell, p10, minAsk, nacenka, n, step int, alreadyUp, hadBuys bool) bool {
+	if n < ahBookMinLotsInWindow || p10 <= 0 || minAsk <= 0 || alreadyUp || hadBuys {
+		return false
+	}
+	bookFloor := minAsk + nacenka
+	if sell <= bookFloor {
 		return false
 	}
 	if step <= 0 {
@@ -776,7 +785,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_ah_book":
 		return "corridor_v8j: селл < min(10 мин ah_book)+наценка, ≥40 uuid → к min+наценка+шаг"
 	case "corridor_price_down_ah_book":
-		return "corridor_v8l: селл > p10(10 мин)+наценка+2×step → к p10+наценка+шаг (held не нужен)"
+		return "corridor_v8l: селл > p10+наценка+2×step → к p10+наценка+шаг, не ниже min+наценка"
 	case "corridor_hold_recover_ceiling":
 		return "corridor_v8e: recover упёрся в max(sell за окно)+K×step"
 	case "corridor_hold_recover_stale":
@@ -1328,10 +1337,10 @@ func adjustPrice(item string) AdjustReport {
 	if raiseFromBook {
 		raiseTgt = ahBookRaiseTarget(minAsk, nacenka, step)
 	}
-	softDownFromBook := p10OK && shouldSoftDownFromAhBook(priceBefore, p10, nacenka, p10N, step, raiseFromBook, buys > 0)
+	softDownFromBook := bookOK && p10OK && shouldSoftDownFromAhBook(priceBefore, p10, minAsk, nacenka, p10N, step, raiseFromBook, buys > 0)
 	var softDownTgt int
 	if softDownFromBook {
-		softDownTgt = ahBookSoftDownTarget(p10, nacenka, step)
+		softDownTgt = ahBookSoftDownTarget(p10, minAsk, nacenka, step)
 	}
 	mutex.Lock()
 	if raiseFromBook && raiseTgt > newPrice {
@@ -1346,12 +1355,16 @@ func adjustPrice(item string) AdjustReport {
 		if tgt < priceFloor {
 			tgt = priceFloor
 		}
+		bookFloor := minAsk + nacenka
+		if tgt < bookFloor {
+			tgt = bookFloor
+		}
 		if tgt < newPrice {
 			newPrice = tgt
 			action = "corridor_price_down_ah_book"
 			changed = true
-			notes = append(notes, fmt.Sprintf("ah_book p10=%d n=%d → селл %d > p10+наценка+%d×step → %d",
-				p10, p10N, priceBefore, ahBookSoftDownSlackSteps, tgt))
+			notes = append(notes, fmt.Sprintf("ah_book p10=%d min=%d n=%d → селл %d → %d (пол min+наценка=%d)",
+				p10, minAsk, p10N, priceBefore, tgt, bookFloor))
 		}
 	}
 

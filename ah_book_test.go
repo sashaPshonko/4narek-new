@@ -66,36 +66,47 @@ func TestAhBookRaiseTarget(t *testing.T) {
 }
 
 func TestAhBookSoftDownTarget(t *testing.T) {
-	if got := ahBookSoftDownTarget(2_000_000, 300_000, 100_000); got != 2_400_000 {
+	if got := ahBookSoftDownTarget(2_000_000, 1_800_000, 300_000, 100_000); got != 2_400_000 {
 		t.Fatalf("got %d", got)
 	}
-	if ahBookSoftDownTarget(0, 300_000, 100_000) != 0 {
+	// p10 занижен дампами — не ниже min+наценка
+	if got := ahBookSoftDownTarget(400_000, 2_000_000, 300_000, 100_000); got != 2_300_000 {
+		t.Fatalf("floor min+nac: got %d", got)
+	}
+	if ahBookSoftDownTarget(0, 2_000_000, 300_000, 100_000) != 0 {
 		t.Fatal("пустой p10")
+	}
+	if ahBookSoftDownTarget(2_000_000, 0, 300_000, 100_000) != 0 {
+		t.Fatal("пустой min")
 	}
 }
 
 func TestShouldSoftDownFromAhBook(t *testing.T) {
 	n := ahBookMinLotsInWindow
 	p10 := 2_000_000
+	minAsk := 1_800_000
 	nac := 300_000
 	step := 100_000
-	// триггер: > p10+nac+2×step = 2.5M
-	if !shouldSoftDownFromAhBook(2_600_000, p10, nac, n, step, false, false) {
+	// триггер: > p10+nac+2×step = 2.5M и > min+nac = 2.1M
+	if !shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, false) {
 		t.Fatal("селл явно выше рынка — снижаем")
 	}
-	if shouldSoftDownFromAhBook(2_500_000, p10, nac, n, step, false, false) {
+	if shouldSoftDownFromAhBook(2_500_000, p10, minAsk, nac, n, step, false, false) {
 		t.Fatal("на границе мёртвой зоны — не трогаем")
 	}
-	if shouldSoftDownFromAhBook(2_400_000, p10, nac, n, step, false, false) {
-		t.Fatal("уже у цели soft-↓ — не трогаем")
+	if shouldSoftDownFromAhBook(2_100_000, p10, minAsk, nac, n, step, false, false) {
+		t.Fatal("уже на min+наценка — не ниже")
 	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, nac, n-1, step, false, false) {
+	if shouldSoftDownFromAhBook(2_000_000, p10, minAsk, nac, n, step, false, false) {
+		t.Fatal("ниже/на min+наценка — не ↓")
+	}
+	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n-1, step, false, false) {
 		t.Fatal("мало лотов — рано")
 	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, nac, n, step, true, false) {
+	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, true, false) {
 		t.Fatal("уже ↑ из книги в этом цикле")
 	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, nac, n, step, false, true) {
+	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, true) {
 		t.Fatal("были покупки — не снижаем")
 	}
 }
