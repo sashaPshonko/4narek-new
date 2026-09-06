@@ -481,6 +481,7 @@ func removeClient(ws *websocket.Conn) {
 	delete(clientFleetTypes, ws)
 	delete(clientBotsPerType, ws)
 	delete(clientBannedBots, ws)
+	delete(clientAuthFaults, ws)
 	delete(clientClanOwners, ws)
 	deleteClientOrchBots(ws)
 	deleteClientOrchestratorAnarchy(ws)
@@ -1188,6 +1189,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			ActiveTypes   []string        `json:"active_types"`
 			BotsPerType   map[string]int  `json:"bots_per_type"`
 			Banned        []bannedBotView `json:"banned"`
+			AuthFaults    []authFaultView `json:"auth_faults"`
 			ClanOwners    []clanOwnerView `json:"clan_owners"`
 			Bots          []orchBotNick   `json:"bots"`
 			Price         int             `json:"price"`
@@ -1210,8 +1212,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if msg.Action == "presence" {
-			log.Printf("[WS incoming] presence items=%d inv=%d banned=%d owners=%d bots=%d active=%v",
-				len(msg.Items), len(msg.Inventory), len(msg.Banned), len(msg.ClanOwners), len(msg.Bots), msg.ActiveTypes)
+			log.Printf("[WS incoming] presence items=%d inv=%d banned=%d faults=%d owners=%d bots=%d active=%v",
+				len(msg.Items), len(msg.Inventory), len(msg.Banned), len(msg.AuthFaults), len(msg.ClanOwners), len(msg.Bots), msg.ActiveTypes)
 		} else if msg.Action != "add" && msg.Action != "ah_lot" && msg.Action != "ah_lots" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
 		}
@@ -1231,6 +1233,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	ActiveTypes   []string        `json:"active_types"`
 	BotsPerType   map[string]int  `json:"bots_per_type"`
 	Banned        []bannedBotView `json:"banned"`
+	AuthFaults    []authFaultView `json:"auth_faults"`
 	ClanOwners    []clanOwnerView `json:"clan_owners"`
 	Bots          []orchBotNick   `json:"bots"`
 	Price         int             `json:"price"`
@@ -1338,6 +1341,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			setClientOrchBots(ws, msg.Bots)
 		}
 		setClientBannedBots(ws, msg.Banned)
+		setClientAuthFaults(ws, msg.AuthFaults)
 		setClientClanOwners(ws, msg.ClanOwners)
 		if a := inferOrchestratorAnarchy(msg.Banned, msg.ClanOwners); a > 0 {
 			setClientOrchestratorAnarchy(ws, a)

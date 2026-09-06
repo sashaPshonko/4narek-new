@@ -24,6 +24,17 @@ type bannedBotView struct {
 	IP       string `json:"ip,omitempty"`
 }
 
+// authFaultView — неверный пароль / мёртвая прокси (не бан FunTime).
+type authFaultView struct {
+	Username string `json:"username"`
+	Anarchy  any    `json:"anarchy"`
+	GoType   string `json:"go_type,omitempty"`
+	Kind     string `json:"kind"` // bad_password | proxy_error
+	At       string `json:"at,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+	IP       string `json:"ip,omitempty"`
+}
+
 type clanOwnerView struct {
 	Username  string `json:"username"`
 	Anarchy   any    `json:"anarchy"`
@@ -48,6 +59,8 @@ type fleetOverview struct {
 	PersistedBanned int                 `json:"persisted_banned"`
 	Anarchies       []fleetAnarchyView  `json:"anarchies"`
 	Banned          []bannedBotView     `json:"banned"`
+	AuthFaults      []authFaultView     `json:"auth_faults"`
+	AuthFaultCount  int                 `json:"auth_fault_count"`
 	ClanOwners      []clanOwnerView     `json:"clan_owners"`
 	BannedIPs       []bannedIPView      `json:"banned_ips"`
 	AssignedProxies []assignedProxyView `json:"assigned_proxies"`
@@ -56,6 +69,9 @@ type fleetOverview struct {
 
 // clientBannedBots — снимок забаненных с каждого WS-оркестратора.
 var clientBannedBots = make(map[*websocket.Conn][]bannedBotView)
+
+// clientAuthFaults — неверный пароль / прокси с каждого оркестратора.
+var clientAuthFaults = make(map[*websocket.Conn][]authFaultView)
 
 // clientClanOwners — статусы владельцев кланов с каждого WS-оркестратора.
 var clientClanOwners = make(map[*websocket.Conn][]clanOwnerView)
@@ -152,6 +168,65 @@ func setClientBannedBots(ws *websocket.Conn, raw []bannedBotView) {
 	out := dedupeBannedBots(raw)
 	clientBannedBots[ws] = out
 	ingestBannedBotsFromPresence(out)
+}
+
+func setClientAuthFaults(ws *websocket.Conn, raw []authFaultView) {
+	clientAuthFaults[ws] = dedupeAuthFaults(raw)
+}
+
+func dedupeAuthFaults(raw []authFaultView) []authFaultView {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make([]authFaultView, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+	for _, b := range raw {
+		u := strings.TrimSpace(b.Username)
+		if u == "" {
+			continue
+		}
+		key := strings.ToLower(u)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		b.Username = u
+		kind := strings.TrimSpace(b.Kind)
+		if kind == "" {
+			kind = "bad_password"
+		}
+		b.Kind = kind
+		out = append(out, b)
+	}
+	return out
+}
+
+func collectAuthFaultsLocked() []authFaultView {
+	byUser := make(map[string]authFaultView)
+	for _, list := range clientAuthFaults {
+		for _, b := range list {
+			key := strings.ToLower(b.Username)
+			if prev, ok := byUser[key]; ok {
+				if b.At != "" && (prev.At == "" || b.At > prev.At) {
+					byUser[key] = b
+				}
+				continue
+			}
+			byUser[key] = b
+		}
+	}
+	out := make([]authFaultView, 0, len(byUser))
+	for _, b := range byUser {
+		out = append(out, b)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		ai, aj := anarchyInt(out[i].Anarchy), anarchyInt(out[j].Anarchy)
+		if ai != aj {
+			return ai < aj
+		}
+		return out[i].Username < out[j].Username
+	})
+	return out
 }
 
 func dedupeBannedBots(raw []bannedBotView) []bannedBotView {
@@ -286,6 +361,7 @@ func buildFleetOverview() fleetOverview {
 	)
 
 	bannedIPs := listBannedIPs()
+	faults := collectAuthFaultsLocked()
 	return fleetOverview{
 		OK:              true,
 		UpdatedAt:       now,
@@ -293,6 +369,8 @@ func buildFleetOverview() fleetOverview {
 		PersistedBanned: persistedCount,
 		Anarchies:       anarchies,
 		Banned:          visible,
+		AuthFaults:      faults,
+		AuthFaultCount:  len(faults),
 		ClanOwners:      owners,
 		BannedIPs:       bannedIPs,
 		AssignedProxies: loadAssignedProxies(),

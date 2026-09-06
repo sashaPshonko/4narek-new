@@ -140,6 +140,10 @@
     .pill.pending { background: #e8edf5; color: var(--muted); }
     .pill.error { background: var(--warn-bg); color: var(--warn); }
     .src-persisted { color: var(--faint); font-size: 11px; }
+    .anarchy.faults > header { background: var(--warn-bg); }
+    .anarchy.faults > header .cnt { color: var(--warn); }
+    .pill.bad_password { background: var(--warn-bg); color: var(--warn); }
+    .pill.proxy_error { background: #e8edf5; color: var(--muted); }
     @media (max-width: 640px) { .kpi { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -160,11 +164,15 @@
     <div class="status" id="status"><span class="dot"></span><span id="statusText">подключение…</span></div>
     <div class="kpi">
       <div class="card"><div class="k">Забанено сейчас</div><div class="v ban mono" id="kpiTotal">—</div></div>
+      <div class="card"><div class="k">Сломанные</div><div class="v mono" id="kpiFaults" style="color:var(--warn)">—</div></div>
       <div class="card"><div class="k">Анархии с банами</div><div class="v mono" id="kpiAn">—</div></div>
       <div class="card"><div class="k">Владельцы кланов</div><div class="v mono" id="kpiOwners">—</div></div>
     </div>
     <h2 class="section-title">Владельцы кланов</h2>
     <div id="owners"></div>
+    <h2 class="section-title">Сломанные боты</h2>
+    <p class="lede" style="margin-top:-4px;margin-bottom:10px;font-size:14px">Неверный пароль или ошибка прокси — оркестратор не рестартит, пока не починишь.</p>
+    <div id="faults"></div>
     <h2 class="section-title">Баны ботов</h2>
     <div id="list"></div>
   </div>
@@ -343,8 +351,9 @@
         const t = new Date(data.updated_at);
         const owners = data.clan_owners || [];
         const ownersBanned = owners.filter((o) => o.banned || o.status === "banned").length;
-        $("statusText").textContent = `обновлено ${t.toLocaleTimeString("ru-RU")} · ${data.total_banned} бан(ов) · в памяти ${data.persisted_banned ?? 0} · владельцев ${owners.length}`;
+        $("statusText").textContent = `обновлено ${t.toLocaleTimeString("ru-RU")} · ${data.total_banned} бан(ов) · сломано ${data.auth_fault_count ?? 0} · в памяти ${data.persisted_banned ?? 0} · владельцев ${owners.length}`;
         $("kpiTotal").textContent = data.total_banned;
+        $("kpiFaults").textContent = data.auth_fault_count ?? 0;
         $("kpiAn").textContent = (data.anarchies || []).filter((a) => a.count > 0).length;
         $("kpiOwners").textContent = owners.length ? `${ownersBanned}/${owners.length}` : "—";
 
@@ -371,35 +380,64 @@
           </section>`;
         }
 
-        const list = $("list");
-        if (!data.total_banned) {
-          list.innerHTML = `<div class="anarchy"><div class="empty">Сейчас никто из бай-ботов не помечен забаненным.</div></div>`;
-          return;
-        }
-        list.innerHTML = (data.anarchies || []).map((a) => {
-          const title = a.anarchy ? `Анархия ${a.anarchy}` : "Без анархии";
-          const rows = (a.banned || []).map((b) => {
-            const type = b.go_type || "—";
-            const persisted = b.source === "persisted" ? `<div class="src-persisted">из памяти сервера</div>` : "";
-            return `
+        const kindLabel = (k) => ({
+          bad_password: "пароль",
+          proxy_error: "прокси",
+        })[k] || k || "?";
+
+        const faultsEl = $("faults");
+        const faults = data.auth_faults || [];
+        if (!faults.length) {
+          faultsEl.innerHTML = `<div class="anarchy faults"><div class="empty">Нет ботов с неверным паролем или ошибкой прокси.</div></div>`;
+        } else {
+          const rows = faults.map((b) => `
             <tr>
               <td>
                 <div class="nick">${escapeHtml(b.username)}</div>
-                <div class="meta">${escapeHtml(type)}${b.ip ? " · " + escapeHtml(b.ip) : ""}</div>
-                ${persisted}
+                <div class="meta">an${escapeHtml(b.anarchy ?? "?")} · ${escapeHtml(b.go_type || "—")}${b.ip ? " · " + escapeHtml(b.ip) : ""}</div>
               </td>
-              <td class="mono">${fmtWhen(b.banned_at)}</td>
+              <td><span class="pill ${escapeHtml(b.kind || "")}">${escapeHtml(kindLabel(b.kind))}</span></td>
+              <td class="mono">${fmtWhen(b.at)}</td>
               ${reasonCell(b.reason, b.username)}
-            </tr>`;
-          }).join("");
-          return `<section class="anarchy">
-            <header><h2>${title}</h2><span class="cnt">${a.count}</span></header>
+            </tr>`).join("");
+          faultsEl.innerHTML = `<section class="anarchy faults">
+            <header><h2>Все анки</h2><span class="cnt">${faults.length}</span></header>
             <table>
-              <thead><tr><th>Бот</th><th>Когда</th><th>Причина</th></tr></thead>
+              <thead><tr><th>Бот</th><th>Тип</th><th>Когда</th><th>Детали</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </section>`;
-        }).join("");
+        }
+
+        const list = $("list");
+        if (!data.total_banned) {
+          list.innerHTML = `<div class="anarchy"><div class="empty">Сейчас никто из бай-ботов не помечен забаненным.</div></div>`;
+        } else {
+          list.innerHTML = (data.anarchies || []).map((a) => {
+            const title = a.anarchy ? `Анархия ${a.anarchy}` : "Без анархии";
+            const rows = (a.banned || []).map((b) => {
+              const type = b.go_type || "—";
+              const persisted = b.source === "persisted" ? `<div class="src-persisted">из памяти сервера</div>` : "";
+              return `
+              <tr>
+                <td>
+                  <div class="nick">${escapeHtml(b.username)}</div>
+                  <div class="meta">${escapeHtml(type)}${b.ip ? " · " + escapeHtml(b.ip) : ""}</div>
+                  ${persisted}
+                </td>
+                <td class="mono">${fmtWhen(b.banned_at)}</td>
+                ${reasonCell(b.reason, b.username)}
+              </tr>`;
+            }).join("");
+            return `<section class="anarchy">
+              <header><h2>${title}</h2><span class="cnt">${a.count}</span></header>
+              <table>
+                <thead><tr><th>Бот</th><th>Когда</th><th>Причина</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </section>`;
+          }).join("");
+        }
       } catch (e) {
         $("status").classList.add("err");
         $("statusText").textContent = "нет связи: " + e.message;
