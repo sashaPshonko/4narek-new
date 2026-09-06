@@ -87,27 +87,35 @@ func TestShouldSoftDownFromAhBook(t *testing.T) {
 	minAsk := 1_800_000
 	nac := 300_000
 	step := 100_000
+	held := 4
 	// триггер: > p10+nac+2×step = 2.5M и > min+nac = 2.1M
-	if !shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, false) {
+	if !shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, false, held) {
 		t.Fatal("селл явно выше рынка — снижаем")
 	}
-	if shouldSoftDownFromAhBook(2_500_000, p10, minAsk, nac, n, step, false, false) {
+	if shouldSoftDownFromAhBook(2_500_000, p10, minAsk, nac, n, step, false, false, held) {
 		t.Fatal("на границе мёртвой зоны — не трогаем")
 	}
-	if shouldSoftDownFromAhBook(2_100_000, p10, minAsk, nac, n, step, false, false) {
+	if shouldSoftDownFromAhBook(2_100_000, p10, minAsk, nac, n, step, false, false, held) {
 		t.Fatal("уже на min+наценка — не ниже")
 	}
-	if shouldSoftDownFromAhBook(2_000_000, p10, minAsk, nac, n, step, false, false) {
+	if shouldSoftDownFromAhBook(2_000_000, p10, minAsk, nac, n, step, false, false, held) {
 		t.Fatal("ниже/на min+наценка — не ↓")
 	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n-1, step, false, false) {
+	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n-1, step, false, false, held) {
 		t.Fatal("мало лотов — рано")
 	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, true, false) {
+	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, true, false, held) {
 		t.Fatal("уже ↑ из книги в этом цикле")
 	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, true) {
-		t.Fatal("были покупки — не снижаем")
+	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, true, held) {
+		t.Fatal("были покупки при held>0 — не снижаем")
+	}
+	// held=0: тонкая книга + buys не блок
+	if !shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, ahBookMinLotsWhenEmpty, step, false, true, 0) {
+		t.Fatal("пусто + buys — всё равно soft-↓")
+	}
+	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, ahBookMinLotsWhenEmpty-1, step, false, false, 0) {
+		t.Fatal("пусто, но книга ещё тоньше порога")
 	}
 }
 

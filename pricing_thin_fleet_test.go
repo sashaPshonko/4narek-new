@@ -110,14 +110,20 @@ func TestRecoverPaidCap(t *testing.T) {
 }
 
 func TestAllowHardDown(t *testing.T) {
-	if !allowHardDown(2, 5) {
+	if !allowHardDown(2, 5, 0.2) {
 		t.Fatal("с продажами всегда можно")
 	}
-	if !allowHardDown(0, 0) {
+	if !allowHardDown(0, 0, 0.2) {
 		t.Fatal("первый idle щуп")
 	}
-	if allowHardDown(0, 1) {
+	if allowHardDown(0, 1, 0.2) {
 		t.Fatal("второй idle — стоп цепочки")
+	}
+	if !allowHardDown(0, 2, 0.55) {
+		t.Fatal("fill≥50% — третий idle ещё можно")
+	}
+	if allowHardDown(0, 3, 0.55) {
+		t.Fatal("fill≥50% — четвёртый idle стоп")
 	}
 }
 

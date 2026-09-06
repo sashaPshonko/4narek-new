@@ -1,6 +1,19 @@
-# Ценообразование 4narek: эксперименты classic → stock_corridor_v8m
+# Ценообразование 4narek: эксперименты classic → stock_corridor_v8n
 
 Документ для быстрого погружения. Код: `4narek-new/pricing.go`, политика в логе: `capital_log.go` → `capitalPolicy`. Метрики: `ml_data/pricing.db` → таблица `capital_cycles`.
+
+## stock_corridor_v8n (07.09.2026)
+
+**Проблема по DB:** меч часто `held=0` на ~3.8M при рынке ~2.0M (`recover_stale` / fair к своему high-water) — AH soft-↓ не стрелял (мало uuid / buys block). Кирка при fill≥50% давала ~6kk/ч vs ~30kk в полосе — idle hard-↓ резал цепочку.
+
+**Патч:**
+- недобор + overcap → soft-↓ (`corridor_price_down_overcap`) вместо hold ceiling
+- stale без paid + цена >> floor → soft-↓ (`…_down_stale`)
+- held=0 + fair к paid + 0 sales + далеко от floor → soft-↓ (`…_down_empty_fair`)
+- AH soft-↓ при held=0: порог 12 uuid, buys не блок
+- dump/over idle: до 3 hard-↓ при fill≥50%
+
+---
 
 ## Цель
 
