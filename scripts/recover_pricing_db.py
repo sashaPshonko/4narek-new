@@ -18,12 +18,17 @@ SRC = Path(sys.argv[1] if len(sys.argv) > 1 else "pricing.db")
 DST = Path(sys.argv[2] if len(sys.argv) > 2 else "pricing.clean.db")
 
 TABLES = [
+    "items",
+    "ah_sellers",
     "trade_events",
     "ml_decisions",
     "ml_shadow",
     "capital_cycles",
     "stock_snapshots",
+    "stock_snapshot_sets",
+    "stock_snapshot_rows",
     "server_price_events",
+    "ah_book_lots",
 ]
 
 
@@ -194,6 +199,8 @@ def main() -> None:
         "CREATE INDEX IF NOT EXISTS idx_capital_cycles_item ON capital_cycles(item_id)",
         "CREATE INDEX IF NOT EXISTS idx_stock_snapshots_ts ON stock_snapshots(ts)",
         "CREATE INDEX IF NOT EXISTS idx_stock_snapshots_item ON stock_snapshots(item_id)",
+        "CREATE INDEX IF NOT EXISTS idx_snap_sets_ts ON stock_snapshot_sets(ts)",
+        "CREATE INDEX IF NOT EXISTS idx_snap_rows_item ON stock_snapshot_rows(item_id)",
         "CREATE INDEX IF NOT EXISTS idx_trade_events_ts ON trade_events(ts)",
         "CREATE INDEX IF NOT EXISTS idx_ml_decisions_ts ON ml_decisions(logged_ts)",
     ]:

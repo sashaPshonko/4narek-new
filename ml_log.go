@@ -16,7 +16,7 @@ import (
 
 const (
 	defaultMLDBPath = "ml_data/pricing.db"
-	mlSchemaVersion = 7
+	mlSchemaVersion = 8
 	mlForwardCycles = 3
 )
 
@@ -36,6 +36,11 @@ schema v6 — один эксперимент по категории:
   reward   — абсолютная прибыль (взвешенная сумма profit по окнам), не маржа
 
 rule action / experiment_check — только SQLite action (отладка), не в JSON.
+
+schema v8 — те же факты, меньше байт:
+  stock_snapshot_sets + stock_snapshot_rows вместо широких stock_snapshots
+  ml_decisions.payload_gz (gzip), payload_json очищается
+  items / ah_sellers без дубля категории и ника в каждой строке
 */
 
 type mlValueChange struct {
@@ -102,11 +107,11 @@ type mlPendingDecision struct {
 
 	PriceBefore, PriceAfter     int
 	NacenkaBefore, NacenkaAfter int
-	ProfitBeforeTrigger       int
-	ProfitBeforeCategory      int
-	OnlineAtDecision          int
-	OnlineMaxAtDecision       int
-	LookbackJSON              string
+	ProfitBeforeTrigger         int
+	ProfitBeforeCategory        int
+	OnlineAtDecision            int
+	OnlineMaxAtDecision         int
+	LookbackJSON                string
 
 	OutcomeCycles              int
 	ForwardCycles              []mlForwardCycle
@@ -167,6 +172,7 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	payload_json TEXT NOT NULL
 )`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_decisions_ts ON ml_decisions(logged_ts)`)
+	ensureMLColumn(db, "ml_decisions", "payload_gz", "BLOB")
 
 	mlDB = db
 	initAhBookTable()
@@ -178,8 +184,10 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	}
 	reloadCapitalPendingFromDB()
 	syncItemsCatalog()
+	ensureCompactSchema()
 	startMLBackupLoop()
-	log.Printf("[ML] SQLite %s (schema v%d + items/sellers, history kept)", mlDBPath, mlSchemaVersion)
+	startMLCompactLoop()
+	log.Printf("[ML] SQLite %s (schema v%d + compact history rewrite)", mlDBPath, mlSchemaVersion)
 	if mlShadowEnabled() {
 		log.Printf("[ML-SHADOW] включён → %s (Go правила + лог сравнения с ML)", mlWSURL())
 	}
@@ -330,7 +338,7 @@ type mlNacenkaItemContext struct {
 }
 
 type mlTrainingRecord struct {
-	SchemaVersion int    `json:"schema_version"`
+	SchemaVersion int `json:"schema_version"`
 	Training      struct {
 		Policy string   `json:"policy"`
 		Reward string   `json:"reward"`
@@ -350,8 +358,8 @@ type mlTrainingRecord struct {
 		RuleSkippedServerClamp     bool                   `json:"rule_skipped_server_clamp_recently,omitempty"`
 	} `json:"price_context"`
 	NacenkaContext struct {
-		Note    string                         `json:"note"`
-		Trigger mlValueChange                  `json:"trigger_item"`
+		Note    string                          `json:"note"`
+		Trigger mlValueChange                   `json:"trigger_item"`
 		Items   map[string]mlNacenkaItemContext `json:"category_items"`
 	} `json:"nacenka_context"`
 	Lookback struct {
@@ -367,10 +375,10 @@ type mlTrainingRecord struct {
 		Note     string           `json:"note"`
 		Timeline []mlForwardCycle `json:"timeline"`
 		Reward   struct {
-			Target              float64 `json:"target"`
-			TotalTradesForward  int     `json:"total_trades_forward"`
-			DeltaVsBaseline     float64 `json:"delta_vs_baseline_legacy"`
-			Note                string  `json:"note"`
+			Target             float64 `json:"target"`
+			TotalTradesForward int     `json:"total_trades_forward"`
+			DeltaVsBaseline    float64 `json:"delta_vs_baseline_legacy"`
+			Note               string  `json:"note"`
 		} `json:"reward"`
 	} `json:"forward,omitempty"`
 }
@@ -381,9 +389,9 @@ type mlMeta struct {
 	CategoryType   string  `json:"category_type"`
 	CycleMinutes   float64 `json:"cycle_minutes"`
 	BotsCategory   int     `json:"bots_category"`
-	PlayersOnline    int `json:"players_online,omitempty"`
-	PlayersMax       int `json:"players_max,omitempty"`
-	CausalityModel   string `json:"causality_model"`
+	PlayersOnline  int     `json:"players_online,omitempty"`
+	PlayersMax     int     `json:"players_max,omitempty"`
+	CausalityModel string  `json:"causality_model"`
 }
 
 func interventionFromAdjust(item string, priceBefore, priceAfter, nacenkaBefore, nacenkaAfter int, ts time.Time) mlIntervention {
@@ -649,16 +657,24 @@ func flushMLDecision(p *mlPendingDecision, now time.Time) {
 	}
 	reward, _ := computeForwardProfitReward(p.ForwardCycles)
 
+	payloadText := payload
+	var payloadGz []byte
+	if gz, err := gzipBytes([]byte(payload)); err == nil && len(gz) > 0 && len(gz) < len(payload) {
+		payloadGz = gz
+		payloadText = ""
+	}
+
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
+	ensureCompactSchemaLocked()
 	_, err := mlDB.Exec(`
 INSERT INTO ml_decisions (
 	logged_ts, decision_ts, category_type, trigger_item, action, cycle_minutes,
-	reward_target, delta_1, delta_2, delta_3, players_online, bots_category, payload_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	reward_target, delta_1, delta_2, delta_3, players_online, bots_category, payload_json, payload_gz
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		now.UTC().Format(time.RFC3339), p.DecisionAt.UTC().Format(time.RFC3339),
 		p.CategoryType, p.TriggerItem, p.Action, p.CycleDuration.Minutes(),
-		reward, d1, d2, d3, p.OnlineAtDecision, p.BotsAtDecision, payload,
+		reward, d1, d2, d3, p.OnlineAtDecision, p.BotsAtDecision, payloadText, payloadGz,
 	)
 	if err != nil {
 		log.Printf("[ML] insert: %v", err)
@@ -775,8 +791,12 @@ func healMLDatabase(db *sql.DB) {
 	}
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_capital_cycles_ts ON capital_cycles(ts)`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_capital_cycles_item ON capital_cycles(item_id)`)
-	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_ts ON stock_snapshots(ts)`)
-	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_item ON stock_snapshots(item_id)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_snap_sets_ts ON stock_snapshot_sets(ts)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_snap_rows_item ON stock_snapshot_rows(item_id)`)
+	if tableExistsOn(db, "stock_snapshots") {
+		_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_ts ON stock_snapshots(ts)`)
+		_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_item ON stock_snapshots(item_id)`)
+	}
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_server_price_events_ts ON server_price_events(ts)`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_decisions_ts ON ml_decisions(logged_ts)`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_shadow_ts ON ml_shadow(ts)`)

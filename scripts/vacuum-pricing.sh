@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Сжатие pricing.db на Go VPS.
-# Безопасный вариант: остановить 4narek-info, затем:
-#   cd ~/4narek-new && ./4narek-info -vacuum-db
+# Go должен быть остановлен с панели.
+#
+# 1) Переписать старые снимки/payloads компактнее + VACUUM:
+#      cd ~/4narek-new && ./4narek-info -compact-db
+# 2) Только VACUUM (если compact уже отработал в фоне):
+#      cd ~/4narek-new && ./4narek-info -vacuum-db
 # Или вручную через sqlite3 (Go остановлен):
 #   cd ~/4narek-new/ml_data
 #   sqlite3 pricing.db "VACUUM INTO 'pricing.vacuum.db'"
@@ -9,8 +13,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 BIN="${BIN:-./4narek-info}"
+MODE="${1:-compact}"
 if [[ -x "$BIN" ]]; then
-  exec "$BIN" -vacuum-db
+  if [[ "$MODE" == "vacuum" ]]; then
+    exec "$BIN" -vacuum-db
+  fi
+  exec "$BIN" -compact-db
 fi
 if command -v sqlite3 >/dev/null; then
   DB="${DB:-ml_data/pricing.db}"

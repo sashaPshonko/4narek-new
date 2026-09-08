@@ -208,6 +208,10 @@ func main() {
 		runVacuumDBCLI()
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "-compact-db" {
+		runCompactDBCLI()
+		return
+	}
 	for {
 		runSafe("server", runServer)
 		log.Println("[RESTART] сервер перезапускается через 2s...")
@@ -260,7 +264,7 @@ func runServer() {
 
 	initMLLog()
 	setupMLShutdown()
-	
+
 	// ОТКЛЮЧАЕМ ТОЛЬКО ТЕЛЕГРАМ
 	// initTelegramBot()
 	if err := ensureTelegramXray(); err != nil {

@@ -98,24 +98,10 @@ CREATE TABLE IF NOT EXISTS capital_cycles (
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_capital_cycles_ts ON capital_cycles(ts)`)
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_capital_cycles_item ON capital_cycles(item_id)`)
 
-	_, _ = mlDB.Exec(`
-CREATE TABLE IF NOT EXISTS stock_snapshots (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	ts TEXT NOT NULL,
-	item_id TEXT NOT NULL,
-	category_type TEXT NOT NULL,
-	on_ah INTEGER NOT NULL,
-	inv INTEGER NOT NULL,
-	held INTEGER NOT NULL,
-	price INTEGER NOT NULL,
-	nacenka INTEGER NOT NULL,
-	trigger_item TEXT,
-	source TEXT NOT NULL
-)`)
-	ensureMLColumn(mlDB, "stock_snapshots", "cycle_id", "INTEGER")
-	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_ts ON stock_snapshots(ts)`)
-	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_item ON stock_snapshots(item_id)`)
-	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_cycle ON stock_snapshots(cycle_id)`)
+	if tableExistsLocked("stock_snapshots") {
+		ensureMLColumn(mlDB, "stock_snapshots", "cycle_id", "INTEGER")
+		_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_cycle ON stock_snapshots(cycle_id)`)
+	}
 
 	_, _ = mlDB.Exec(`
 CREATE TABLE IF NOT EXISTS server_price_events (
@@ -331,11 +317,24 @@ func logStockSnapshotCycle(cycleID int64, triggerItem, categoryType, source stri
 	mutex.RUnlock()
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
+	ensureCompactSchemaLocked()
+	if cat != "" {
+		_, _ = mlDB.Exec(`INSERT INTO items (id, category_type) VALUES (?, ?)
+			ON CONFLICT(id) DO UPDATE SET category_type = excluded.category_type`, triggerItem, cat)
+	}
+	res, err := mlDB.Exec(`INSERT INTO stock_snapshot_sets (ts, trigger_item, source, cycle_id) VALUES (?,?,?,?)`,
+		ts, triggerItem, source, cycleID)
+	if err != nil {
+		log.Printf("[ML] snapshot set: %v", err)
+		return
+	}
+	setID, err := res.LastInsertId()
+	if err != nil || setID <= 0 {
+		return
+	}
 	_, _ = mlDB.Exec(`
-INSERT INTO stock_snapshots (ts, item_id, category_type, on_ah, inv, held, price, nacenka, trigger_item, source, cycle_id)
-VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-		ts, triggerItem, cat, ah, inv, ah+inv, price, nac, triggerItem, source, cycleID,
-	)
+INSERT OR REPLACE INTO stock_snapshot_rows (set_id, item_id, on_ah, inv, held, price, nacenka)
+VALUES (?,?,?,?,?,?,?)`, setID, triggerItem, ah, inv, ah+inv, price, nac)
 }
 
 // logServerPriceEvent — sqlite; не вызывать под mutex.Lock.
