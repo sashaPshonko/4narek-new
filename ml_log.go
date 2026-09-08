@@ -16,7 +16,7 @@ import (
 
 const (
 	defaultMLDBPath = "ml_data/pricing.db"
-	mlSchemaVersion = 6
+	mlSchemaVersion = 7
 	mlForwardCycles = 3
 )
 
@@ -177,8 +177,10 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 		healMLDatabase(db)
 	}
 	reloadCapitalPendingFromDB()
+	syncItemsCatalog()
 	startMLBackupLoop()
-	log.Printf("[ML] SQLite %s (schema v%d + capital_cycles/fwd + stock_snapshots + server_price_events)", mlDBPath, mlSchemaVersion)
+	startMLPruneLoop()
+	log.Printf("[ML] SQLite %s (schema v%d + items/sellers + prune)", mlDBPath, mlSchemaVersion)
 	if mlShadowEnabled() {
 		log.Printf("[ML-SHADOW] включён → %s (Go правила + лог сравнения с ML)", mlWSURL())
 	}

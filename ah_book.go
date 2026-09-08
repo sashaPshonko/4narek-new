@@ -9,7 +9,7 @@ import (
 )
 
 // Витрина: ≥N разных лотов одного SKU с одного ника за окно → вечный бан для нашего min.
-// Сами строки в ah_book_lots не трогаем (олух / разбор витрин).
+// Старые uuid в ah_book_lots чистит prune (окно прайсинга 10 мин).
 const (
 	ahBookWallMinLots = 3
 	ahBookWallWindow  = 15 * time.Minute
@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS ah_book_lots (
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_ah_book_item_ts ON ah_book_lots(item_id, ts)`)
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_ah_book_go_ts ON ah_book_lots(go_type, ts)`)
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_ah_book_seller_item_ts ON ah_book_lots(seller, item_id, ts)`)
+	ensureMLColumn(mlDB, "ah_book_lots", "seller_id", "INTEGER")
+	if err := ensureAhSellersTableLocked(); err != nil {
+		log.Printf("[ah_book] sellers schema: %v", err)
+	}
 	err = ensureAhBookSellerBanTableLocked()
 	mlDBMu.Unlock()
 	if err != nil {
@@ -293,9 +297,10 @@ func insertAhBookBatch(rows []ahBookWire) {
 			dur = *r.Durability
 		}
 		seller := strings.TrimSpace(r.Seller)
+		sellerID := upsertAhSellerLocked(strings.ToLower(seller))
 		_, err := mlDB.Exec(
-			`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, durability, seller, enchants_json, anarchy, seen_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, durability, seller, seller_id, enchants_json, anarchy, seen_by)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(uuid) DO UPDATE SET
 			   ts = excluded.ts,
 			   go_type = excluded.go_type,
@@ -303,10 +308,11 @@ func insertAhBookBatch(rows []ahBookWire) {
 			   price = excluded.price,
 			   durability = excluded.durability,
 			   seller = excluded.seller,
+			   seller_id = excluded.seller_id,
 			   enchants_json = excluded.enchants_json,
 			   anarchy = excluded.anarchy,
 			   seen_by = excluded.seen_by`,
-			uuid, ts, r.GoType, r.ItemID, r.Price, dur, seller, ench, anarchyInt(r.Anarchy), r.SeenBy,
+			uuid, ts, r.GoType, r.ItemID, r.Price, dur, seller, sellerID, ench, anarchyInt(r.Anarchy), r.SeenBy,
 		)
 		if err != nil {
 			log.Printf("[ah_book] insert: %v", err)

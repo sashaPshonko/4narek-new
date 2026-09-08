@@ -112,8 +112,10 @@ CREATE TABLE IF NOT EXISTS stock_snapshots (
 	trigger_item TEXT,
 	source TEXT NOT NULL
 )`)
+	ensureMLColumn(mlDB, "stock_snapshots", "cycle_id", "INTEGER")
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_ts ON stock_snapshots(ts)`)
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_item ON stock_snapshots(item_id)`)
+	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_stock_snapshots_cycle ON stock_snapshots(cycle_id)`)
 
 	_, _ = mlDB.Exec(`
 CREATE TABLE IF NOT EXISTS server_price_events (
@@ -307,43 +309,33 @@ INSERT INTO capital_cycles (
 	})
 	mutex.Unlock()
 
-	logStockSnapshotCategory(row.Category, row.Item, "capital_cycle")
+	logStockSnapshotCycle(id, row.Item, row.Category, "capital_cycle")
 }
 
-func logStockSnapshotCategory(categoryType, triggerItem, source string) {
-	if mlDB == nil {
+// logStockSnapshotCycle — одна строка на цикл, FK на capital_cycles.
+// Раньше писали всю категорию (N sku × каждый adjust) — это раздувало pricing.db.
+func logStockSnapshotCycle(cycleID int64, triggerItem, categoryType, source string) {
+	if mlDB == nil || triggerItem == "" {
 		return
 	}
 	ts := time.Now().UTC().Format(time.RFC3339)
-	type snapRow struct {
-		item, cat     string
-		ah, inv, held int
-		price, nac    int
-	}
 	mutex.RLock()
-	var rows []snapRow
-	for id, conf := range itemsConfig {
-		if conf.Type != categoryType {
-			continue
-		}
-		ah := getItemCount(id)
-		inv := getInventoryCount(id)
-		rows = append(rows, snapRow{
-			item: id, cat: conf.Type,
-			ah: ah, inv: inv, held: ah + inv,
-			price: data.Prices[id], nac: getNacenka(id),
-		})
+	ah := getItemCount(triggerItem)
+	inv := getInventoryCount(triggerItem)
+	price := data.Prices[triggerItem]
+	nac := getNacenka(triggerItem)
+	cat := categoryType
+	if cfg, ok := itemsConfig[triggerItem]; ok && cfg.Type != "" {
+		cat = cfg.Type
 	}
 	mutex.RUnlock()
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
-	for _, r := range rows {
-		_, _ = mlDB.Exec(`
-INSERT INTO stock_snapshots (ts, item_id, category_type, on_ah, inv, held, price, nacenka, trigger_item, source)
-VALUES (?,?,?,?,?,?,?,?,?,?)`,
-			ts, r.item, r.cat, r.ah, r.inv, r.held, r.price, r.nac, triggerItem, source,
-		)
-	}
+	_, _ = mlDB.Exec(`
+INSERT INTO stock_snapshots (ts, item_id, category_type, on_ah, inv, held, price, nacenka, trigger_item, source, cycle_id)
+VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		ts, triggerItem, cat, ah, inv, ah+inv, price, nac, triggerItem, source, cycleID,
+	)
 }
 
 // logServerPriceEvent — sqlite; не вызывать под mutex.Lock.
