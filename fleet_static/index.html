@@ -44,7 +44,7 @@
     .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
     .status.err .dot { background: var(--ban); }
     .kpi {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px;
     }
     .lookup-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
     .lookup-row input {
@@ -145,6 +145,15 @@
     .pill.bad_password { background: var(--warn-bg); color: var(--warn); }
     .pill.proxy_error { background: #e8edf5; color: var(--muted); }
     .pill.staff_check { background: #efe8ff; color: #5b3cc4; }
+    .pill.live { background: #efe8ff; color: #5b3cc4; }
+    .pill.done { background: #e8edf5; color: var(--muted); }
+    .chat-log { display: flex; flex-direction: column; gap: 8px; }
+    .chat-line {
+      background: #f6f7fa; border-radius: 12px; padding: 8px 12px;
+      font-size: 13px; line-height: 1.4;
+    }
+    .chat-line .who { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+    .check-open { cursor: pointer; }
     .ban-tag { margin-left: 6px; vertical-align: middle; }
     @media (max-width: 640px) { .kpi { grid-template-columns: 1fr; } }
   </style>
@@ -152,7 +161,7 @@
 <body>
   <div class="wrap">
     <h1>4narek <span>Баны</span></h1>
-    <p class="lede">Баны ников: владельцы кланов и бай-боты.</p>
+    <p class="lede">Баны ников, сломанные боты и вызовы на проверку (чат AnyDesk).</p>
     <nav class="nav" aria-label="Разделы">
       <a href="/sales/" data-nav="sales">Продажи</a>
       <a href="/funauth/" data-nav="funauth">FunAuth</a>
@@ -169,12 +178,16 @@
       <div class="card"><div class="k">Сломанные</div><div class="v mono" id="kpiFaults" style="color:var(--warn)">—</div></div>
       <div class="card"><div class="k">Анархии с банами</div><div class="v mono" id="kpiAn">—</div></div>
       <div class="card"><div class="k">Владельцы кланов</div><div class="v mono" id="kpiOwners">—</div></div>
+      <div class="card"><div class="k">На проверке</div><div class="v mono" id="kpiChecks" style="color:#5b3cc4">—</div></div>
     </div>
     <h2 class="section-title">Владельцы кланов</h2>
     <div id="owners"></div>
     <h2 class="section-title">Сломанные боты</h2>
     <p class="lede" style="margin-top:-4px;margin-bottom:10px;font-size:14px">Неверный пароль или ошибка прокси — оркестратор не рестартит, пока не починишь.</p>
     <div id="faults"></div>
+    <h2 class="section-title">Проверки</h2>
+    <p class="lede" style="margin-top:-4px;margin-bottom:10px;font-size:14px">Кого вызвали на SS. Чат с AnyDesk — клик по строке.</p>
+    <div id="checks"></div>
     <h2 class="section-title">Баны ботов</h2>
     <div id="list"></div>
   </div>
@@ -185,6 +198,16 @@
         <button type="button" class="btn" id="bannerClose">закрыть</button>
       </header>
       <pre class="banner-pre" id="bannerBody"></pre>
+    </div>
+  </div>
+  <div class="modal" id="checkModal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="checkNick">
+      <header>
+        <h3 id="checkNick">проверка</h3>
+        <button type="button" class="btn" id="checkClose">закрыть</button>
+      </header>
+      <pre class="banner-pre" id="checkReason" style="margin-bottom:12px"></pre>
+      <div class="chat-log" id="checkChat"></div>
     </div>
   </div>
   <script>
@@ -236,6 +259,27 @@
 
     function closeBanner() {
       $("bannerModal").hidden = true;
+    }
+
+    function openCheck(id) {
+      const checks = lastOverview?.staff_checks || [];
+      const c = checks.find((x) => x.id === id);
+      if (!c) return;
+      $("checkNick").textContent = `${c.username} · an${c.anarchy ?? "?"}`;
+      $("checkReason").textContent = c.reason || "без текста вызова";
+      const chat = c.chat || [];
+      $("checkChat").innerHTML = chat.length
+        ? chat.map((m) => `
+            <div class="chat-line">
+              <div class="who">${escapeHtml(fmtWhen(m.at))} · ${escapeHtml(m.from || "anydesk")}</div>
+              <div>${escapeHtml(m.text)}</div>
+            </div>`).join("")
+        : `<div class="empty" style="padding:16px">Пока нет сообщений с AnyDesk.</div>`;
+      $("checkModal").hidden = false;
+    }
+
+    function closeCheck() {
+      $("checkModal").hidden = true;
     }
 
     function isStaffCheckBan(b) {
@@ -359,11 +403,12 @@
         const t = new Date(data.updated_at);
         const owners = data.clan_owners || [];
         const ownersBanned = owners.filter((o) => o.banned || o.status === "banned").length;
-        $("statusText").textContent = `обновлено ${t.toLocaleTimeString("ru-RU")} · ${data.total_banned} бан(ов) · сломано ${data.auth_fault_count ?? 0} · в памяти ${data.persisted_banned ?? 0} · владельцев ${owners.length}`;
+        $("statusText").textContent = `обновлено ${t.toLocaleTimeString("ru-RU")} · ${data.total_banned} бан(ов) · сломано ${data.auth_fault_count ?? 0} · проверок ${data.staff_check_count ?? 0} (${data.staff_check_live ?? 0} сейчас) · владельцев ${owners.length}`;
         $("kpiTotal").textContent = data.total_banned;
         $("kpiFaults").textContent = data.auth_fault_count ?? 0;
         $("kpiAn").textContent = (data.anarchies || []).filter((a) => a.count > 0).length;
         $("kpiOwners").textContent = owners.length ? `${ownersBanned}/${owners.length}` : "—";
+        $("kpiChecks").textContent = `${data.staff_check_live ?? 0}/${data.staff_check_count ?? 0}`;
 
         const ownersEl = $("owners");
         if (!owners.length) {
@@ -417,6 +462,34 @@
           </section>`;
         }
 
+        const checksEl = $("checks");
+        const checks = data.staff_checks || [];
+        if (!checks.length) {
+          checksEl.innerHTML = `<div class="anarchy"><div class="empty">Пока никого не вызывали на проверку.</div></div>`;
+        } else {
+          const rows = checks.map((c) => {
+            const nchat = (c.chat || []).length;
+            const st = c.status === "live" ? "сейчас" : "была";
+            return `
+            <tr class="check-open" data-check-id="${escapeHtml(c.id)}">
+              <td>
+                <div class="nick">${escapeHtml(c.username)}</div>
+                <div class="meta">an${escapeHtml(c.anarchy ?? "?")}${nchat ? " · " + nchat + " сообщ." : ""}</div>
+              </td>
+              <td><span class="pill ${escapeHtml(c.status || "done")}">${st}</span></td>
+              <td class="mono">${fmtWhen(c.at)}</td>
+              ${reasonCell(c.reason, c.username)}
+            </tr>`;
+          }).join("");
+          checksEl.innerHTML = `<section class="anarchy" style="border-color:rgba(91,60,196,.25)">
+            <header style="background:#efe8ff"><h2>AnyDesk</h2><span class="cnt" style="color:#5b3cc4">${checks.filter((c) => c.id !== "loose").length}</span></header>
+            <table>
+              <thead><tr><th>Бот</th><th>Статус</th><th>Когда</th><th>Вызов</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </section>`;
+        }
+
         const list = $("list");
         if (!data.total_banned) {
           list.innerHTML = `<div class="anarchy"><div class="empty">Сейчас никто из бай-ботов не помечен забаненным.</div></div>`;
@@ -455,15 +528,24 @@
       }
     }
     document.addEventListener("click", (e) => {
+      const checkRow = e.target.closest("[data-check-id]");
+      if (checkRow && !e.target.closest(".reason-open")) {
+        openCheck(checkRow.getAttribute("data-check-id"));
+        return;
+      }
       const btn = e.target.closest(".reason-open");
       if (btn) {
         openBanner(btn.getAttribute("data-nick"), btn.getAttribute("data-banner"));
         return;
       }
       if (e.target.id === "bannerClose" || e.target.id === "bannerModal") closeBanner();
+      if (e.target.id === "checkClose" || e.target.id === "checkModal") closeCheck();
     });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeBanner();
+      if (e.key === "Escape") {
+        closeBanner();
+        closeCheck();
+      }
     });
     load();
     setInterval(load, 5000);

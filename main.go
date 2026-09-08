@@ -255,6 +255,7 @@ func runServer() {
 	loadDailyData(loc)
 	loadRuntimeState()
 	loadFleetBanPersist()
+	loadStaffDeskPersist()
 	loadFleetNickRoster()
 
 	// HTTP сразу: /funauth и /ws не ждут SQLite (quick_check на 480МБ вешал старт).
@@ -1218,7 +1219,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		if msg.Action == "presence" {
 			log.Printf("[WS incoming] presence items=%d inv=%d banned=%d faults=%d owners=%d bots=%d active=%v",
 				len(msg.Items), len(msg.Inventory), len(msg.Banned), len(msg.AuthFaults), len(msg.ClanOwners), len(msg.Bots), msg.ActiveTypes)
-		} else if msg.Action != "add" && msg.Action != "ah_lot" && msg.Action != "ah_lots" {
+		} else if msg.Action != "add" && msg.Action != "ah_lot" && msg.Action != "ah_lots" && msg.Action != "desk_chat" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
 		}
 
@@ -1476,6 +1477,24 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		}
 		anarchy := rawJSONIntField(rawMsg, "anarchy")
 		handleFunauthVerifiedWS(nick, anarchy)
+
+	case "staff_check":
+		mutex.Unlock()
+		nick, _ := rawJSONField(rawMsg, "username")
+		reason, _ := rawJSONField(rawMsg, "reason")
+		ingestStaffCheck(nick, msg.Anarchy, reason)
+
+	case "staff_check_end":
+		mutex.Unlock()
+		nick, _ := rawJSONField(rawMsg, "username")
+		endStaffCheck(nick)
+
+	case "desk_chat":
+		mutex.Unlock()
+		nick, _ := rawJSONField(rawMsg, "username")
+		from, _ := rawJSONField(rawMsg, "from")
+		text, _ := rawJSONField(rawMsg, "text")
+		ingestDeskChat(nick, from, text, msg.Anarchy)
 
 	default:
 		mutex.Unlock()

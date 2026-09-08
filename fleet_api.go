@@ -66,6 +66,9 @@ type fleetOverview struct {
 	BannedIPs       []bannedIPView      `json:"banned_ips"`
 	AssignedProxies []assignedProxyView `json:"assigned_proxies"`
 	BannedIPCount   int                 `json:"banned_ip_count"`
+	StaffChecks     []staffCheckView    `json:"staff_checks"`
+	StaffCheckCount int                 `json:"staff_check_count"`
+	StaffCheckLive  int                 `json:"staff_check_live"`
 }
 
 // clientBannedBots — снимок забаненных с каждого WS-оркестратора.
@@ -83,6 +86,8 @@ func registerFleetHTTP(mux *http.ServeMux) {
 	}))
 	mux.HandleFunc("/api/clan-owner", recoverHTTP(handleClanOwnerHTTP))
 	mux.HandleFunc("/api/banned-ip", recoverHTTP(handleBannedIPHTTP))
+	mux.HandleFunc("/fleet/api/staff-check", recoverHTTP(handleStaffCheckHTTP))
+	mux.HandleFunc("/fleet/api/desk-chat", recoverHTTP(handleDeskChatHTTP))
 
 	staticRoot, err := fs.Sub(fleetStaticFS, "fleet_static")
 	if err != nil {
@@ -151,6 +156,14 @@ func fleetAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if path == "/ips/mark-used" {
 		handleMarkUsedIPsHTTP(w, r)
+		return
+	}
+	if path == "/staff-check" {
+		handleStaffCheckHTTP(w, r)
+		return
+	}
+	if path == "/desk-chat" {
+		handleDeskChatHTTP(w, r)
 		return
 	}
 	fleetJSON(w, http.StatusNotFound, map[string]any{"ok": false, "error": "not found"})
@@ -363,6 +376,18 @@ func buildFleetOverview() fleetOverview {
 
 	bannedIPs := listBannedIPs()
 	faults := collectAuthFaultsLocked()
+	checks := listStaffChecksForAPI()
+	live := 0
+	totalChecks := 0
+	for _, c := range checks {
+		if c.ID == "loose" {
+			continue
+		}
+		totalChecks++
+		if c.Status == "live" {
+			live++
+		}
+	}
 	return fleetOverview{
 		OK:              true,
 		UpdatedAt:       now,
@@ -376,6 +401,9 @@ func buildFleetOverview() fleetOverview {
 		BannedIPs:       bannedIPs,
 		AssignedProxies: loadAssignedProxies(),
 		BannedIPCount:   len(bannedIPs),
+		StaffChecks:     checks,
+		StaffCheckCount: totalChecks,
+		StaffCheckLive:  live,
 	}
 }
 
