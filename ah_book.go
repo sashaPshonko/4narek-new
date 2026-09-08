@@ -9,7 +9,7 @@ import (
 )
 
 // Витрина: ≥N разных лотов одного SKU с одного ника за окно → вечный бан для нашего min.
-// Старые uuid в ah_book_lots чистит prune (окно прайсинга 10 мин).
+// Строки ah_book_lots не удаляем.
 const (
 	ahBookWallMinLots = 3
 	ahBookWallWindow  = 15 * time.Minute

@@ -179,8 +179,7 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	reloadCapitalPendingFromDB()
 	syncItemsCatalog()
 	startMLBackupLoop()
-	startMLPruneLoop()
-	log.Printf("[ML] SQLite %s (schema v%d + items/sellers + prune)", mlDBPath, mlSchemaVersion)
+	log.Printf("[ML] SQLite %s (schema v%d + items/sellers, history kept)", mlDBPath, mlSchemaVersion)
 	if mlShadowEnabled() {
 		log.Printf("[ML-SHADOW] включён → %s (Go правила + лог сравнения с ML)", mlWSURL())
 	}
