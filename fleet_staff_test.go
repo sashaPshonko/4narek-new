@@ -9,6 +9,7 @@ import (
 )
 
 func TestStaffCheckAndDeskChat(t *testing.T) {
+	staffDeskPersistPath = t.TempDir() + "/staff_desk.json"
 	staffDeskMu.Lock()
 	staffChecksMem = nil
 	deskChatsMem = nil
@@ -68,6 +69,7 @@ func TestStaffCheckAndDeskChat(t *testing.T) {
 }
 
 func TestStaffDeskHTTP(t *testing.T) {
+	staffDeskPersistPath = t.TempDir() + "/staff_desk.json"
 	staffDeskMu.Lock()
 	staffChecksMem = nil
 	deskChatsMem = nil

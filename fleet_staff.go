@@ -14,11 +14,12 @@ import (
 )
 
 const (
-	staffDeskPersistPath = "ml_data/staff_desk.json"
-	staffCheckMax        = 200
-	deskChatMax          = 3000
-	deskChatPerCheckAPI  = 200
+	staffCheckMax       = 200
+	deskChatMax         = 3000
+	deskChatPerCheckAPI = 200
 )
+
+var staffDeskPersistPath = "ml_data/staff_desk.json"
 
 type staffCheckView struct {
 	ID       string         `json:"id"`
