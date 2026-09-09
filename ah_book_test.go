@@ -55,15 +55,48 @@ func TestShouldRaiseFromAhBook(t *testing.T) {
 	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 0, 4, false, false, true) {
 		t.Fatal("были покупки — не поднимаем")
 	}
-	// v8p: пусто / нет разбора — не догоняем книгу (кейс нагрудник 0.84→2.4)
+	// v8r: пусто — обычный ah_book-ап не трогаем, для этого отдельный empty_book путь.
 	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 0, 0, 0, false, false, false) {
-		t.Fatal("held=0 sales=0 — не поднимаем")
+		t.Fatal("held=0 sales=0 — не обычный ah_book raise")
 	}
 	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 2, 0, 4, false, false, false) {
 		t.Fatal("sales<minForUp — не поднимаем")
 	}
 	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 6, 4, false, false, false) {
 		t.Fatal("buys≥sales — не поднимаем")
+	}
+}
+
+
+func TestShouldRaiseEmptyFromAhBook(t *testing.T) {
+	n := ahBookMinLotsInWindow
+	p10 := 1_600_000
+	minAsk := 1_400_000
+	nac := 300_000
+	step := 100_000
+	if !shouldRaiseEmptyFromAhBook(1_400_000, p10, minAsk, nac, n, step, 0, 0, false, false) {
+		t.Fatal("held=0 and market 2+ steps above us — raise")
+	}
+	if shouldRaiseEmptyFromAhBook(1_800_000, p10, minAsk, nac, n, step, 0, 0, false, false) {
+		t.Fatal("gap < 2 steps — no empty raise")
+	}
+	if shouldRaiseEmptyFromAhBook(1_400_000, p10, minAsk, nac, n-1, step, 0, 0, false, false) {
+		t.Fatal("thin book — no empty raise")
+	}
+	if shouldRaiseEmptyFromAhBook(1_400_000, p10, minAsk, nac, n, step, 1, 0, false, false) {
+		t.Fatal("with stock this path is disabled")
+	}
+	if shouldRaiseEmptyFromAhBook(1_400_000, p10, minAsk, nac, n, step, 0, 1, false, false) {
+		t.Fatal("while buys already flowing, no empty raise")
+	}
+}
+
+func TestEmptyBookRaiseTarget(t *testing.T) {
+	if got := emptyBookRaiseTarget(1_400_000, 1_600_000, 1_400_000, 300_000, 100_000); got != 1_500_000 {
+		t.Fatalf("step target got %d", got)
+	}
+	if got := emptyBookRaiseTarget(1_800_000, 1_600_000, 1_400_000, 300_000, 100_000); got != 1_900_000 {
+		t.Fatalf("cap to +1 step got %d", got)
 	}
 }
 

@@ -16,8 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8r — v8q + held=0 может быть bullish: если глубокая книга AH выше нас,
+// поднимаем медленно по 1 step (empty_book), а не ждём sale-подтверждение.
 // stock_corridor_v8q — v8p + не пилить каталог при held=0 (stale/empty_fair/overcap):
-// ↓ с призрака только если есть сток и try показывает отказ; пусто ≠ «дорого».
+// ↓ с призрака только если есть сток и try показывает отказ; пусто ≠ «дорого".
 // ah_book soft-↓: всегда ≥40 uuid; на пустом стоке не больше −N×step за цикл.
 // stock_corridor_v8p — v8o + ah_book-↑ только при живом разборе/held>0 + cap шагов;
 // recover-↑ только при sales≥1; deep-bypass только sales>buys; probe×1.
@@ -531,6 +533,13 @@ func maxInt(a, b int) int {
 	return b
 }
 
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // categoryAhCapacityLocked — ёмкость хранилища АХ по типу (боты × 5 слотов). Только под mutex.Lock.
 func categoryAhCapacityLocked(minecraftType string) int {
 	bots := aggregateBotsPerTypeLocked()[minecraftType]
@@ -783,6 +792,32 @@ func shouldRaiseFromAhBook(sell, minAsk, nacenka, n, sales, buys, held int, dump
 // shouldSoftDownFromAhBook — селл явно выше p10+наценка и выше min+наценка; ↑ цикла не трогаем.
 // Триггер с люфтом 2×step; цель не ниже min+наценка (p10 может быть занижен дампами).
 // v8q: всегда ≥40 uuid (тонкая книга на held=0 больше не сливает каталог ночью).
+func shouldRaiseEmptyFromAhBook(sell, p10, minAsk, nacenka, n, step, held, buys int, alreadyDown, dumpZone bool) bool {
+	if held > 0 || buys > 0 || alreadyDown || dumpZone {
+		return false
+	}
+	if n < ahBookMinLotsInWindow || p10 <= 0 || minAsk <= 0 || step <= 0 {
+		return false
+	}
+	marketFloor := maxInt(p10+nacenka, minAsk+nacenka)
+	return marketFloor >= sell+2*step
+}
+
+func emptyBookRaiseTarget(sell, p10, minAsk, nacenka, step int) int {
+	if step <= 0 {
+		return sell
+	}
+	marketFloor := maxInt(p10+nacenka, minAsk+nacenka)
+	tgt := sell + step
+	if tgt > marketFloor {
+		tgt = marketFloor
+	}
+	return tgt
+}
+
+// shouldSoftDownFromAhBook — селл явно выше p10+наценка и выше min+наценка; ↑ цикла не трогаем.
+// Триггер с люфтом 2×step; цель не ниже min+наценка (p10 может быть занижен дампами).
+// v8q: всегда ≥40 uuid (тонкая книга на held=0 больше не сливает каталог ночью).
 func shouldSoftDownFromAhBook(sell, p10, minAsk, nacenka, n, step int, alreadyUp, hadBuys bool, held int) bool {
 	if n < ahBookMinLotsInWindow || p10 <= 0 || minAsk <= 0 || alreadyUp {
 		return false
@@ -898,6 +933,8 @@ func actionReasonRU(action string) string {
 		return "corridor_v8c: цена ниже пола (minBuy+наценка) → поднимаем"
 	case "corridor_price_up_ah_book":
 		return "corridor_v8p: селл < min(ah_book)+наценка, held>0, sales>buys → ≤+N×step к книге"
+	case "corridor_price_up_empty_book":
+		return "corridor_v8r: held=0 и глубокая книга выше нас ≥2 step → +1 step к рынку"
 	case "corridor_price_down_ah_book":
 		return "corridor_v8q: селл > p10+наценка, ≥40 uuid; held=0 → ≤−N×step/цикл"
 	case "corridor_price_down_overcap":
@@ -1498,9 +1535,12 @@ func adjustPrice(item string) AdjustReport {
 	minAsk, bookN, bookOK := ahBookMinSince(item, bookSince)
 	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
 	raiseFromBook := bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, sales, buys, totalHeld, dumpZone, alreadyDown, buys > 0)
+	raiseEmptyFromBook := bookOK && p10OK && shouldRaiseEmptyFromAhBook(priceBefore, p10, minAsk, nacenka, minInt(bookN, p10N), step, totalHeld, buys, alreadyDown, dumpZone)
 	var raiseTgt int
 	if raiseFromBook {
 		raiseTgt = ahBookRaiseTargetCapped(priceBefore, minAsk, nacenka, step)
+	} else if raiseEmptyFromBook {
+		raiseTgt = emptyBookRaiseTarget(priceBefore, p10, minAsk, nacenka, step)
 	}
 	softDownFromBook := bookOK && p10OK && shouldSoftDownFromAhBook(priceBefore, p10, minAsk, nacenka, p10N, step, raiseFromBook, buys > 0, totalHeld)
 	var softDownTgt int
@@ -1514,6 +1554,12 @@ func adjustPrice(item string) AdjustReport {
 		changed = true
 		notes = append(notes, fmt.Sprintf("ah_book min10=%d n=%d → селл %d < min+наценка %d → %d (cap +%d×step)",
 			minAsk, bookN, priceBefore, minAsk+nacenka, raiseTgt, ahBookMaxRaiseSteps))
+	} else if raiseEmptyFromBook && raiseTgt > newPrice {
+		newPrice = raiseTgt
+		action = "corridor_price_up_empty_book"
+		changed = true
+		notes = append(notes, fmt.Sprintf("held=0 ah_book p10=%d min=%d n=%d → рынок выше sell %d, медленный ↑ до %d",
+			p10, minAsk, minInt(bookN, p10N), priceBefore, raiseTgt))
 	}
 	if softDownFromBook && softDownTgt > 0 && softDownTgt < newPrice {
 		bookFloor := minAsk + nacenka
