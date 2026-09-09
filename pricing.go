@@ -1850,6 +1850,8 @@ func adjustPrice(item string) AdjustReport {
 
 	// Shadow-only B_price_trap recovery: не меняет newPrice / winner / broadcast.
 	runMarketRecoveryShadow(item, now, newPrice, step, totalHeld, buys, sales, actionTaken, blockUp || blockDown)
+	// Shadow-only LEVEL1 cap1/3/5 comparison on same episodes — не меняет цену.
+	runCappedDiscoveryShadow(item, now, newPrice, step, totalHeld, buys, sales, trySells, actionTaken, blockUp || blockDown)
 
 	if experimentTG != nil {
 		enqueueExperimentTelegram(*experimentTG)

@@ -179,6 +179,7 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	initCapitalTables()
 	initMLShadowTable()
 	initMarketRecoveryShadowTable()
+	initCappedDiscoveryShadowTable()
 	if os.Getenv("ML_HEAL_ON_START") == "1" {
 		log.Printf("[ML] ML_HEAL_ON_START=1 — PRAGMA quick_check (минуты на большой БД)")
 		healMLDatabase(db)
