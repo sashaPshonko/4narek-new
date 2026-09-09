@@ -41,7 +41,8 @@ func mlBackupKeep() int {
 			return n
 		}
 	}
-	return 28
+	return 3 // каждый бэкап ~3GB; 28 забивали диск под 100% и клинили capital_log
+
 }
 
 func mlBackupInterval() time.Duration {
