@@ -16,6 +16,8 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8o — v8n + skim lead sales≥buys+3, жёстче try-veto для skim,
+// soft-↓ откат в полосе после неудачного ↑, up_cd=2.
 // stock_corridor_v8n — v8m + ↓ с призрачного потолка (stale/overcap при недоборе);
 // пустой held: AH soft-↓ с более тонкой книгой, buys не блокируют ↓.
 // stock_corridor_v8m — v8l + recover-↑ только если цена занижена vs paid (не vacuum).
@@ -50,13 +52,14 @@ const (
 	pozorOverFrac              = 0.25
 	pozorDumpFrac              = 0.40
 	corridorMaxUpStreak        = 1 // не два ↑ подряд
-	corridorUpCooldownCycles   = 1 // после ↑ ещё N циклов без ↑ (deep-↑ может обойти)
+	corridorUpCooldownCycles   = 2 // после ↑ ещё N циклов без ↑ (deep-↑ может обойти)
 	corridorMinSalesForUp      = 3 // дневной пол спроса на ↑
 	corridorNightMinSalesForUp = 4 // ночь 03–09 MSK
 	corridorSoftDownEvery      = 1
 	corridorHardDownStepMult   = 2 // over/dump: −step×2
 	tryUpVetoMinTries          = 5
 	tryUpVetoPerSale           = 2
+	corridorSkimMinLead        = 3 // skim только если sales ≥ buys+lead (анти-ложный probe)
 	// recover-↑: только при цене << paid; без buys — короткая страховка, не главный гейт.
 	corridorMaxNoBuyUps       = 3 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
 	corridorRecoverProbeSteps = 2 // recover ≤ max(sell в TTL) + K×step
@@ -428,6 +431,30 @@ func trySellsBlockUp(sales, trySells int) bool {
 	return trySells >= tryUpVetoPerSale*maxInt(sales, 1)
 }
 
+// trySellsBlockSkim — жёстче veto только для profit-skim в полосе (try ≥ max(minTries, sales)).
+func trySellsBlockSkim(sales, trySells int) bool {
+	if trySells < tryUpVetoMinTries {
+		return false
+	}
+	return trySells >= maxInt(sales, tryUpVetoMinTries)
+}
+
+// skimSalesLeadOK — запас продаж над покупками для skim-↑.
+func skimSalesLeadOK(sales, buys int) bool {
+	return sales >= buys+corridorSkimMinLead
+}
+
+// skimShouldRevert — после недавнего ↑ рынок не берёт: soft-↓ даже в полосе.
+func skimShouldRevert(upCooldown, sales, buys, trySells int) bool {
+	if upCooldown <= 0 {
+		return false
+	}
+	if trySellsBlockUp(sales, trySells) {
+		return true
+	}
+	return sales <= buys && trySells >= tryUpVetoMinTries
+}
+
 // isNightMSK — окно 03:00–08:59 Europe/Moscow (false-scarcity / реконнекты).
 func isNightMSK(t time.Time) bool {
 	msk := t.In(time.FixedZone("MSK", 3*60*60))
@@ -796,7 +823,9 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
 		return "corridor_v8m: недобор + цена << paid → recover ≤ max(sell)+K×step"
 	case "corridor_price_up_skim":
-		return "corridor_v8: held в полосе + сильный разбор → +цена (probe прибыли)"
+		return "corridor_v8o: held в полосе + sales≥buys+lead → +цена (probe прибыли)"
+	case "corridor_price_down_skim_revert":
+		return "corridor_v8o: после ↑ try/buy показывают отказ → soft-↓ в полосе"
 	case "corridor_price_up_floor":
 		return "corridor_v8c: цена ниже пола (minBuy+наценка) → поднимаем"
 	case "corridor_price_up_ah_book":
@@ -1324,19 +1353,26 @@ func adjustPrice(item string) AdjustReport {
 	default:
 		// В полосе: не мёртвая зона. Если витрина стабильно разбирается —
 		// пробуем ↑ (skim), иначе залипаем в дешёвом локальном оптимуме.
+		// v8o: lead sales−buys, жёстче try-veto, soft-↓ откат после неудачного ↑.
+		skimTryBlocked := trySellsBlockSkim(sales, trySells)
 		skimOK := !nightMSK &&
 			state.CorridorUpCooldown == 0 &&
 			state.CorridorUpStreak < corridorMaxUpStreak &&
-			sales > buys &&
+			skimSalesLeadOK(sales, buys) &&
 			demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) &&
-			!trySellsBlockUp(sales, trySells)
+			!trySellsBlockUp(sales, trySells) &&
+			!skimTryBlocked
 		paidClimb := priceFarBelowPaid(priceBefore, paidMax, step) &&
 			buys <= sales &&
 			!trySellsBlockUp(sales, trySells) &&
 			state.CorridorNoBuyUpStreak < corridorMaxNoBuyUps &&
 			state.CorridorUpCooldown == 0
 		switch {
-		case trySellsBlockUp(sales, trySells):
+		case skimShouldRevert(state.CorridorUpCooldown, sales, buys, trySells):
+			trySoftDown("corridor_price_down_skim_revert",
+				fmt.Sprintf("held=%d в [%d,%d] после ↑ sales=%d buys=%d try=%d — рынок не берёт → откат",
+					totalHeld, targetLo, targetHi, sales, buys, trySells))
+		case trySellsBlockUp(sales, trySells) || skimTryBlocked:
 			action = "corridor_hold_skim_veto"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] sales=%d try=%d — рынок не берёт, skim ↑ запрещён",
 				totalHeld, targetLo, targetHi, sales, trySells))
@@ -1355,14 +1391,14 @@ func adjustPrice(item string) AdjustReport {
 			action = "corridor_hold_band"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] up_cd=%d — пауза skim",
 				totalHeld, targetLo, targetHi, state.CorridorUpCooldown))
-		case !demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) || sales <= buys:
+		case !demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) || !skimSalesLeadOK(sales, buys):
 			action = "corridor_hold_band"
-			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] sales=%d buys=%d last=%d — нет сигнала skim",
-				totalHeld, targetLo, targetHi, sales, buys, prevCycleSales))
+			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] sales=%d buys=%d last=%d lead<%d — нет сигнала skim",
+				totalHeld, targetLo, targetHi, sales, buys, prevCycleSales, corridorSkimMinLead))
 		case skimOK:
 			applyUp("corridor_price_up_skim",
-				fmt.Sprintf("held=%d в [%d,%d] sales=%d > buys=%d last=%d — skim-↑ (probe прибыли)",
-					totalHeld, targetLo, targetHi, sales, buys, prevCycleSales))
+				fmt.Sprintf("held=%d в [%d,%d] sales=%d ≥ buys=%d+%d last=%d — skim-↑ (probe прибыли)",
+					totalHeld, targetLo, targetHi, sales, buys, corridorSkimMinLead, prevCycleSales))
 		default:
 			action = "corridor_hold_band"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] share=%d", totalHeld, targetLo, targetHi, share))
@@ -1472,8 +1508,8 @@ func adjustPrice(item string) AdjustReport {
 		if state.CorridorUpCooldown > 0 {
 			state.CorridorUpCooldown--
 		}
-		// Soft-cooldown тикает каждый цикл, кроме только что выставленного после soft↓.
-		if strings.Contains(action, "price_down_soft") {
+		// Soft-cooldown тикает каждый цикл, кроме только что выставленного после soft↓ / skim_revert.
+		if strings.Contains(action, "price_down_soft") || strings.Contains(action, "skim_revert") {
 			// уже выставили CorridorDownCooldown в trySoftDown
 		} else if state.CorridorDownCooldown > 0 {
 			state.CorridorDownCooldown--
