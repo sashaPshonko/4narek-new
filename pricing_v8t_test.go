@@ -44,7 +44,8 @@ func TestTrySellsBlockUpNotBlanketAtHighSales(t *testing.T) {
 }
 
 func TestCapitalPolicyV8t(t *testing.T) {
-	if capitalPolicy != "stock_corridor_v8t" {
-		t.Fatalf("policy=%s want stock_corridor_v8t", capitalPolicy)
+	// Superseded by v8u (DOI cover); keep flag checks above.
+	if capitalPolicy != "stock_corridor_v8u" {
+		t.Fatalf("policy=%s want stock_corridor_v8u", capitalPolicy)
 	}
 }

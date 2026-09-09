@@ -16,6 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8u — v8t + Level-2 Policy F (sales≥1 only, Sep 2026):
+//   DOI=held/sales: <3 HOLD; [3,5) OVER −2; [5,10) SOFT −1; ≥10 HOLD.
+//   fill≥25% больше не основной soft-↓ при sales≥1. sales=0: legacy fill dump/over/soft.
+//   Без fill≥50 rail. L1 trusted_AH_min / floor / disabled UP — без изменений.
 // stock_corridor_v8t — v8s + Level1/Level2 split (audit Sep 2026):
 //   L1: trusted_AH_min jump (held=0 buys=0 deep gap); demand/recover/paid-↑ off;
 //       try≥5 не универсальный UP-veto; up_deep оставлен; corridor 18–25% без сдвига;
@@ -386,6 +390,33 @@ func recoverBlockedByPaidCap(price, lastPaid, step int) bool {
 		return true
 	}
 	return price >= cap
+}
+
+// doiCover — days-of-inventory proxy for Level-2 Policy F (sales≥1).
+func doiCover(held, sales int) float64 {
+	if sales <= 0 {
+		return 0
+	}
+	return float64(held) / float64(sales)
+}
+
+// doiCoverIntensity — Policy F actuator for sales≥1: "hold" | "over" | "soft".
+// sales≤0 → "" (caller must use legacy fill dump/over/soft).
+func doiCoverIntensity(held, sales int) string {
+	if sales <= 0 {
+		return ""
+	}
+	doi := doiCover(held, sales)
+	switch {
+	case doi < 3:
+		return "hold"
+	case doi < 5:
+		return "over"
+	case doi < 10:
+		return "soft"
+	default:
+		return "hold"
+	}
 }
 
 // allowHardDown — over/dump. С продажами — всегда (fwd лучше hold). Без продаж — один щуп,
@@ -925,13 +956,15 @@ func actionReasonRU(action string) string {
 	case "corridor_price_down_dump":
 		return "corridor_v8h: held ≥ dump% → −цена×2 (без продаж — макс. 1 щуп подряд)"
 	case "corridor_price_down_over":
-		return "corridor_v8h: held ≥ over% → −цена×2 (без продаж — макс. 1 щуп подряд)"
+		return "corridor_v8u: OVER −2 step (sales≥1: DOI cover 3≤DOI<5; sales=0: fill≥over%)"
 	case "corridor_hold_over_idle":
 		return "corridor_v8h: перезапас, sales=0 после idle-щупа — ждём продажу"
+	case "corridor_hold_doi_cover":
+		return "corridor_v8u L2 F: sales≥1 DOI<3 или DOI≥10 → HOLD (fill≥25% soft/over/dump не режем)"
 	case "corridor_price_up_paid":
 		return "corridor_v8h: в полосе цена << lastPaid → ↑ к якорю (и ночью)"
 	case "corridor_price_down_soft":
-		return "corridor_v6: held > hi → −цена (слив хвоста выше полосы)"
+		return "corridor_v8u: SOFT −1 step (sales≥1: DOI cover 5≤DOI<10; sales=0: held>hi)"
 	case "corridor_price_down_hi":
 		return "corridor_v3(legacy): held > hi → −цена"
 	case "corridor_price_up_demand":
@@ -1260,11 +1293,8 @@ func adjustPrice(item string) AdjustReport {
 	var experimentTG *experimentTelegramEvent
 
 	// ═══════════════════════════════════════════════════════════════════
-	// stock_corridor_v8 — fill + recover + profit-skim в полосе.
-	// Default полоса [lo,hi]≈18–25%; позор ≈10–18% + earlier over/dump.
-	// ↑ ниже lo: спрос / deep / recover; try-veto; buy-veto buys>sales.
-	// ↑ в полосе (skim): сильный разбор днём → probe выше (прибыль, не только fill).
-	// hard↓ over/dump: step×2.
+	// stock_corridor_v8u — L2 Policy F (sales≥1 DOI cover) + legacy sales=0 fill↓.
+	// L1 trusted_AH_min / floor / disabled UP — без изменений в этом блоке.
 	// ═══════════════════════════════════════════════════════════════════
 
 	band := stockBandFor(item, cfg)
@@ -1355,7 +1385,31 @@ func adjustPrice(item string) AdjustReport {
 		action = "hold"
 		notes = append(notes, "share=0 — нет базы для коридора")
 
-	case totalHeld >= targetDump:
+	// ─── Level-2 Policy F (sales≥1): DOI cover before any fill-based soft/over/dump ───
+	case sales >= 1 && doiCoverIntensity(totalHeld, sales) == "over":
+		doi := doiCover(totalHeld, sales)
+		applyDown("corridor_price_down_over",
+			fmt.Sprintf("doi_cover F: DOI=%.3f held=%d sales=%d fill=%.1f%% → OVER −%d×step (3≤DOI<5) price %d",
+				doi, totalHeld, sales, stockLoad*100, corridorHardDownStepMult, priceBefore),
+			corridorHardDownStepMult)
+
+	case sales >= 1 && doiCoverIntensity(totalHeld, sales) == "soft":
+		doi := doiCover(totalHeld, sales)
+		trySoftDown("corridor_price_down_soft",
+			fmt.Sprintf("doi_cover F: DOI=%.3f held=%d sales=%d fill=%.1f%% → SOFT −1 step (5≤DOI<10) price %d",
+				doi, totalHeld, sales, stockLoad*100, priceBefore))
+
+	// sales≥1 + DOI HOLD, but fill would have triggered legacy soft/over/dump → explicit HOLD
+	case sales >= 1 && (totalHeld >= targetDump || totalHeld >= targetOver || totalHeld > targetHi):
+		doi := doiCover(totalHeld, sales)
+		inten := doiCoverIntensity(totalHeld, sales)
+		action = "corridor_hold_doi_cover"
+		notes = append(notes, fmt.Sprintf(
+			"doi_cover F: DOI=%.3f inten=%s held=%d sales=%d fill=%.1f%% → HOLD (legacy fill-↓ skipped; DOI<3 or DOI≥10)",
+			doi, inten, totalHeld, sales, stockLoad*100))
+
+	// ─── sales==0: legacy fill dump/over/soft (unchanged) ───
+	case sales == 0 && totalHeld >= targetDump:
 		if !allowHardDown(sales, state.IdleHardDownStreak, stockLoad) {
 			action = "corridor_hold_dump_idle"
 			notes = append(notes, fmt.Sprintf("held=%d ≥ dump=%d sales=0 idleHard=%d — ждём продажу, не цепочку в пол", totalHeld, targetDump, state.IdleHardDownStreak))
@@ -1367,7 +1421,7 @@ func adjustPrice(item string) AdjustReport {
 			state.CorridorDownCooldown = 0
 		}
 
-	case totalHeld >= targetOver:
+	case sales == 0 && totalHeld >= targetOver:
 		if !allowHardDown(sales, state.IdleHardDownStreak, stockLoad) {
 			action = "corridor_hold_over_idle"
 			notes = append(notes, fmt.Sprintf("held=%d ≥ over=%d sales=0 idleHard=%d — ждём продажу, не цепочку в пол", totalHeld, targetOver, state.IdleHardDownStreak))
@@ -1378,7 +1432,7 @@ func adjustPrice(item string) AdjustReport {
 				corridorHardDownStepMult)
 		}
 
-	case totalHeld > targetHi:
+	case sales == 0 && totalHeld > targetHi:
 		trySoftDown("corridor_price_down_soft",
 			fmt.Sprintf("held=%d > hi=%d (полоса [%d,%d] soft=%d share=%d)",
 				totalHeld, targetHi, targetLo, targetHi, targetSoft, share))
@@ -1754,11 +1808,11 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	if changed {
-		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d | held %d/share %d зона[%d,%d] soft=%d over=%d | продажи %d buys=%d try=%d | АХ %d инв %d | %s",
-			item, action, priceBefore, newPrice, nacenka, totalHeld, share, targetLo, targetHi, targetSoft, targetOver, sales, buys, trySells, onAH, invCount, reason)
+		log.Printf("[ADJUST] %s: %s | цена %d→%d | наценка %d | held %d/share %d fill=%.1f%% DOI=%.3f зона[%d,%d] soft=%d over=%d | продажи %d buys=%d try=%d | АХ %d инв %d | %s",
+			item, action, priceBefore, newPrice, nacenka, totalHeld, share, stockLoad*100, doiCover(totalHeld, sales), targetLo, targetHi, targetSoft, targetOver, sales, buys, trySells, onAH, invCount, reason)
 	} else {
-		log.Printf("[HOLD] %s: %s | цена %d | наценка %d | held %d/share %d зона[%d,%d] soft=%d | продажи %d buys=%d try=%d | АХ %d инв %d | %s",
-			item, actionTaken, newPrice, nacenka, totalHeld, share, targetLo, targetHi, targetSoft, sales, buys, trySells, onAH, invCount, reason)
+		log.Printf("[HOLD] %s: %s | цена %d | наценка %d | held %d/share %d fill=%.1f%% DOI=%.3f зона[%d,%d] soft=%d | продажи %d buys=%d try=%d | АХ %d инв %d | %s",
+			item, actionTaken, newPrice, nacenka, totalHeld, share, stockLoad*100, doiCover(totalHeld, sales), targetLo, targetHi, targetSoft, sales, buys, trySells, onAH, invCount, reason)
 	}
 
 	queueMLDecisionLocked(
