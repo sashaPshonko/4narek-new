@@ -938,6 +938,8 @@ func actionReasonRU(action string) string {
 		return "corridor_v8c: цена ниже пола (minBuy+наценка) → поднимаем"
 	case "corridor_price_up_ah_book":
 		return "corridor_v8p: селл < min(ah_book)+наценка, held>0, sales>buys → ≤+N×step к книге"
+	case "corridor_price_up_market_recovery", "corridor_price_up_market_recovery_shadow":
+		return "shadow: B_price_trap — held=buys=sales=0, our≪p10 (60m book) → virtual +1 step (не winner)"
 	case "corridor_price_up_empty_book":
 		return "corridor_v8r: held=0 и глубокая книга выше нас ≥2 step → +1 step к рынку"
 	case "corridor_price_down_ah_book":
@@ -1825,6 +1827,9 @@ func adjustPrice(item string) AdjustReport {
 	mutex.Unlock()
 
 	logCapitalCycle(capitalRow)
+
+	// Shadow-only B_price_trap recovery: не меняет newPrice / winner / broadcast.
+	runMarketRecoveryShadow(item, now, newPrice, step, totalHeld, buys, sales, actionTaken, blockUp || blockDown)
 
 	if experimentTG != nil {
 		enqueueExperimentTelegram(*experimentTG)

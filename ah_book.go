@@ -332,6 +332,86 @@ func insertAhBookBatch(rows []ahBookWire) {
 	maybeBanAhBookWallSellers(pairs)
 }
 
+// ahBookMarketRecoverySnap — книга за длинное окно для shadow market_recovery (не 10m ah_book).
+type ahBookMarketRecoverySnap struct {
+	MinAsk  int
+	P10     int
+	NSell   int // unique sellers без ban-витрин
+	NUUID   int // unique uuid без ban-витрин
+	NRows   int
+	OK      bool
+}
+
+// ahBookMarketRecoveryStats — min/p10 + unique sellers/uuid за since…now, без ban-витрин.
+// p10 по всем лотам окна (как ahBookP10Since); min/sellers/uuid — без банов.
+// Не использует nacenka. Не меняет пороги обычного 10m ah_book.
+func ahBookMarketRecoveryStats(itemID string, since time.Time) ahBookMarketRecoverySnap {
+	var out ahBookMarketRecoverySnap
+	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
+		return out
+	}
+	mlDBMu.Lock()
+	rows, err := mlDB.Query(
+		`SELECT a.price, lower(trim(coalesce(a.seller,''))), a.uuid,
+			EXISTS(
+				SELECT 1 FROM ah_book_seller_bans b
+				WHERE b.seller = lower(trim(a.seller))
+			) AS banned
+		 FROM ah_book_lots a
+		 WHERE a.item_id = ? AND a.ts >= ? AND a.price > 0`,
+		itemID, since.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		mlDBMu.Unlock()
+		log.Printf("[ah_book] market_recovery stats: %v", err)
+		return out
+	}
+	allPrices := make([]int, 0, 256)
+	byUUID := map[string]int{}
+	sellers := map[string]struct{}{}
+	for rows.Next() {
+		var price int
+		var seller, uuid string
+		var banned bool
+		if err := rows.Scan(&price, &seller, &uuid, &banned); err != nil || price <= 0 {
+			continue
+		}
+		allPrices = append(allPrices, price)
+		out.NRows++
+		if banned {
+			continue
+		}
+		if seller != "" {
+			sellers[seller] = struct{}{}
+		}
+		if uuid == "" {
+			continue
+		}
+		if prev, ok := byUUID[uuid]; !ok || price < prev {
+			byUUID[uuid] = price
+		}
+	}
+	_ = rows.Close()
+	mlDBMu.Unlock()
+
+	out.NSell = len(sellers)
+	out.NUUID = len(byUUID)
+	if out.NUUID == 0 || len(allPrices) == 0 {
+		return out
+	}
+	minAsk := 0
+	for _, p := range byUUID {
+		if minAsk == 0 || p < minAsk {
+			minAsk = p
+		}
+	}
+	out.MinAsk = minAsk
+	sort.Ints(allPrices)
+	out.P10 = allPrices[len(allPrices)/10]
+	out.OK = out.MinAsk > 0 && out.P10 > 0
+	return out
+}
+
 // ahBookMinSince — min(price) по уникальным uuid SKU с ts≥since, без забаненных витрин.
 // n = COUNT(DISTINCT uuid); ok только при n ≥ ahBookMinLotsInWindow.
 func ahBookMinSince(itemID string, since time.Time) (minPrice, n int, ok bool) {
