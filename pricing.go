@@ -16,6 +16,8 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8q — v8p + не пилить каталог при held=0 (stale/empty_fair/overcap):
+// ↓ с призрака только если есть сток и try показывает отказ; пусто ≠ «дорого».
 // stock_corridor_v8p — v8o + ah_book-↑ только при живом разборе/held>0 + cap шагов;
 // recover-↑ только при sales≥1; deep-bypass только sales>buys; probe×1.
 // stock_corridor_v8o — v8n + skim lead sales≥buys+3, жёстче try-veto для skim,
@@ -391,6 +393,15 @@ func priceFarBelowPaid(price, paidMax, step int) bool {
 		return false
 	}
 	return price <= paidMax-corridorPaidBandGapSteps*step
+}
+
+// ghostPriceDownOK — stale/empty/overcap ↓ только при живом стоке и отказе рынка на листинг.
+// held=0 + 0 sales ≠ «мы дороже рынка» (часто просто нет капитала) — каталог не пилим.
+func ghostPriceDownOK(held, sales, trySells int) bool {
+	if held <= 0 {
+		return false
+	}
+	return trySellsBlockUp(sales, trySells) || trySells >= tryUpVetoMinTries
 }
 
 // serverFunTimeRaiseAnomalous — set_min: не поднимать каталог.
@@ -860,11 +871,11 @@ func actionReasonRU(action string) string {
 	case "corridor_price_down_ah_book":
 		return "corridor_v8l/v8n: селл > p10+наценка → soft-↓ (пусто: тонкая книга OK)"
 	case "corridor_price_down_overcap":
-		return "corridor_v8n: недобор + цена ≥ paid+K×step → soft-↓ с потолка"
+		return "corridor_v8q: недобор + сток + try-отказ + цена ≥ paid+K×step → soft-↓"
 	case "corridor_price_down_stale":
-		return "corridor_v8n: нет sell в TTL + цена >> floor → soft-↓ (анти-призрак)"
+		return "corridor_v8q: нет sell в TTL, но held>0 и try-отказ → soft-↓ (не пилим пустое)"
 	case "corridor_price_down_empty_fair":
-		return "corridor_v8n: held=0 + fair к paid + 0 sales → soft-↓"
+		return "corridor_v8q: disabled — held=0 больше не ↓ (см. hold_empty)"
 	case "corridor_hold_recover_ceiling":
 		return "corridor_v8e: recover упёрся в max(sell за окно)+K×step"
 	case "corridor_hold_recover_stale":
@@ -1342,30 +1353,35 @@ func adjustPrice(item string) AdjustReport {
 			action = "corridor_hold_recover_fair"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d price=%d << paid=%d но sales=0 — recover ↑ нет (нет разбора)",
 				totalHeld, targetLo, priceBefore, paidMax))
-		case recoverBase && !underpriced && totalHeld <= 0 && sales == 0 &&
-			priceBefore > priceFloor+3*step:
-			// пусто + «fair» к своему high-water paid, но цена далеко от пола — рынок уже не берёт (меч 3.8M vs ~2M)
-			applyDown("corridor_price_down_empty_fair",
-				fmt.Sprintf("held=0 < lo=%d price=%d ≈ paid=%d но пусто/0 sales → ↓ с призрака",
-					targetLo, priceBefore, paidMax), 1)
+		case recoverBase && !underpriced && totalHeld <= 0 && sales == 0:
+			// v8q: пусто ≠ дорого. Призрак 3.8M чинит ah_book soft-↓, не пиление пола.
+			action = "corridor_hold_empty"
+			notes = append(notes, fmt.Sprintf("held=0 < lo=%d price=%d paid=%d — пусто, каталог не ↓ (нет стока ≠ выше рынка)",
+				targetLo, priceBefore, paidMax))
 		case recoverBase && !underpriced:
 			action = "corridor_hold_recover_fair"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d price=%d paid=%d — недобор, но не << paid (−%d×step), recover ↑ нет",
 				totalHeld, targetLo, priceBefore, paidMax, corridorPaidBandGapSteps))
 		case overCap && paidMax <= 0:
-			if priceBefore > priceFloor+2*step {
+			if ghostPriceDownOK(totalHeld, sales, trySells) && priceBefore > priceFloor+2*step {
 				applyDown("corridor_price_down_stale",
-					fmt.Sprintf("held=%d < lo=%d — нет sell за %s, цена %d >> floor → ↓",
-						totalHeld, targetLo, maxAnalysisRetain().Round(time.Minute), priceBefore), 1)
+					fmt.Sprintf("held=%d < lo=%d try=%d — нет sell за %s, рынок не берёт листинг → ↓",
+						totalHeld, targetLo, trySells, maxAnalysisRetain().Round(time.Minute)), 1)
 			} else {
 				action = "corridor_hold_recover_stale"
-				notes = append(notes, fmt.Sprintf("held=%d < lo=%d — нет sell за %s, recover ↑ запрещён",
+				notes = append(notes, fmt.Sprintf("held=%d < lo=%d — нет sell за %s, ↓ нет (нужен сток+try-отказ)",
 					totalHeld, targetLo, maxAnalysisRetain().Round(time.Minute)))
 			}
 		case overCap:
-			applyDown("corridor_price_down_overcap",
-				fmt.Sprintf("held=%d < lo=%d price=%d ≥ paid %d + %d×step → ↓ с потолка recover",
-					totalHeld, targetLo, priceBefore, paidMax, corridorRecoverProbeSteps), 1)
+			if ghostPriceDownOK(totalHeld, sales, trySells) {
+				applyDown("corridor_price_down_overcap",
+					fmt.Sprintf("held=%d < lo=%d try=%d price=%d ≥ paid %d + %d×step → ↓ с потолка",
+						totalHeld, targetLo, trySells, priceBefore, paidMax, corridorRecoverProbeSteps), 1)
+			} else {
+				action = "corridor_hold_recover_ceiling"
+				notes = append(notes, fmt.Sprintf("held=%d < lo=%d price=%d ≥ paid-cap — ↓ нет (held=0 или нет try-отказа)",
+					totalHeld, targetLo, priceBefore))
+			}
 		case noBuyBlocked:
 			action = "corridor_hold_recover_pause"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d — пауза recover: %d ↑ без buys (антиvacuum)",

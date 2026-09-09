@@ -61,3 +61,22 @@ func TestRecoverNeedsSales(t *testing.T) {
 		t.Fatal("sales≥1 + underpriced may recover")
 	}
 }
+
+// v8q: пустой сток / нет try — не пилим каталог (ночной megasword 3.5→0.5).
+func TestGhostPriceDownOK(t *testing.T) {
+	if ghostPriceDownOK(0, 0, 0) {
+		t.Fatal("held=0 must not ghost-↓")
+	}
+	if ghostPriceDownOK(0, 0, 20) {
+		t.Fatal("held=0 even with try — no ↓ (нечего продавать)")
+	}
+	if ghostPriceDownOK(5, 0, 0) {
+		t.Fatal("held>0 but no try evidence — hold, not ↓")
+	}
+	if !ghostPriceDownOK(5, 0, 5) {
+		t.Fatal("held>0 try≥minTries — ghost-↓ OK")
+	}
+	if !ghostPriceDownOK(5, 2, 8) {
+		t.Fatal("trySellsBlockUp — ghost-↓ OK")
+	}
+}
