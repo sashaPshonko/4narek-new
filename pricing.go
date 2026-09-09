@@ -16,6 +16,8 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8p — v8o + ah_book-↑ только при живом разборе/held>0 + cap шагов;
+// recover-↑ только при sales≥1; deep-bypass только sales>buys; probe×1.
 // stock_corridor_v8o — v8n + skim lead sales≥buys+3, жёстче try-veto для skim,
 // soft-↓ откат в полосе после неудачного ↑, up_cd=2.
 // stock_corridor_v8n — v8m + ↓ с призрачного потолка (stale/overcap при недоборе);
@@ -60,9 +62,9 @@ const (
 	tryUpVetoMinTries          = 5
 	tryUpVetoPerSale           = 2
 	corridorSkimMinLead        = 3 // skim только если sales ≥ buys+lead (анти-ложный probe)
-	// recover-↑: только при цене << paid; без buys — короткая страховка, не главный гейт.
-	corridorMaxNoBuyUps       = 3 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
-	corridorRecoverProbeSteps = 2 // recover ≤ max(sell в TTL) + K×step
+	// recover-↑: только при цене << paid и sales≥1; без buys — короткая страховка.
+	corridorMaxNoBuyUps       = 2 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
+	corridorRecoverProbeSteps = 1 // recover ≤ max(sell в TTL) + K×step
 	corridorThinFleetMaxBots  = 2 // ≤ столько ботов в категории → мягче пороги спроса / recover
 	corridorMaxIdleHardDowns = 1 // over/dump при sales=0: один щуп, не цепочка в пол
 	corridorIdleHardDownsDump = 3 // при fill≥50% и sales=0 — до 3 hard-↓ (кирка иначе стоит в переполнении)
@@ -72,6 +74,7 @@ const (
 	ahBookMinLotsInWindow     = 40               // уникальных uuid за цикл; меньше — скан тонкий, min/↑/↓ не считаем
 	ahBookMinLotsWhenEmpty    = 12               // held=0: soft-↓ по более тонкой книге (меч иначе залипал на 3.8M)
 	ahBookSoftDownSlackSteps  = 2                // soft-↓ только если sell > p10+наценка+2×step (мёртвая зона)
+	ahBookMaxRaiseSteps       = 2                // ah_book-↑ не прыгает к min+наценка за цикл (0.84→2.4)
 	serverBoundLookCycles = 3 // окно закупок для set_min
 	serverBoundMinBuys    = 2 // одна покупка — шум
 )
@@ -708,6 +711,22 @@ func ahBookRaiseTarget(minAsk, nacenka, step int) int {
 	return minAsk + nacenka + step
 }
 
+// ahBookRaiseTargetCapped — полный таргет книги, но не больше sell+N×step за цикл.
+func ahBookRaiseTargetCapped(sell, minAsk, nacenka, step int) int {
+	full := ahBookRaiseTarget(minAsk, nacenka, step)
+	if full <= 0 {
+		return 0
+	}
+	if step <= 0 || ahBookMaxRaiseSteps <= 0 {
+		return full
+	}
+	cap := sell + ahBookMaxRaiseSteps*step
+	if full > cap {
+		return cap
+	}
+	return full
+}
+
 // ahBookSoftDownTarget — к p10+наценка+шаг, но не ниже min(книги без витрин)+наценка.
 func ahBookSoftDownTarget(p10, minAsk, nacenka, step int) int {
 	if p10 <= 0 || minAsk <= 0 {
@@ -724,9 +743,17 @@ func ahBookSoftDownTarget(p10, minAsk, nacenka, step int) int {
 	return tgt
 }
 
-// shouldRaiseFromAhBook — селл ниже min(окно)+наценка; dump / ↓ цикла / были buys / тонкий скан — не трогаем.
-func shouldRaiseFromAhBook(sell, minAsk, nacenka, n int, dumpZone, alreadyDown, hadBuys bool) bool {
+// shouldRaiseFromAhBook — селл ниже min(окно)+наценка.
+// v8p: только при held>0 и живом разборе (sales>buys, sales≥min); иначе книга тянет в пустоту (нагрудник 0.84→2.4).
+// dump / ↓ цикла / были buys / тонкий скан — не трогаем.
+func shouldRaiseFromAhBook(sell, minAsk, nacenka, n, sales, buys, held int, dumpZone, alreadyDown, hadBuys bool) bool {
 	if n < ahBookMinLotsInWindow || minAsk <= 0 || dumpZone || alreadyDown || hadBuys {
+		return false
+	}
+	if held <= 0 {
+		return false
+	}
+	if sales <= buys || sales < corridorMinSalesForUp {
 		return false
 	}
 	return sell < minAsk+nacenka
@@ -821,7 +848,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_deep":
 		return "corridor_v8h: held=0 днём + сильный спрос → +цена (обход up_cd)"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
-		return "corridor_v8m: недобор + цена << paid → recover ≤ max(sell)+K×step"
+		return "corridor_v8p: недобор + цена << paid + sales≥1 → recover ≤ max(sell)+K×step"
 	case "corridor_price_up_skim":
 		return "corridor_v8o: held в полосе + sales≥buys+lead → +цена (probe прибыли)"
 	case "corridor_price_down_skim_revert":
@@ -829,7 +856,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_floor":
 		return "corridor_v8c: цена ниже пола (minBuy+наценка) → поднимаем"
 	case "corridor_price_up_ah_book":
-		return "corridor_v8j: селл < min(10 мин ah_book)+наценка, ≥40 uuid → к min+наценка+шаг"
+		return "corridor_v8p: селл < min(ah_book)+наценка, held>0, sales>buys → ≤+N×step к книге"
 	case "corridor_price_down_ah_book":
 		return "corridor_v8l/v8n: селл > p10+наценка → soft-↓ (пусто: тонкая книга OK)"
 	case "corridor_price_down_overcap":
@@ -1247,13 +1274,13 @@ func adjustPrice(item string) AdjustReport {
 		deep := deepUnderstock(totalHeld, targetLo)
 		// Цена занижена vs свежий paid — иначе недобор ≠ повод recover-↑ (vacuum).
 		underpriced := priceFarBelowPaid(priceBefore, paidMax, step)
-		// deep обход cd: только с живым спросом ИЛИ с доказанным занижением.
-		bypassUpCD := deep && !nightMSK && (sales > buys || underpriced)
+		// deep обход cd: только с живым спросом (не underpriced-only — это vacuum deep-recover).
+		bypassUpCD := deep && !nightMSK && sales > buys
 		// buy-veto только когда реально набиваем сток сильнее продаж.
 		// buys==sales (в т.ч. 1=1 при held≈0) — рынок забирает всё → ↑ можно.
 		liveBuyVeto := buys > sales
 		noBuyBlocked := state.CorridorNoBuyUpStreak >= corridorMaxNoBuyUps
-		// recover: недобор + цена << paid, нет try/buy-veto, не ночь. Потолок — paid+K×step.
+		// recover: недобор + цена << paid + sales≥1, нет try/buy-veto, не ночь.
 		recoverCDOK := state.CorridorUpCooldown == 0 || bypassUpCD
 		recoverStreakOK := state.CorridorUpStreak < corridorMaxUpStreak || bypassUpCD
 		recoverBase := !nightMSK &&
@@ -1263,7 +1290,7 @@ func adjustPrice(item string) AdjustReport {
 			!liveBuyVeto &&
 			!noBuyBlocked &&
 			!overCap
-		recoverOK := recoverBase && underpriced
+		recoverOK := recoverBase && underpriced && sales >= 1
 		switch {
 		case trySellsBlockUp(sales, trySells):
 			action = "corridor_hold_try_veto"
@@ -1311,6 +1338,10 @@ func adjustPrice(item string) AdjustReport {
 					totalHeld, targetLo, priceBefore, paidMax, state.CorridorNoBuyUpStreak, corridorMaxNoBuyUps)
 			}
 			applyUp(label, note)
+		case recoverBase && underpriced && sales < 1:
+			action = "corridor_hold_recover_fair"
+			notes = append(notes, fmt.Sprintf("held=%d < lo=%d price=%d << paid=%d но sales=0 — recover ↑ нет (нет разбора)",
+				totalHeld, targetLo, priceBefore, paidMax))
 		case recoverBase && !underpriced && totalHeld <= 0 && sales == 0 &&
 			priceBefore > priceFloor+3*step:
 			// пусто + «fair» к своему high-water paid, но цена далеко от пола — рынок уже не берёт (меч 3.8M vs ~2M)
@@ -1412,10 +1443,10 @@ func adjustPrice(item string) AdjustReport {
 	mutex.Unlock()
 	minAsk, bookN, bookOK := ahBookMinSince(item, bookSince)
 	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
-	raiseFromBook := bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, dumpZone, alreadyDown, buys > 0)
+	raiseFromBook := bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, sales, buys, totalHeld, dumpZone, alreadyDown, buys > 0)
 	var raiseTgt int
 	if raiseFromBook {
-		raiseTgt = ahBookRaiseTarget(minAsk, nacenka, step)
+		raiseTgt = ahBookRaiseTargetCapped(priceBefore, minAsk, nacenka, step)
 	}
 	softDownFromBook := bookOK && p10OK && shouldSoftDownFromAhBook(priceBefore, p10, minAsk, nacenka, p10N, step, raiseFromBook, buys > 0, totalHeld)
 	var softDownTgt int
@@ -1427,8 +1458,8 @@ func adjustPrice(item string) AdjustReport {
 		newPrice = raiseTgt
 		action = "corridor_price_up_ah_book"
 		changed = true
-		notes = append(notes, fmt.Sprintf("ah_book min10=%d n=%d → селл %d < min+наценка %d → %d",
-			minAsk, bookN, priceBefore, minAsk+nacenka, raiseTgt))
+		notes = append(notes, fmt.Sprintf("ah_book min10=%d n=%d → селл %d < min+наценка %d → %d (cap +%d×step)",
+			minAsk, bookN, priceBefore, minAsk+nacenka, raiseTgt, ahBookMaxRaiseSteps))
 	}
 	if softDownFromBook && softDownTgt > 0 && softDownTgt < newPrice {
 		tgt := softDownTgt
@@ -1638,14 +1669,14 @@ func adjustPrice(item string) AdjustReport {
 				}
 				deep := deepUnderstock(totalHeld, targetLo)
 				under := priceFarBelowPaid(priceBefore, paidMax, step)
-				bypass := deep && !nightMSK && (sales > buys || under)
+				bypass := deep && !nightMSK && sales > buys
 				cdOK := state.CorridorUpCooldown == 0 || bypass
 				streakOK := state.CorridorUpStreak < corridorMaxUpStreak || bypass
 				if sales > buys {
 					return demandStrongEnoughForUp(sales, prevCycleSales, minSalesForUp, nightMSK) && cdOK && streakOK
 				}
-				// recover: недобор без sales>buys — только заниженная цена
-				return !nightMSK && under && !overCap && cdOK && streakOK
+				// recover: недобор без sales>buys — заниженная цена + sales≥1
+				return !nightMSK && under && sales >= 1 && !overCap && cdOK && streakOK
 			}(),
 			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
 			PlayersOnline:  onlineForCap,

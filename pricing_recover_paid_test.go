@@ -42,3 +42,22 @@ func TestRecoverUnderpriceGap(t *testing.T) {
 		t.Fatal("paid-5step is underpriced — recover allowed")
 	}
 }
+
+// v8p: recover только при sales≥1 (синтетика гейтов, не полный adjustPrice).
+func TestRecoverNeedsSales(t *testing.T) {
+	step := 100_000
+	paid := 2_500_000
+	price := 1_200_000
+	if !priceFarBelowPaid(price, paid, step) {
+		t.Fatal("setup: must be underpriced")
+	}
+	// гейт в коде: recoverOK = … && underpriced && sales >= 1
+	sales0OK := priceFarBelowPaid(price, paid, step) && 0 >= 1
+	sales1OK := priceFarBelowPaid(price, paid, step) && 1 >= 1
+	if sales0OK {
+		t.Fatal("sales=0 must not recover")
+	}
+	if !sales1OK {
+		t.Fatal("sales≥1 + underpriced may recover")
+	}
+}

@@ -91,13 +91,13 @@ func TestServerFunTimeRaiseAnomalousNoBook(t *testing.T) {
 func TestRecoverPaidCap(t *testing.T) {
 	step := 100_000
 	paid := 2_500_000
-	if recoverPaidCap(paid, step) != paid+2*step {
-		t.Fatalf("cap=%d", recoverPaidCap(paid, step))
+	if recoverPaidCap(paid, step) != paid+1*step {
+		t.Fatalf("cap=%d want paid+1×step (v8p)", recoverPaidCap(paid, step))
 	}
 	if recoverBlockedByPaidCap(paid, paid, step) {
 		t.Fatal("at last paid should still allow +K probe")
 	}
-	if !recoverBlockedByPaidCap(paid+2*step, paid, step) {
+	if !recoverBlockedByPaidCap(paid+1*step, paid, step) {
 		t.Fatal("at cap must block")
 	}
 	if !recoverBlockedByPaidCap(1_200_000, 0, step) {

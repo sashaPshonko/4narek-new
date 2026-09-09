@@ -36,23 +36,34 @@ func TestShouldRaiseFromAhBook(t *testing.T) {
 	n := ahBookMinLotsInWindow
 	minAsk := 1_000_000
 	nac := 300_000
-	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false, false) {
-		t.Fatal("селл ниже min+наценка — поднимаем")
+	// живой разбор: held>0, sales≥3, buys=0
+	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 0, 4, false, false, false) {
+		t.Fatal("селл ниже min+наценка + разбор — поднимаем")
 	}
-	if shouldRaiseFromAhBook(minAsk+nac, minAsk, nac, n, false, false, false) {
+	if shouldRaiseFromAhBook(minAsk+nac, minAsk, nac, n, 5, 0, 4, false, false, false) {
 		t.Fatal("уже на min+наценка — не трогаем")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, false, false, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, 5, 0, 4, false, false, false) {
 		t.Fatal("мало uuid в окне — рано")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, true, false, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 0, 4, true, false, false) {
 		t.Fatal("dump — не поднимаем")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, true, false) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 0, 4, false, true, false) {
 		t.Fatal("уже ↓ в этом цикле")
 	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, false, false, true) {
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 0, 4, false, false, true) {
 		t.Fatal("были покупки — не поднимаем")
+	}
+	// v8p: пусто / нет разбора — не догоняем книгу (кейс нагрудник 0.84→2.4)
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 0, 0, 0, false, false, false) {
+		t.Fatal("held=0 sales=0 — не поднимаем")
+	}
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 2, 0, 4, false, false, false) {
+		t.Fatal("sales<minForUp — не поднимаем")
+	}
+	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 6, 4, false, false, false) {
+		t.Fatal("buys≥sales — не поднимаем")
 	}
 }
 
@@ -62,6 +73,18 @@ func TestAhBookRaiseTarget(t *testing.T) {
 	}
 	if ahBookRaiseTarget(0, 300_000, 100_000) != 0 {
 		t.Fatal("пустой min")
+	}
+}
+
+func TestAhBookRaiseTargetCapped(t *testing.T) {
+	step := 100_000
+	// полный таргет 1.4M, но с 400k только +2 step → 600k
+	if got := ahBookRaiseTargetCapped(400_000, 1_000_000, 300_000, step); got != 600_000 {
+		t.Fatalf("cap: got %d", got)
+	}
+	// уже близко — полный таргет
+	if got := ahBookRaiseTargetCapped(1_300_000, 1_000_000, 300_000, step); got != 1_400_000 {
+		t.Fatalf("near: got %d", got)
 	}
 }
 
