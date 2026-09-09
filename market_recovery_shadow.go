@@ -8,18 +8,21 @@ import (
 	"time"
 )
 
-// Shadow-only market recovery для B_price_trap.
-// Не меняет winner/production price. Не использует p10+nacenka.
-// Книга — отдельное 60m окно (ahBookMarketRecoveryStats), не 10m ah_book.
+// Market recovery для B_price_trap.
+// Live (marketRecoveryLiveEnabled): winner = corridor_price_up_market_recovery, +1 step/cycle.
+// Не использует p10+nacenka. Книга — 60m (ahBookMarketRecoveryStats), не 10m ah_book.
+// Остальные UP/DOWN / nacenka / v8s skim — не трогаем.
 
 const (
+	marketRecoveryLiveEnabled  = true
+	marketRecoveryActionLive   = "corridor_price_up_market_recovery"
 	marketRecoveryActionShadow = "corridor_price_up_market_recovery_shadow"
 	marketRecoveryBookWindow   = 60 * time.Minute
 	marketRecoveryMinSellers   = 15
 	marketRecoveryMinUUID      = 25
 	marketRecoveryRatioMax     = 0.80 // our/p10 ≤ 0.80
 	marketRecoveryGapMinSteps  = 4    // (p10-our)/step ≥ 4
-	marketRecoveryBuyableFrac  = 0.85 // stop when virtual our ≥ 0.85*p10
+	marketRecoveryBuyableFrac  = 0.85 // stop when our ≥ 0.85*p10
 	marketRecoveryP10StablePct = 0.10 // p10 в пределах ±10% на 2–3 obs
 	marketRecoveryRecentDownN  = 3    // нет price_down в последних N циклах
 	marketRecoveryP10HistN     = 3
@@ -458,6 +461,10 @@ func logMarketRecoveryShadowRow(in marketRecoveryEvalIn, st *marketRecoveryShado
 		active = 1
 	}
 	_ = stepped
+	actionName := marketRecoveryActionShadow
+	if marketRecoveryLiveEnabled {
+		actionName = marketRecoveryActionLive
+	}
 
 	mlDBMu.Lock()
 	defer mlDBMu.Unlock()
@@ -470,7 +477,7 @@ INSERT INTO market_recovery_shadow (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		in.Now.UTC().Format(time.RFC3339),
 		in.Item,
-		marketRecoveryActionShadow,
+		actionName,
 		in.OurPrice,
 		p10,
 		minAsk,
@@ -519,10 +526,123 @@ WHERE id = ?`,
 	}
 }
 
+// marketRecoveryLiveShouldRaise — peek: полный B_price_trap по hist прошлых циклов.
+// Не меняет state и не трогает цену. Вызывать до apply winner.
+func marketRecoveryLiveShouldRaise(item string, our, step, held, buys, sales int, book ahBookMarketRecoverySnap, manualLock bool) bool {
+	if !marketRecoveryLiveEnabled {
+		return false
+	}
+	if strings.TrimSpace(item) == "" || our <= 0 || step <= 0 {
+		return false
+	}
+	mrShadowMu.Lock()
+	defer mrShadowMu.Unlock()
+	st := mrShadowGet(item)
+	if st.ExhaustedUntilRealChange && our == st.ExhaustedAtOur {
+		return false
+	}
+	in := marketRecoveryEvalIn{
+		Item:       item,
+		OurPrice:   our,
+		Step:       step,
+		Held:       held,
+		Buys:       buys,
+		Sales:      sales,
+		ManualLock: manualLock,
+		Book:       book,
+	}
+	return isBPriceTrap(in, st.P10Hist, st.RecentActions, st.PriorHeld, st.PriorBuys, st.PriorSales)
+}
+
+// marketRecoveryCommitAfterLive — обновить hist + лог после real decision (live mode).
+// Не меняет цену. Virtual shadow-session не ведёт — winner уже применил step.
+func marketRecoveryCommitAfterLive(in marketRecoveryEvalIn) {
+	mrShadowMu.Lock()
+	defer mrShadowMu.Unlock()
+	st := mrShadowGet(in.Item)
+
+	if len(st.PendingRowIDs) > 0 {
+		upsAtBuy := st.RecoveryI
+		for _, id := range st.PendingRowIDs {
+			updateMarketRecoveryShadowNextCycle(id, in.Buys, in.Held, in.Sales, upsAtBuy)
+		}
+		st.PendingRowIDs = nil
+	}
+
+	st.RecentActions = appendBoundedStr(st.RecentActions, in.WinnerAction, marketRecoveryRecentDownN+2)
+	st.PriorHeld = appendBoundedInt(st.PriorHeld, in.Held, marketRecoveryPriorHistN)
+	st.PriorBuys = appendBoundedInt(st.PriorBuys, in.Buys, marketRecoveryPriorHistN)
+	st.PriorSales = appendBoundedInt(st.PriorSales, in.Sales, marketRecoveryPriorHistN)
+	if in.Book.OK && in.Book.P10 > 0 {
+		st.P10Hist = appendBoundedInt(st.P10Hist, in.Book.P10, marketRecoveryP10HistN)
+	}
+
+	// Сброс virtual shadow, если остался от pre-live периода.
+	st.Active = false
+	st.PredictedPrice = 0
+
+	raised := in.WinnerAction == marketRecoveryActionLive
+	if raised {
+		st.RecoveryI++
+		st.LastStepAt = in.Now
+		if st.SessionStartedAt.IsZero() {
+			st.SessionStartedAt = in.Now
+		}
+		out := marketRecoveryEvalOut{
+			DidStep:        true,
+			PredictedPrice: in.OurPrice, // уже после +1 step
+			RecoveryI:      st.RecoveryI,
+			SessionActive:  true,
+		}
+		if in.Book.P10 > 0 && in.Step > 0 {
+			// our в логе — цена до шага удобнее для gap; здесь our уже post.
+			// gap/ratio от post-price.
+			out.OurOverP10 = float64(in.OurPrice) / float64(in.Book.P10)
+			out.GapSteps = float64(in.Book.P10-in.OurPrice) / float64(in.Step)
+		}
+		// После шага — если уже buyable/gap closed, exhausted до смены real our.
+		if post := marketRecoveryStopReason(in, in.OurPrice, false); post == "buyable_zone" || post == "gap_closed" {
+			out.StopReason = post
+			out.SessionActive = false
+			st.ExhaustedUntilRealChange = true
+			st.ExhaustedAtOur = in.OurPrice
+			st.RecoveryI = 0
+			st.SessionStartedAt = time.Time{}
+		}
+		logMarketRecoveryShadowRow(in, st, out, true)
+		return
+	}
+
+	// Не raise: если были в серии recovery и теперь STOP — exhausted / сброс счётчика.
+	if st.RecoveryI > 0 {
+		stop := marketRecoveryStopReason(in, in.OurPrice, false)
+		if stop != "" {
+			out := marketRecoveryEvalOut{
+				StopReason:     stop,
+				RecoveryI:      st.RecoveryI,
+				PredictedPrice: in.OurPrice,
+				SessionActive:  false,
+			}
+			if in.Book.P10 > 0 && in.OurPrice > 0 && in.Step > 0 {
+				out.OurOverP10 = float64(in.OurPrice) / float64(in.Book.P10)
+				out.GapSteps = float64(in.Book.P10-in.OurPrice) / float64(in.Step)
+			}
+			logMarketRecoveryShadowRow(in, st, out, false)
+			if stop == "buyable_zone" || stop == "gap_closed" {
+				st.ExhaustedUntilRealChange = true
+				st.ExhaustedAtOur = in.OurPrice
+			}
+			st.RecoveryI = 0
+			st.SessionStartedAt = time.Time{}
+		}
+	}
+}
+
 // runMarketRecoveryShadow — хук после real decision; никогда не меняет цену.
+// Live mode: только hist + лог. Shadow mode: virtual +1 step session.
 func runMarketRecoveryShadow(item string, now time.Time, ourPrice, step, held, buys, sales int, winnerAction string, manualLock bool) {
 	book := ahBookMarketRecoveryStats(item, now.Add(-marketRecoveryBookWindow))
-	evaluateMarketRecoveryShadow(marketRecoveryEvalIn{
+	in := marketRecoveryEvalIn{
 		Item:         item,
 		Now:          now,
 		OurPrice:     ourPrice,
@@ -533,7 +653,12 @@ func runMarketRecoveryShadow(item string, now time.Time, ourPrice, step, held, b
 		WinnerAction: winnerAction,
 		ManualLock:   manualLock,
 		Book:         book,
-	})
+	}
+	if marketRecoveryLiveEnabled {
+		marketRecoveryCommitAfterLive(in)
+		return
+	}
+	evaluateMarketRecoveryShadow(in)
 }
 
 // resetMarketRecoveryShadowStateForTest — только тесты.

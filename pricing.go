@@ -939,7 +939,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_ah_book":
 		return "corridor_v8p: селл < min(ah_book)+наценка, held>0, sales>buys → ≤+N×step к книге"
 	case "corridor_price_up_market_recovery", "corridor_price_up_market_recovery_shadow":
-		return "shadow: B_price_trap — held=buys=sales=0, our≪p10 (60m book) → virtual +1 step (не winner)"
+		return "corridor_v8s+mr: B_price_trap held=buys=sales=0, our≪p10 (60m) → +1 step (не к p10)"
 	case "corridor_price_up_empty_book":
 		return "corridor_v8r: held=0 и глубокая книга выше нас ≥2 step → +1 step к рынку"
 	case "corridor_price_down_ah_book":
@@ -1545,10 +1545,12 @@ func adjustPrice(item string) AdjustReport {
 	dumpZone := totalHeld >= targetDump
 	alreadyDown := strings.Contains(action, "price_down")
 	bookSince := now.Add(-ahBookRaiseWindow)
+	mrBookSince := now.Add(-marketRecoveryBookWindow)
 	// sqlite книги — вне mutex.Lock (иначе WS/sales клинят на ah_book + mlDBMu).
 	mutex.Unlock()
 	minAsk, bookN, bookOK := ahBookMinSince(item, bookSince)
 	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
+	mrBook := ahBookMarketRecoveryStats(item, mrBookSince)
 	raiseFromBook := bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, sales, buys, totalHeld, dumpZone, alreadyDown, buys > 0)
 	raiseEmptyFromBook := bookOK && p10OK && shouldRaiseEmptyFromAhBook(priceBefore, p10, minAsk, nacenka, minInt(bookN, p10N), step, totalHeld, buys, alreadyDown, dumpZone)
 	var raiseTgt int
@@ -1591,8 +1593,26 @@ func adjustPrice(item string) AdjustReport {
 		}
 	}
 
-	// После set_min: только ↑. После set_max: только ↓. Окно = AnalysisTime.
+	// B_price_trap live recovery: +1 step, без p10+nacenka, без прыжка к p10.
+	// Не пересекается с уже выбранным ↑/↓ этого цикла.
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
+	manualLock := blockUp || blockDown
+	alreadyUp := strings.Contains(action, "price_up")
+	alreadyDown = strings.Contains(action, "price_down")
+	if marketRecoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock &&
+		marketRecoveryLiveShouldRaise(item, priceBefore, step, totalHeld, buys, sales, mrBook, manualLock) {
+		tgt := priceBefore + step
+		if tgt > newPrice {
+			newPrice = tgt
+			action = marketRecoveryActionLive
+			changed = true
+			notes = append(notes, fmt.Sprintf(
+				"market_recovery B_price_trap: held=buys=sales=0 our=%d p10_60m=%d sellers=%d uuid=%d → +1 step → %d",
+				priceBefore, mrBook.P10, mrBook.NSell, mrBook.NUUID, tgt))
+		}
+	}
+
+	// После set_min: только ↑. После set_max: только ↓. Окно = AnalysisTime.
 	if blockDown && newPrice < priceBefore {
 		notes = append(notes, "manual min → ↓ запрещён")
 		newPrice = priceBefore

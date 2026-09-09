@@ -195,6 +195,90 @@ func TestEvaluateMarketRecoveryNoPriceMutation(t *testing.T) {
 	}
 }
 
+func TestMarketRecoveryLiveShouldRaise(t *testing.T) {
+	resetMarketRecoveryShadowStateForTest()
+	bookTrap := ahBookMarketRecoverySnap{MinAsk: 1_800_000, P10: 2_000_000, NSell: 20, NUUID: 40, OK: true}
+	// deep trap: our=1kk, p10=2kk
+	if !marketRecoveryLiveShouldRaise("LIVE_TRAP", 1_000_000, 100_000, 0, 0, 0, bookTrap, false) {
+		t.Fatal("1kk vs 2kk empty should raise")
+	}
+	// normal SKU near market
+	bookNear := ahBookMarketRecoverySnap{MinAsk: 1_900_000, P10: 2_000_000, NSell: 20, NUUID: 40, OK: true}
+	if marketRecoveryLiveShouldRaise("LIVE_NEAR", 1_900_000, 100_000, 0, 0, 0, bookNear, false) {
+		t.Fatal("near p10 should NOT raise")
+	}
+	// held>0 — ordinary SKU
+	if marketRecoveryLiveShouldRaise("LIVE_HELD", 1_000_000, 100_000, 3, 0, 0, bookTrap, false) {
+		t.Fatal("held>0 should NOT raise")
+	}
+	// buys/sales
+	if marketRecoveryLiveShouldRaise("LIVE_BUY", 1_000_000, 100_000, 0, 1, 0, bookTrap, false) {
+		t.Fatal("buys>0 should NOT raise")
+	}
+	if marketRecoveryLiveShouldRaise("LIVE_SALE", 1_000_000, 100_000, 0, 0, 1, bookTrap, false) {
+		t.Fatal("sales>0 should NOT raise")
+	}
+	// thin book — dead/idle
+	thin := ahBookMarketRecoverySnap{MinAsk: 1_800_000, P10: 2_000_000, NSell: 5, NUUID: 10, OK: true}
+	if marketRecoveryLiveShouldRaise("LIVE_THIN", 1_000_000, 100_000, 0, 0, 0, thin, false) {
+		t.Fatal("thin book should NOT raise")
+	}
+	// manual lock
+	if marketRecoveryLiveShouldRaise("LIVE_LOCK", 1_000_000, 100_000, 0, 0, 0, bookTrap, true) {
+		t.Fatal("manual lock should NOT raise")
+	}
+	// already buyable zone
+	if marketRecoveryLiveShouldRaise("LIVE_BUYABLE", 1_700_000, 100_000, 0, 0, 0, bookTrap, false) {
+		t.Fatal("our>=0.85*p10 should NOT raise")
+	}
+}
+
+func TestMarketRecoveryLiveOnlyFullConditions(t *testing.T) {
+	resetMarketRecoveryShadowStateForTest()
+	// seed prior activity → C_sold_out
+	mrShadowMu.Lock()
+	st := mrShadowGet("SOLD_OUT")
+	st.PriorHeld = []int{4, 2, 0}
+	st.PriorBuys = []int{0, 0, 0}
+	st.PriorSales = []int{3, 1, 0}
+	mrShadowMu.Unlock()
+	book := ahBookMarketRecoverySnap{MinAsk: 1_800_000, P10: 2_000_000, NSell: 20, NUUID: 40, OK: true}
+	if marketRecoveryLiveShouldRaise("SOLD_OUT", 1_000_000, 100_000, 0, 0, 0, book, false) {
+		t.Fatal("prior held/sales → not B")
+	}
+	// seed recent price_down
+	resetMarketRecoveryShadowStateForTest()
+	mrShadowMu.Lock()
+	st2 := mrShadowGet("AFTER_DOWN")
+	st2.RecentActions = []string{"corridor_hold_dead", "corridor_price_down_soft", "corridor_hold_dead"}
+	mrShadowMu.Unlock()
+	if marketRecoveryLiveShouldRaise("AFTER_DOWN", 1_000_000, 100_000, 0, 0, 0, book, false) {
+		t.Fatal("recent price_down → not raise")
+	}
+}
+
+func TestMarketRecoveryLiveCommitNoPriceMutation(t *testing.T) {
+	resetMarketRecoveryShadowStateForTest()
+	old := mlDB
+	mlDB = nil
+	defer func() { mlDB = old }()
+	price := 1_000_000
+	in := marketRecoveryEvalIn{
+		Item: "COMMIT", Now: time.Now(), OurPrice: price, Step: 100_000,
+		WinnerAction: marketRecoveryActionLive,
+		Book:         ahBookMarketRecoverySnap{MinAsk: 1_800_000, P10: 2_000_000, NSell: 20, NUUID: 40, OK: true},
+	}
+	marketRecoveryCommitAfterLive(in)
+	if in.OurPrice != price {
+		t.Fatal("commit must not mutate OurPrice")
+	}
+	// next peek at same price after buyable exhaust from commit? 1kk/2kk still trap
+	// RecoveryI was incremented; still should raise if not exhausted
+	if !marketRecoveryLiveShouldRaise("COMMIT", price, 100_000, 0, 0, 0, in.Book, false) {
+		t.Fatal("still in trap should allow another cycle raise")
+	}
+}
+
 func TestEvaluateStopsOnTrustLostAndManual(t *testing.T) {
 	resetMarketRecoveryShadowStateForTest()
 	old := mlDB
