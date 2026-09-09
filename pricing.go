@@ -16,6 +16,8 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8s — v8r + up_skim выключен (→ hold_skim_disabled): matched HOLD
+// стабильно лучше skim-↑; KEEP-подрежимов нет. up_paid / demand / recover / ↓ не трогаем.
 // stock_corridor_v8r — v8q + held=0 может быть bullish: если глубокая книга AH выше нас,
 // поднимаем медленно по 1 step (empty_book), а не ждём sale-подтверждение.
 // stock_corridor_v8q — v8p + не пилить каталог при held=0 (stale/empty_fair/overcap):
@@ -66,7 +68,8 @@ const (
 	corridorHardDownStepMult   = 2 // over/dump: −step×2
 	tryUpVetoMinTries          = 5
 	tryUpVetoPerSale           = 2
-	corridorSkimMinLead        = 3 // skim только если sales ≥ buys+lead (анти-ложный probe)
+	corridorSkimMinLead        = 3 // legacy порог lead; сам skim-↑ выключен (v8s)
+	corridorSkimEnabled        = false // v8s: up_skim → HOLD (baggage vs matched HOLD)
 	// recover-↑: только при цене << paid и sales≥1; без buys — короткая страховка.
 	corridorMaxNoBuyUps       = 2 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
 	corridorRecoverProbeSteps = 1 // recover ≤ max(sell в TTL) + K×step
@@ -926,7 +929,9 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
 		return "corridor_v8p: недобор + цена << paid + sales≥1 → recover ≤ max(sell)+K×step"
 	case "corridor_price_up_skim":
-		return "corridor_v8o: held в полосе + sales≥buys+lead → +цена (probe прибыли)"
+		return "corridor_v8o(legacy): held в полосе + sales≥buys+lead → +цена (выкл в v8s)"
+	case "corridor_hold_skim_disabled":
+		return "corridor_v8s: сигнал skim был, но up_skim выключен → hold (matched HOLD лучше ↑)"
 	case "corridor_price_down_skim_revert":
 		return "corridor_v8o: после ↑ try/buy показывают отказ → soft-↓ в полосе"
 	case "corridor_price_up_floor":
@@ -1518,9 +1523,17 @@ func adjustPrice(item string) AdjustReport {
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] sales=%d buys=%d last=%d lead<%d — нет сигнала skim",
 				totalHeld, targetLo, targetHi, sales, buys, prevCycleSales, corridorSkimMinLead))
 		case skimOK:
-			applyUp("corridor_price_up_skim",
-				fmt.Sprintf("held=%d в [%d,%d] sales=%d ≥ buys=%d+%d last=%d — skim-↑ (probe прибыли)",
+			if corridorSkimEnabled {
+				applyUp("corridor_price_up_skim",
+					fmt.Sprintf("held=%d в [%d,%d] sales=%d ≥ buys=%d+%d last=%d — skim-↑ (probe прибыли)",
+						totalHeld, targetLo, targetHi, sales, buys, corridorSkimMinLead, prevCycleSales))
+			} else {
+				// v8s: исторически up_skim ≪ matched HOLD; не подбираем новый порог.
+				action = "corridor_hold_skim_disabled"
+				notes = append(notes, fmt.Sprintf(
+					"held=%d в [%d,%d] sales=%d ≥ buys=%d+%d last=%d — был бы skim-↑, v8s hold",
 					totalHeld, targetLo, targetHi, sales, buys, corridorSkimMinLead, prevCycleSales))
+			}
 		default:
 			action = "corridor_hold_band"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] share=%d", totalHeld, targetLo, targetHi, share))

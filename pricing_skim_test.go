@@ -2,8 +2,14 @@ package main
 
 import "testing"
 
+func TestCorridorSkimDisabledInV8s(t *testing.T) {
+	if corridorSkimEnabled {
+		t.Fatal("v8s: corridorSkimEnabled must be false (up_skim → hold_skim_disabled)")
+	}
+}
+
 func TestSkimSalesLeadOK(t *testing.T) {
-	// Сегодняшний кейс 12 vs 7 — lead=5 ≥ 3 → skim ещё возможен.
+	// Сегодняшний кейс 12 vs 7 — lead=5 ≥ 3 → сигнал lead ещё детектится (для veto/логов).
 	if !skimSalesLeadOK(12, 7) {
 		t.Fatal("12≥7+3 must allow skim")
 	}
