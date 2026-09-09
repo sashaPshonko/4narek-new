@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -78,5 +80,22 @@ func TestGhostPriceDownOK(t *testing.T) {
 	}
 	if !ghostPriceDownOK(5, 2, 8) {
 		t.Fatal("trySellsBlockUp — ghost-↓ OK")
+	}
+	if !isGhostCatalogDown("corridor_price_down_stale") || !isGhostCatalogDown("corridor_price_down_empty_fair") {
+		t.Fatal("ghost labels")
+	}
+	if isGhostCatalogDown("corridor_price_down_soft") {
+		t.Fatal("soft overstock is not ghost-↓")
+	}
+}
+
+// Гарантия: empty_fair больше нигде не вызывается через applyDown.
+func TestNoEmptyFairApplyDownInSource(t *testing.T) {
+	b, err := os.ReadFile("pricing.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `applyDown("corridor_price_down_empty_fair"`) {
+		t.Fatal("corridor_price_down_empty_fair must not be applied")
 	}
 }

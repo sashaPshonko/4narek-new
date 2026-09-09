@@ -133,12 +133,25 @@ func TestShouldSoftDownFromAhBook(t *testing.T) {
 	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, true, held) {
 		t.Fatal("были покупки при held>0 — не снижаем")
 	}
-	// held=0: тонкая книга + buys не блок
-	if !shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, ahBookMinLotsWhenEmpty, step, false, true, 0) {
-		t.Fatal("пусто + buys — всё равно soft-↓")
+	// v8q: held=0 тоже только при полной книге (≥40), тонкая ночная больше не сливает
+	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, ahBookMinLotsWhenEmpty, step, false, true, 0) {
+		t.Fatal("пусто + тонкая книга — soft-↓ запрещён")
 	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, ahBookMinLotsWhenEmpty-1, step, false, false, 0) {
-		t.Fatal("пусто, но книга ещё тоньше порога")
+	if !shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, true, 0) {
+		t.Fatal("пусто + полная книга + buys — soft-↓ можно (выше рынка)")
+	}
+}
+
+func TestAhBookSoftDownApplyEmptyCap(t *testing.T) {
+	step := 100_000
+	floor := 400_000
+	// пусто: 3.5M → цель 1.0M, но за цикл только −2 step
+	if got := ahBookSoftDownApply(3_500_000, 1_000_000, floor, step, 0); got != 3_300_000 {
+		t.Fatalf("empty cap: got %d", got)
+	}
+	// со стоком — полный таргет
+	if got := ahBookSoftDownApply(3_500_000, 2_400_000, floor, step, 5); got != 2_400_000 {
+		t.Fatalf("with stock: got %d", got)
 	}
 }
 

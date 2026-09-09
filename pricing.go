@@ -18,6 +18,7 @@ const botTotalSlots = 32
 
 // stock_corridor_v8q — v8p + не пилить каталог при held=0 (stale/empty_fair/overcap):
 // ↓ с призрака только если есть сток и try показывает отказ; пусто ≠ «дорого».
+// ah_book soft-↓: всегда ≥40 uuid; на пустом стоке не больше −N×step за цикл.
 // stock_corridor_v8p — v8o + ah_book-↑ только при живом разборе/held>0 + cap шагов;
 // recover-↑ только при sales≥1; deep-bypass только sales>buys; probe×1.
 // stock_corridor_v8o — v8n + skim lead sales≥buys+3, жёстче try-veto для skim,
@@ -74,7 +75,7 @@ const (
 	corridorMinBandSpan      = 4 // hi−lo; share=21 иначе полоса 4–5 шт. (позор не трогаем)
 	ahBookRaiseWindow         = 10 * time.Minute // окно книги = типичный AnalysisTime цикл
 	ahBookMinLotsInWindow     = 40               // уникальных uuid за цикл; меньше — скан тонкий, min/↑/↓ не считаем
-	ahBookMinLotsWhenEmpty    = 12               // held=0: soft-↓ по более тонкой книге (меч иначе залипал на 3.8M)
+	ahBookMinLotsWhenEmpty    = 12               // deprecated v8q: soft-↓ всегда ahBookMinLotsInWindow
 	ahBookSoftDownSlackSteps  = 2                // soft-↓ только если sell > p10+наценка+2×step (мёртвая зона)
 	ahBookMaxRaiseSteps       = 2                // ah_book-↑ не прыгает к min+наценка за цикл (0.84→2.4)
 	serverBoundLookCycles = 3 // окно закупок для set_min
@@ -402,6 +403,15 @@ func ghostPriceDownOK(held, sales, trySells int) bool {
 		return false
 	}
 	return trySellsBlockUp(sales, trySells) || trySells >= tryUpVetoMinTries
+}
+
+func isGhostCatalogDown(label string) bool {
+	switch label {
+	case "corridor_price_down_stale", "corridor_price_down_overcap", "corridor_price_down_empty_fair":
+		return true
+	default:
+		return false
+	}
 }
 
 // serverFunTimeRaiseAnomalous — set_min: не поднимать каталог.
@@ -772,13 +782,9 @@ func shouldRaiseFromAhBook(sell, minAsk, nacenka, n, sales, buys, held int, dump
 
 // shouldSoftDownFromAhBook — селл явно выше p10+наценка и выше min+наценка; ↑ цикла не трогаем.
 // Триггер с люфтом 2×step; цель не ниже min+наценка (p10 может быть занижен дампами).
-// held=0: достаточно тонкой книги; buys не блокируют (иначе призрак 3.8M пока докупаем).
+// v8q: всегда ≥40 uuid (тонкая книга на held=0 больше не сливает каталог ночью).
 func shouldSoftDownFromAhBook(sell, p10, minAsk, nacenka, n, step int, alreadyUp, hadBuys bool, held int) bool {
-	minLots := ahBookMinLotsInWindow
-	if held <= 0 {
-		minLots = ahBookMinLotsWhenEmpty
-	}
-	if n < minLots || p10 <= 0 || minAsk <= 0 || alreadyUp {
+	if n < ahBookMinLotsInWindow || p10 <= 0 || minAsk <= 0 || alreadyUp {
 		return false
 	}
 	if hadBuys && held > 0 {
@@ -792,6 +798,30 @@ func shouldSoftDownFromAhBook(sell, p10, minAsk, nacenka, n, step int, alreadyUp
 		return sell > p10+nacenka
 	}
 	return sell > p10+nacenka+ahBookSoftDownSlackSteps*step
+}
+
+// ahBookSoftDownApply — цель книги; при held=0 не больше −N×step за цикл (анти-пила пустого).
+func ahBookSoftDownApply(sell, softDownTgt, priceFloor, step, held int) int {
+	if softDownTgt <= 0 || softDownTgt >= sell {
+		return sell
+	}
+	tgt := softDownTgt
+	if tgt < priceFloor {
+		tgt = priceFloor
+	}
+	if held <= 0 && step > 0 && ahBookMaxRaiseSteps > 0 {
+		cap := sell - ahBookMaxRaiseSteps*step
+		if cap < priceFloor {
+			cap = priceFloor
+		}
+		if tgt < cap {
+			tgt = cap
+		}
+	}
+	if tgt >= sell {
+		return sell
+	}
+	return tgt
 }
 
 // countItemsInCategoryLocked — сколько id в items_config с данным go-типом. Только под mutex.Lock.
@@ -869,7 +899,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_ah_book":
 		return "corridor_v8p: селл < min(ah_book)+наценка, held>0, sales>buys → ≤+N×step к книге"
 	case "corridor_price_down_ah_book":
-		return "corridor_v8l/v8n: селл > p10+наценка → soft-↓ (пусто: тонкая книга OK)"
+		return "corridor_v8q: селл > p10+наценка, ≥40 uuid; held=0 → ≤−N×step/цикл"
 	case "corridor_price_down_overcap":
 		return "corridor_v8q: недобор + сток + try-отказ + цена ≥ paid+K×step → soft-↓"
 	case "corridor_price_down_stale":
@@ -1202,6 +1232,14 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	applyDown := func(label, note string, stepMult int) {
+		// v8q belt: stale/overcap/empty_fair никогда не пилят пустой каталог.
+		if isGhostCatalogDown(label) && !ghostPriceDownOK(totalHeld, sales, trySells) {
+			notes = append(notes, note+" · blocked ghost-↓ (нужен held+try-отказ)")
+			if action == "" || action == "hold" {
+				action = "corridor_hold_recover_stale"
+			}
+			return
+		}
 		if stepMult < 1 {
 			stepMult = 1
 		}
@@ -1478,20 +1516,17 @@ func adjustPrice(item string) AdjustReport {
 			minAsk, bookN, priceBefore, minAsk+nacenka, raiseTgt, ahBookMaxRaiseSteps))
 	}
 	if softDownFromBook && softDownTgt > 0 && softDownTgt < newPrice {
-		tgt := softDownTgt
-		if tgt < priceFloor {
-			tgt = priceFloor
-		}
 		bookFloor := minAsk + nacenka
-		if tgt < bookFloor {
-			tgt = bookFloor
+		if softDownTgt < bookFloor {
+			softDownTgt = bookFloor
 		}
+		tgt := ahBookSoftDownApply(newPrice, softDownTgt, priceFloor, step, totalHeld)
 		if tgt < newPrice {
 			newPrice = tgt
 			action = "corridor_price_down_ah_book"
 			changed = true
-			notes = append(notes, fmt.Sprintf("ah_book p10=%d min=%d n=%d → селл %d → %d (пол min+наценка=%d)",
-				p10, minAsk, p10N, priceBefore, tgt, bookFloor))
+			notes = append(notes, fmt.Sprintf("ah_book p10=%d min=%d n=%d → селл %d → %d (пол min+наценка=%d held=%d)",
+				p10, minAsk, p10N, priceBefore, tgt, bookFloor, totalHeld))
 		}
 	}
 
