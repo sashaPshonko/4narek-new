@@ -412,6 +412,86 @@ func ahBookMarketRecoveryStats(itemID string, since time.Time) ahBookMarketRecov
 	return out
 }
 
+// ahBookTrustedSellerMinSnap — sell-side min по независимым продавцам (не uuid-flood).
+// На продавца берём его самый дешёвый лот; витрины (bans) и флот уже отфильтрованы на insert/ban.
+// Не использует nacenka. Не меняет ahBookMinSince / 10m raise logic.
+type ahBookTrustedSellerMinSnap struct {
+	TrustedMin       int // min среди per-seller mins
+	UniqueSellers    int
+	SellersNearMin   int // sellers with min <= TrustedMin + nearSlack
+	NUUID            int // informational
+	OK               bool
+}
+
+// ahBookTrustedSellerMin — книга за since…now: per-seller min → global min + trust counts.
+func ahBookTrustedSellerMin(itemID string, since time.Time, nearSlackSteps, step int) ahBookTrustedSellerMinSnap {
+	var out ahBookTrustedSellerMinSnap
+	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
+		return out
+	}
+	mlDBMu.Lock()
+	rows, err := mlDB.Query(
+		`SELECT a.price, lower(trim(coalesce(a.seller,''))), a.uuid,
+			EXISTS(
+				SELECT 1 FROM ah_book_seller_bans b
+				WHERE b.seller = lower(trim(a.seller))
+			) AS banned
+		 FROM ah_book_lots a
+		 WHERE a.item_id = ? AND a.ts >= ? AND a.price > 0`,
+		itemID, since.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		mlDBMu.Unlock()
+		log.Printf("[ah_book] trusted seller min: %v", err)
+		return out
+	}
+	bySeller := map[string]int{}
+	uuids := map[string]struct{}{}
+	for rows.Next() {
+		var price int
+		var seller, uuid string
+		var banned bool
+		if err := rows.Scan(&price, &seller, &uuid, &banned); err != nil || price <= 0 {
+			continue
+		}
+		if banned || seller == "" {
+			continue
+		}
+		if prev, ok := bySeller[seller]; !ok || price < prev {
+			bySeller[seller] = price
+		}
+		if uuid != "" {
+			uuids[uuid] = struct{}{}
+		}
+	}
+	_ = rows.Close()
+	mlDBMu.Unlock()
+
+	out.UniqueSellers = len(bySeller)
+	out.NUUID = len(uuids)
+	if out.UniqueSellers == 0 {
+		return out
+	}
+	minAsk := 0
+	for _, p := range bySeller {
+		if minAsk == 0 || p < minAsk {
+			minAsk = p
+		}
+	}
+	out.TrustedMin = minAsk
+	near := minAsk
+	if step > 0 && nearSlackSteps > 0 {
+		near = minAsk + nearSlackSteps*step
+	}
+	for _, p := range bySeller {
+		if p <= near {
+			out.SellersNearMin++
+		}
+	}
+	out.OK = out.TrustedMin > 0
+	return out
+}
+
 // ahBookMinSince — min(price) по уникальным uuid SKU с ts≥since, без забаненных витрин.
 // n = COUNT(DISTINCT uuid); ok только при n ≥ ahBookMinLotsInWindow.
 func ahBookMinSince(itemID string, since time.Time) (minPrice, n int, ok bool) {

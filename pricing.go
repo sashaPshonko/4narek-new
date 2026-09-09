@@ -940,6 +940,8 @@ func actionReasonRU(action string) string {
 		return "corridor_v8p: селл < min(ah_book)+наценка, held>0, sales>buys → ≤+N×step к книге"
 	case "corridor_price_up_market_recovery", "corridor_price_up_market_recovery_shadow":
 		return "corridor_v8s+mr: B_price_trap held=buys=sales=0, our≪p10 (60m) → +1 step (не к p10)"
+	case "corridor_price_up_trusted_ah_min", "corridor_price_up_trusted_ah_min_shadow":
+		return "corridor_v8s+tm: held=0 buys=0, our≪trusted_AH_min (sellers≥15 near≥3) → jump to min (без nacenka)"
 	case "corridor_price_up_empty_book":
 		return "corridor_v8r: held=0 и глубокая книга выше нас ≥2 step → +1 step к рынку"
 	case "corridor_price_down_ah_book":
@@ -1551,6 +1553,7 @@ func adjustPrice(item string) AdjustReport {
 	minAsk, bookN, bookOK := ahBookMinSince(item, bookSince)
 	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
 	mrBook := ahBookMarketRecoveryStats(item, mrBookSince)
+	tmBook := ahBookTrustedSellerMin(item, bookSince, trustedMinDiscoveryNearSteps, step)
 	raiseFromBook := bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, sales, buys, totalHeld, dumpZone, alreadyDown, buys > 0)
 	raiseEmptyFromBook := bookOK && p10OK && shouldRaiseEmptyFromAhBook(priceBefore, p10, minAsk, nacenka, minInt(bookN, p10N), step, totalHeld, buys, alreadyDown, dumpZone)
 	var raiseTgt int
@@ -1593,10 +1596,25 @@ func adjustPrice(item string) AdjustReport {
 		}
 	}
 
-	// B_price_trap live recovery: +1 step, без p10+nacenka, без прыжка к p10.
-	// Не пересекается с уже выбранным ↑/↓ этого цикла.
+	// Trusted AH-min jump (production test): held=0 buys=0 + deep gap → price = trusted_AH_min.
+	// Без p10/nacenka/κ. Только ↑. Перед market_recovery, чтобы +1 не конкурировал в том же цикле.
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
 	manualLock := blockUp || blockDown
+	alreadyDown = strings.Contains(action, "price_down")
+	if trustedMinDiscoveryLiveEnabled && !alreadyDown && !manualLock {
+		tmEv := evalTrustedMinDiscovery(priceBefore, step, totalHeld, buys, tmBook, manualLock)
+		if tmEv.WouldFire && tmEv.WouldPrice > newPrice {
+			newPrice = tmEv.WouldPrice
+			action = trustedMinDiscoveryActionLive
+			changed = true
+			notes = append(notes, fmt.Sprintf(
+				"trusted_ah_min: held=0 buys=0 our=%d → min=%d sellers=%d near=%d gap_steps=%.1f gap_pct=%.1f",
+				priceBefore, tmEv.TrustedMin, tmEv.UniqueSellers, tmEv.SellersNearMin, tmEv.GapSteps, tmEv.GapPct))
+		}
+	}
+
+	// B_price_trap live recovery: +1 step, без p10+nacenka, без прыжка к p10.
+	// Не пересекается с уже выбранным ↑/↓ этого цикла (в т.ч. trusted_ah_min).
 	alreadyUp := strings.Contains(action, "price_up")
 	alreadyDown = strings.Contains(action, "price_down")
 	if marketRecoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock &&
@@ -1852,6 +1870,8 @@ func adjustPrice(item string) AdjustReport {
 	runMarketRecoveryShadow(item, now, newPrice, step, totalHeld, buys, sales, actionTaken, blockUp || blockDown)
 	// Shadow-only LEVEL1 cap1/3/5 comparison on same episodes — не меняет цену.
 	runCappedDiscoveryShadow(item, now, newPrice, step, totalHeld, buys, sales, trySells, actionTaken, blockUp || blockDown)
+	// Diagnostic log for trusted-min (live winner may already be corridor_price_up_trusted_ah_min).
+	runTrustedMinDiscoveryShadow(item, now, priceBefore, step, totalHeld, buys, sales, actionTaken, blockUp || blockDown)
 
 	if experimentTG != nil {
 		enqueueExperimentTelegram(*experimentTG)
