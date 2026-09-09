@@ -117,11 +117,25 @@
       padding: 20px; background: rgba(12,18,34,.48);
     }
     .modal[hidden] { display: none; }
+    .section-title.fold-title {
+      cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;
+    }
+    .section-title.fold-title .chev { display: inline-block; transition: transform .15s; font-size: 14px; color: var(--muted); }
+    .section-title.fold-title.open .chev { transform: rotate(90deg); }
+    #checks.collapsed .fold-body { display: none; }
+    #checks .lede { margin-top: -4px; margin-bottom: 10px; font-size: 14px; }
     .modal-card {
-      width: min(560px, 100%); max-height: 82vh; overflow: auto;
+      width: min(560px, 100%); max-height: 70vh; overflow: auto;
       background: var(--surface); border-radius: 16px; padding: 16px 18px 18px;
       box-shadow: 0 24px 60px rgba(12,18,34,.2); border: 1px solid var(--line);
     }
+    #checkReason { max-height: 7.5em; overflow: auto; }
+    .chat-log { display: flex; flex-direction: column; gap: 8px; max-height: 36vh; overflow: auto; }
+    .chat-line {
+      background: #f6f7fa; border-radius: 12px; padding: 8px 12px;
+      font-size: 13px; line-height: 1.4;
+    }
+    .chat-line .who { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 2px; }
     .modal-card header {
       display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px;
     }
@@ -147,11 +161,6 @@
     .pill.staff_check { background: #efe8ff; color: #5b3cc4; }
     .pill.live { background: #efe8ff; color: #5b3cc4; }
     .pill.done { background: #e8edf5; color: var(--muted); }
-    .chat-log { display: flex; flex-direction: column; gap: 8px; }
-    .chat-line {
-      background: #f6f7fa; border-radius: 12px; padding: 8px 12px;
-      font-size: 13px; line-height: 1.4;
-    }
     .chat-line .who { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 2px; }
     .check-open { cursor: pointer; }
     .ban-tag { margin-left: 6px; vertical-align: middle; }
@@ -185,9 +194,11 @@
     <h2 class="section-title">Сломанные боты</h2>
     <p class="lede" style="margin-top:-4px;margin-bottom:10px;font-size:14px">Неверный пароль или ошибка прокси — оркестратор не рестартит, пока не починишь.</p>
     <div id="faults"></div>
-    <h2 class="section-title">Проверки</h2>
-    <p class="lede" style="margin-top:-4px;margin-bottom:10px;font-size:14px">Кого вызвали на SS. Чат с AnyDesk — клик по строке.</p>
-    <div id="checks"></div>
+    <h2 class="section-title fold-title" id="checksTitle" data-fold="checks"><span class="chev">▸</span> Проверки</h2>
+    <div id="checks" class="collapsed">
+      <p class="lede fold-body">Кого вызвали на SS. Чат с AnyDesk — клик по строке.</p>
+      <div class="fold-body" id="checksList"></div>
+    </div>
     <h2 class="section-title">Баны ботов</h2>
     <div id="list"></div>
   </div>
@@ -214,6 +225,15 @@
     const $ = (id) => document.getElementById(id);
     let lastOverview = null;
     const seenBanKeys = new Set(JSON.parse(localStorage.getItem("fleetSeenBans") || "[]"));
+    let checksOpen = localStorage.getItem("fleetChecksOpen") === "1";
+
+    function applyChecksFold() {
+      const box = $("checks");
+      const title = $("checksTitle");
+      if (!box || !title) return;
+      box.classList.toggle("collapsed", !checksOpen);
+      title.classList.toggle("open", checksOpen);
+    }
 
     document.querySelectorAll(".nav a").forEach((a) => {
       if (location.pathname.startsWith("/" + a.dataset.nav)) a.classList.add("active");
@@ -462,7 +482,7 @@
           </section>`;
         }
 
-        const checksEl = $("checks");
+        const checksEl = $("checksList");
         const checks = data.staff_checks || [];
         if (!checks.length) {
           checksEl.innerHTML = `<div class="anarchy"><div class="empty">Пока никого не вызывали на проверку.</div></div>`;
@@ -489,6 +509,7 @@
             </table>
           </section>`;
         }
+        applyChecksFold();
 
         const list = $("list");
         if (!data.total_banned) {
@@ -528,6 +549,13 @@
       }
     }
     document.addEventListener("click", (e) => {
+      const fold = e.target.closest("[data-fold=checks]");
+      if (fold) {
+        checksOpen = !checksOpen;
+        localStorage.setItem("fleetChecksOpen", checksOpen ? "1" : "0");
+        applyChecksFold();
+        return;
+      }
       const checkRow = e.target.closest("[data-check-id]");
       if (checkRow && !e.target.closest(".reason-open")) {
         openCheck(checkRow.getAttribute("data-check-id"));
@@ -548,6 +576,7 @@
       }
     });
     load();
+    applyChecksFold();
     setInterval(load, 5000);
   </script>
 </body>

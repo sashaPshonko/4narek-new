@@ -281,6 +281,9 @@ func ingestBannedBotsFromPresence(raw []bannedBotView) {
 		}
 		key := banUserKey(u)
 		b.Username = u
+		if nickWasCalledToCheck(u) {
+			b.Kind = "staff_check"
+		}
 		prev := persistedBannedBots[key]
 		persistedBannedBots[key] = mergeBannedBotView(prev, b)
 		if reasonIsChatBan(firstNonEmpty(b.Reason, prev.Reason)) {

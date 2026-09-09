@@ -120,3 +120,30 @@ func TestStaffDeskHTTP(t *testing.T) {
 		t.Fatalf("http nick missing in %+v", body.StaffChecks)
 	}
 }
+
+func TestBanTaggedAfterStaffCheck(t *testing.T) {
+	staffDeskPersistPath = t.TempDir() + "/staff_desk.json"
+	staffDeskMu.Lock()
+	staffChecksMem = nil
+	deskChatsMem = nil
+	staffDeskMu.Unlock()
+	t.Cleanup(func() {
+		staffDeskMu.Lock()
+		staffChecksMem = nil
+		deskChatsMem = nil
+		staffDeskMu.Unlock()
+	})
+
+	ingestStaffCheck("plotinaQ", 506, "вызваны на проверку читов")
+	bans := []bannedBotView{
+		{Username: "plotinaQ", Anarchy: 506, Reason: "Вы забанены [FunAC] 4.3"},
+		{Username: "otherNick", Anarchy: 502, Reason: "Вы забанены"},
+	}
+	tagBansFromStaffChecks(bans)
+	if bans[0].Kind != "staff_check" {
+		t.Fatalf("plotinaQ kind=%q", bans[0].Kind)
+	}
+	if bans[1].Kind != "" {
+		t.Fatalf("otherNick should stay untagged, kind=%q", bans[1].Kind)
+	}
+}

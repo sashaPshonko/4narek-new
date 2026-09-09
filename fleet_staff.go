@@ -221,6 +221,29 @@ func ingestDeskChat(username, from, text string, anarchy any) {
 	saveStaffDesk()
 }
 
+func nickWasCalledToCheck(username string) bool {
+	key := strings.ToLower(strings.TrimSpace(username))
+	if key == "" {
+		return false
+	}
+	staffDeskMu.RLock()
+	defer staffDeskMu.RUnlock()
+	for _, c := range staffChecksMem {
+		if strings.ToLower(strings.TrimSpace(c.Username)) == key {
+			return true
+		}
+	}
+	return false
+}
+
+func tagBansFromStaffChecks(bans []bannedBotView) {
+	for i := range bans {
+		if nickWasCalledToCheck(bans[i].Username) {
+			bans[i].Kind = "staff_check"
+		}
+	}
+}
+
 func listStaffChecksForAPI() []staffCheckView {
 	staffDeskMu.RLock()
 	checks := append([]staffCheckView(nil), staffChecksMem...)

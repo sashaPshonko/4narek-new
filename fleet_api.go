@@ -361,6 +361,7 @@ func buildFleetOverview() fleetOverview {
 
 	running := collectRunningAnarchiesLocked()
 	visible := filterBannedForFleet(all, running, roster)
+	tagBansFromStaffChecks(visible)
 	anarchies := groupBannedByAnarchy(visible)
 
 	persistedCount := 0
