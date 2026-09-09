@@ -11,6 +11,9 @@ func TestEvalTrustedMinDiscoveryJump(t *testing.T) {
 	if ev.GapSteps < 5 {
 		t.Fatalf("gap_steps: %+v", ev)
 	}
+	if ev.GapRatio < 0.39 || ev.GapRatio > 0.41 {
+		t.Fatalf("gap_ratio want ~0.4 got %v", ev.GapRatio)
+	}
 }
 
 func TestEvalTrustedMinDiscoveryRequiresEmptyNoBuys(t *testing.T) {
@@ -32,26 +35,20 @@ func TestEvalTrustedMinDiscoveryNoLower(t *testing.T) {
 }
 
 func TestEvalTrustedMinDiscoveryShallowGapNoJump(t *testing.T) {
-	// 119→120 style: trust OK but not deep (ratio>0.80 and <4 steps)
 	book := ahBookTrustedSellerMinSnap{TrustedMin: 120_000, UniqueSellers: 20, SellersNearMin: 5, OK: true}
 	ev := evalTrustedMinDiscovery(119_000, 1_000, 0, 0, book, false)
 	if ev.WouldFire || ev.SkipReason != "gap_too_small" {
-		// 120 > 119+1000? No → gap_too_small
 		t.Fatalf("shallow 119→120: %+v", ev)
 	}
 	book2 := ahBookTrustedSellerMinSnap{TrustedMin: 350_000, UniqueSellers: 20, SellersNearMin: 5, OK: true}
 	ev2 := evalTrustedMinDiscovery(300_000, 100_000, 0, 0, book2, false)
-	// min > our+step (350>400? no) wait 350 > 300+100 = 400? No
 	if ev2.WouldFire {
 		t.Fatalf("should not fire when min <= our+step: %+v", ev2)
 	}
-	// Deep enough in steps but check 3-step gap blocked by deep filter when ratio > 0.80
-	// our=700k min=1M step=100k: gap=3 steps, ratio=0.70 → fires via ratio
 	book3 := ahBookTrustedSellerMinSnap{TrustedMin: 1_000_000, UniqueSellers: 20, SellersNearMin: 5, OK: true}
 	if ev := evalTrustedMinDiscovery(700_000, 100_000, 0, 0, book3, false); !ev.WouldFire {
 		t.Fatalf("ratio 0.70 should fire: %+v", ev)
 	}
-	// our=850k min=1M step=100k: gap=1.5 steps, ratio=0.85 → not deep, but also min > our+step? 1M > 950k yes
 	book4 := ahBookTrustedSellerMinSnap{TrustedMin: 1_000_000, UniqueSellers: 20, SellersNearMin: 5, OK: true}
 	if ev := evalTrustedMinDiscovery(850_000, 100_000, 0, 0, book4, false); ev.WouldFire || ev.SkipReason != "gap_not_deep" {
 		t.Fatalf("shallow ratio+steps: %+v", ev)
@@ -89,5 +86,28 @@ func TestTrustedMinDiscoveryGapOK(t *testing.T) {
 	}
 	if trustedMinDiscoveryGapOK(900_000, 1_000_000, 100_000) {
 		t.Fatal("shallow")
+	}
+}
+
+func TestTrustedMinDiscoveryStopReasons(t *testing.T) {
+	book := ahBookTrustedSellerMinSnap{TrustedMin: 1_000_000, UniqueSellers: 20, SellersNearMin: 5, OK: true}
+	if g := trustedMinDiscoveryStopReason(0, 1, book, 1_000_000, 100_000, "hold", false); g != "buy" {
+		t.Fatalf("buy: %q", g)
+	}
+	if g := trustedMinDiscoveryStopReason(2, 0, book, 1_000_000, 100_000, "hold", false); g != "held" {
+		t.Fatalf("held: %q", g)
+	}
+	if g := trustedMinDiscoveryStopReason(0, 0, book, 1_000_000, 100_000, "hold", true); g != "manual_lock" {
+		t.Fatalf("manual: %q", g)
+	}
+	if g := trustedMinDiscoveryStopReason(0, 0, book, 1_000_000, 100_000, "corridor_price_down_soft", false); g != "price_down" {
+		t.Fatalf("down: %q", g)
+	}
+	thin := ahBookTrustedSellerMinSnap{TrustedMin: 1_000_000, UniqueSellers: 3, SellersNearMin: 1, OK: true}
+	if g := trustedMinDiscoveryStopReason(0, 0, thin, 400_000, 100_000, "hold", false); g != "trust_lost" {
+		t.Fatalf("trust: %q", g)
+	}
+	if g := trustedMinDiscoveryStopReason(0, 0, book, 1_000_000, 100_000, "hold", false); g != "gap_closed" {
+		t.Fatalf("gap_closed: %q", g)
 	}
 }

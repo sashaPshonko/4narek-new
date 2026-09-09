@@ -16,6 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8t — v8s + Level1/Level2 split (audit Sep 2026):
+//   L1: trusted_AH_min jump (held=0 buys=0 deep gap); demand/recover/paid-↑ off;
+//       try≥5 не универсальный UP-veto; up_deep оставлен; corridor 18–25% без сдвига;
+//       DOWN (soft/over/dump) и nacenka не трогаем.
 // stock_corridor_v8s — v8r + up_skim выключен (→ hold_skim_disabled): matched HOLD
 // стабильно лучше skim-↑; KEEP-подрежимов нет. up_paid / demand / recover / ↓ не трогаем.
 // stock_corridor_v8r — v8q + held=0 может быть bullish: если глубокая книга AH выше нас,
@@ -70,6 +74,10 @@ const (
 	tryUpVetoPerSale           = 2
 	corridorSkimMinLead        = 3 // legacy порог lead; сам skim-↑ выключен (v8s)
 	corridorSkimEnabled        = false // v8s: up_skim → HOLD (baggage vs matched HOLD)
+	// v8t audit: inventory UP как market discovery — отключить (кроме up_deep).
+	corridorDemandUpEnabled = false // sales>buys → up_demand off
+	corridorRecoverUpEnabled = false // up_recover / up_recover_deep off
+	corridorPaidClimbEnabled = false // up_paid (paid как market) off
 	// recover-↑: только при цене << paid и sales≥1; без buys — короткая страховка.
 	corridorMaxNoBuyUps       = 2 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
 	corridorRecoverProbeSteps = 1 // recover ≤ max(sell в TTL) + K×step
@@ -452,10 +460,14 @@ func serverMinBuyBlocksUp(item string, cycle time.Duration, now time.Time) bool 
 	return buys >= countRecentSales(item, since)
 }
 
-// trySellsBlockUp — рынок уже отказывается от цены: ↑ запрещён даже при недоборе стока.
+// trySellsBlockUp — плохая конверсия наших try_sells (не buyer demand).
+// v8t: try≥5 не универсальный бан. При sales≥2 нужен try≥3×sales (audit: try≥5&sales≥5 UP>HOLD).
 func trySellsBlockUp(sales, trySells int) bool {
 	if trySells < tryUpVetoMinTries {
 		return false
+	}
+	if sales >= 2 {
+		return trySells >= 3*sales
 	}
 	return trySells >= tryUpVetoPerSale*maxInt(sales, 1)
 }
@@ -923,15 +935,23 @@ func actionReasonRU(action string) string {
 	case "corridor_price_down_hi":
 		return "corridor_v3(legacy): held > hi → −цена"
 	case "corridor_price_up_demand":
-		return "corridor_v8: held < lo, сильный спрос (день≥3 / ночь≥4) → +цена"
+		return "corridor_v8: held < lo, сильный спрос (день≥3 / ночь≥4) → +цена (v8t: выкл)"
 	case "corridor_price_up_deep":
-		return "corridor_v8h: held=0 днём + сильный спрос → +цена (обход up_cd)"
+		return "corridor_v8h: held=0 днём + сильный спрос → +цена (обход up_cd); v8t: единственный sales>buys ↑"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
-		return "corridor_v8p: недобор + цена << paid + sales≥1 → recover ≤ max(sell)+K×step"
+		return "corridor_v8p: недобор + цена << paid + sales≥1 → recover (v8t: выкл)"
+	case "corridor_hold_demand_disabled":
+		return "corridor_v8t: был бы up_demand (sales>buys), audit matched ≪ HOLD → hold"
+	case "corridor_hold_recover_disabled":
+		return "corridor_v8t: был бы up_recover/deep, audit без устойчивого + → hold"
+	case "corridor_hold_paid_disabled":
+		return "corridor_v8t: был бы up_paid (paid≠market), audit → hold"
 	case "corridor_price_up_skim":
 		return "corridor_v8o(legacy): held в полосе + sales≥buys+lead → +цена (выкл в v8s)"
 	case "corridor_hold_skim_disabled":
 		return "corridor_v8s: сигнал skim был, но up_skim выключен → hold (matched HOLD лучше ↑)"
+	case "corridor_price_up_trusted_ah_min", "corridor_price_up_trusted_ah_min_shadow":
+		return "corridor_v8t L1: held=0 buys=0, our≪trusted_AH_min → jump to min (без nacenka)"
 	case "corridor_price_down_skim_revert":
 		return "corridor_v8o: после ↑ try/buy показывают отказ → soft-↓ в полосе"
 	case "corridor_price_up_floor":
@@ -940,8 +960,6 @@ func actionReasonRU(action string) string {
 		return "corridor_v8p: селл < min(ah_book)+наценка, held>0, sales>buys → ≤+N×step к книге"
 	case "corridor_price_up_market_recovery", "corridor_price_up_market_recovery_shadow":
 		return "corridor_v8s+mr: B_price_trap held=buys=sales=0, our≪p10 (60m) → +1 step (не к p10)"
-	case "corridor_price_up_trusted_ah_min", "corridor_price_up_trusted_ah_min_shadow":
-		return "corridor_v8s+tm: held=0 buys=0, our≪trusted_AH_min (sellers≥15 near≥3) → jump to min (без nacenka)"
 	case "corridor_price_up_empty_book":
 		return "corridor_v8r: held=0 и глубокая книга выше нас ≥2 step → +1 step к рынку"
 	case "corridor_price_down_ah_book":
@@ -1408,21 +1426,17 @@ func adjustPrice(item string) AdjustReport {
 				notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d last=%d — слабый спрос, ↑ запрещён",
 					totalHeld, targetLo, sales, prevCycleSales))
 			}
-		case sales > buys && (state.CorridorUpStreak < corridorMaxUpStreak || bypassUpCD):
-			upLabel := "corridor_price_up_demand"
-			upNote := fmt.Sprintf("held=%d < lo=%d sales=%d > buys=%d last=%d night=%v (сильный разбор витрины)",
-				totalHeld, targetLo, sales, buys, prevCycleSales, nightMSK)
-			if bypassUpCD && (state.CorridorUpCooldown > 0 || state.CorridorUpStreak >= corridorMaxUpStreak) {
-				upLabel = "corridor_price_up_deep"
-				upNote = fmt.Sprintf("held=0 < lo=%d sales=%d > buys=%d — deep-↑ обход cd/streak",
-					targetLo, sales, buys)
-			}
-			applyUp(upLabel, upNote)
-		case sales > buys && state.CorridorUpStreak >= corridorMaxUpStreak:
-			action = "corridor_hold_up_cap"
-			notes = append(notes, fmt.Sprintf("held=%d < lo=%d sales=%d но up_streak=%d≥%d",
-				totalHeld, targetLo, sales, state.CorridorUpStreak, corridorMaxUpStreak))
-		case recoverOK:
+		case sales > buys && deep && !nightMSK && (state.CorridorUpStreak < corridorMaxUpStreak || bypassUpCD):
+			// v8t: up_demand выкл; up_deep оставляем (малый N, отдельное решение).
+			applyUp("corridor_price_up_deep",
+				fmt.Sprintf("held=0 < lo=%d sales=%d > buys=%d — deep-↑ (v8t: demand off, deep kept)",
+					targetLo, sales, buys))
+		case sales > buys:
+			action = "corridor_hold_demand_disabled"
+			notes = append(notes, fmt.Sprintf(
+				"held=%d < lo=%d sales=%d > buys=%d — был бы up_demand, v8t hold (audit Δ≪0)",
+				totalHeld, targetLo, sales, buys))
+		case recoverOK && corridorRecoverUpEnabled:
 			label := "corridor_price_up_recover"
 			note := fmt.Sprintf("held=%d < lo=%d sales=%d buys=%d price=%d << paid=%d cap=%d noBuyUps=%d/%d — recover-↑",
 				totalHeld, targetLo, sales, buys, priceBefore, paidMax, recoverPaidCap(paidMax, step),
@@ -1433,6 +1447,11 @@ func adjustPrice(item string) AdjustReport {
 					totalHeld, targetLo, priceBefore, paidMax, state.CorridorNoBuyUpStreak, corridorMaxNoBuyUps)
 			}
 			applyUp(label, note)
+		case recoverOK:
+			action = "corridor_hold_recover_disabled"
+			notes = append(notes, fmt.Sprintf(
+				"held=%d < lo=%d sales=%d price=%d << paid=%d — был бы recover-↑, v8t hold",
+				totalHeld, targetLo, sales, priceBefore, paidMax))
 		case recoverBase && underpriced && sales < 1:
 			action = "corridor_hold_recover_fair"
 			notes = append(notes, fmt.Sprintf("held=%d < lo=%d price=%d << paid=%d но sales=0 — recover ↑ нет (нет разбора)",
@@ -1511,10 +1530,15 @@ func adjustPrice(item string) AdjustReport {
 			action = "corridor_hold_skim_veto"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] buys=%d > sales=%d — набиваем, skim ↑ запрещён",
 				totalHeld, targetLo, targetHi, buys, sales))
-		case paidClimb:
+		case paidClimb && corridorPaidClimbEnabled:
 			applyUp("corridor_price_up_paid",
 				fmt.Sprintf("held=%d в [%d,%d] price=%d << paid=%d night=%v — ↑ к якорю",
 					totalHeld, targetLo, targetHi, priceBefore, paidMax, nightMSK))
+		case paidClimb:
+			action = "corridor_hold_paid_disabled"
+			notes = append(notes, fmt.Sprintf(
+				"held=%d в [%d,%d] price=%d << paid=%d — был бы up_paid, v8t hold (paid≠market)",
+				totalHeld, targetLo, targetHi, priceBefore, paidMax))
 		case nightMSK:
 			action = "corridor_hold_band"
 			notes = append(notes, fmt.Sprintf("held=%d в [%d,%d] night — skim выкл", totalHeld, targetLo, targetHi))
@@ -1608,8 +1632,9 @@ func adjustPrice(item string) AdjustReport {
 			action = trustedMinDiscoveryActionLive
 			changed = true
 			notes = append(notes, fmt.Sprintf(
-				"trusted_ah_min: held=0 buys=0 our=%d → min=%d sellers=%d near=%d gap_steps=%.1f gap_pct=%.1f",
-				priceBefore, tmEv.TrustedMin, tmEv.UniqueSellers, tmEv.SellersNearMin, tmEv.GapSteps, tmEv.GapPct))
+				"trusted_ah_min: held=0 buys=0 our=%d → min=%d sellers=%d near=%d gap_steps=%.1f gap_ratio=%.3f",
+				priceBefore, tmEv.TrustedMin, tmEv.UniqueSellers, tmEv.SellersNearMin, tmEv.GapSteps, tmEv.GapRatio))
+			logTrustedMinDiscoveryJump(item, now, priceBefore, newPrice, step, totalHeld, buys, sales, tmEv)
 		}
 	}
 
@@ -1872,6 +1897,8 @@ func adjustPrice(item string) AdjustReport {
 	runCappedDiscoveryShadow(item, now, newPrice, step, totalHeld, buys, sales, trySells, actionTaken, blockUp || blockDown)
 	// Diagnostic log for trusted-min (live winner may already be corridor_price_up_trusted_ah_min).
 	runTrustedMinDiscoveryShadow(item, now, priceBefore, step, totalHeld, buys, sales, actionTaken, blockUp || blockDown)
+	// Production experiment outcomes after trusted-min jump (1h / first buy / downs / stop).
+	trackTrustedMinDiscoveryOutcome(item, now, totalHeld, buys, sales, profitNow, actionTaken, tmBook, newPrice, step, blockUp || blockDown)
 
 	if experimentTG != nil {
 		enqueueExperimentTelegram(*experimentTG)

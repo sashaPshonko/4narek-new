@@ -47,9 +47,9 @@ func TestSkimShouldRevert(t *testing.T) {
 	if !skimShouldRevert(1, 4, 4, 5) {
 		t.Fatal("sales<=buys + try≥min → revert")
 	}
-	// try-veto path (sales=5 try=10 → 10≥2*5).
-	if !skimShouldRevert(1, 5, 2, 10) {
-		t.Fatal("trySellsBlockUp must trigger revert")
+	// v8t try-veto: sales=5 try=10 (=2×) больше не blockUp; нужен try≥3×sales.
+	if !skimShouldRevert(1, 5, 2, 15) {
+		t.Fatal("trySellsBlockUp (3×sales) must trigger revert")
 	}
 	if skimShouldRevert(0, 4, 11, 20) {
 		t.Fatal("no up_cd → no revert")
