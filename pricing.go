@@ -1709,8 +1709,10 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	// EMPTY_IDLE / floor escape BEFORE standalone trusted jump / market_recovery:
-	// held=sales=buys=0 → jump or +1 (даже без book); near_floor+down_streak≥3 → +1.
-	// One UP max this cycle.
+	// held=sales=buys=0 → trusted jump or +1 (даже без book / thin AH);
+	// near_floor+down_streak≥3 → +1. One UP max this cycle.
+	// Raw tmBook.TrustedMin is only an AH *cap* inside evalFloorEscape when tmEv.WouldFire
+	// (untrusted/thin AH must not cancel EMPTY_IDLE +1 via at_or_above_cap).
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
 	manualLock := blockUp || blockDown
 	alreadyDown = strings.Contains(action, "price_down")

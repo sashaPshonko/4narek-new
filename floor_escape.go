@@ -115,8 +115,11 @@ func evalFloorEscape(
 		return out
 	}
 
+	// Cap to AH only when that AH is trusted for discovery jump (jumpWouldFire).
+	// Raw/thin TrustedMin must NOT block EMPTY_IDLE +1 via at_or_above_cap —
+	// untrusted AH is still fine for DeepAH classification (display only).
 	capPrice := func(tgt int) int {
-		if ahMin > 0 && tgt > ahMin {
+		if jumpWouldFire && ahMin > 0 && tgt > ahMin {
 			tgt = ahMin
 		}
 		if maxPrice > 0 && tgt > maxPrice {
@@ -126,7 +129,7 @@ func evalFloorEscape(
 	}
 
 	// EMPTY_IDLE recovery (priority over hold_recover_stale / any empty HOLD):
-	// no stock + no turnover → never bearish; jump if trusted, else +1 / cycle.
+	// trusted jump → jump; else +1 / cycle (AH absent or untrusted never blocks +1).
 	if isEmptyIdle(held, sales, buys) {
 		if jumpWouldFire && jumpPrice > price {
 			tgt := jumpPrice
