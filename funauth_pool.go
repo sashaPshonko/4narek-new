@@ -1349,24 +1349,6 @@ func parseFunauthSessionInput(raw string, dcID int) (funauthParsedAuth, error) {
 		}
 	}
 
-	// Telethon StringSession: starts with '1' and is not pure hex of length 512.
-	if len(s) > 1 && s[0] == '1' {
-		hexOnly := true
-		for _, c := range s {
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-				hexOnly = false
-				break
-			}
-		}
-		if !hexOnly || len(s) != 513 {
-			data, err := session.TelethonSession(s)
-			if err != nil {
-				return funauthParsedAuth{}, fmt.Errorf("telethon_session: %w", err)
-			}
-			return funauthParsedAuth{Data: data, ForcedDC: data.DC}, nil
-		}
-	}
-
 	hexStr := strings.Builder{}
 	for _, c := range s {
 		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
@@ -1374,6 +1356,24 @@ func parseFunauthSessionInput(raw string, dcID int) (funauthParsedAuth, error) {
 		}
 	}
 	h := hexStr.String()
+	// Чистый 256-байтный auth_key (512 hex). Может начинаться с '1' — это НЕ Telethon.
+	if len(h) == 512 && len(h) == len(s) {
+		keyBytes, err := hex.DecodeString(h)
+		if err != nil {
+			return funauthParsedAuth{}, errors.New("authkey_hex_invalid")
+		}
+		return funauthParsedAuth{Key: keyBytes, ForcedDC: forced}, nil
+	}
+
+	// Telethon StringSession (обычно base64 после версии '1', не чистый hex512).
+	if len(s) > 1 && s[0] == '1' {
+		data, err := session.TelethonSession(s)
+		if err != nil {
+			return funauthParsedAuth{}, fmt.Errorf("telethon_session: %w", err)
+		}
+		return funauthParsedAuth{Data: data, ForcedDC: data.DC}, nil
+	}
+
 	if len(h) != 512 {
 		return funauthParsedAuth{}, fmt.Errorf("authkey_len: нужно 512 hex-символов (256 байт), сейчас %d", len(h))
 	}

@@ -33,6 +33,18 @@ func TestParseFunauthSessionInputAutoDC(t *testing.T) {
 	}
 }
 
+func TestParseFunauthHexStartingWithOne(t *testing.T) {
+	// Реальный кейс: auth_key начинается с '1' → раньше ошибочно шёл в Telethon.
+	hexKey := "1" + strings.Repeat("0", 511)
+	parsed, err := parseFunauthSessionInput(hexKey, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Data != nil || len(parsed.Key) != 256 {
+		t.Fatalf("must be raw hex authkey, data=%v keyLen=%d", parsed.Data != nil, len(parsed.Key))
+	}
+}
+
 func TestSplitAuthKeyLines(t *testing.T) {
 	got := splitAuthKeyLines("a\n\n#c\nb\n")
 	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
