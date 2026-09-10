@@ -38,19 +38,16 @@ func TestPickForAnarchyBindMultiUntilFull(t *testing.T) {
 	}
 }
 
-func TestPickSkipsOtherAnarchy(t *testing.T) {
+func TestPickReusesOtherAnarchyUntilFull(t *testing.T) {
 	p := newFunauthPool()
 	p.accounts = map[string]*funauthAccount{
 		"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+1", Anarchy: 502}, ready: true, api: &tg.Client{}},
 	}
 	p.nicks = map[string]string{"nick_a": "tg1"}
 
-	acc, diag := p.pickForAnarchyBindDiag("nick_b", 503, nil)
-	if acc != nil {
-		t.Fatalf("expected nil for other anarchy, got %s", acc.meta.ID)
-	}
-	if diag.Busy != 1 {
-		t.Fatalf("busy=%d want 1", diag.Busy)
+	acc, diag := p.pickForAnarchyBindDiag("nick_b", 507, nil)
+	if acc == nil || acc.meta.ID != "tg1" {
+		t.Fatalf("expected reuse tg1 across anarchy, got %v full=%d", acc, diag.Full)
 	}
 }
 

@@ -636,7 +636,7 @@ func (p *funauthPool) cleanupOrphanAnarchies() {
 type funauthPickDiag struct {
 	Offline  int
 	Full     int
-	Busy     int // TG занят другой анархией
+	Busy     int // устар.; раньше «другая анка» — теперь не блокируем
 	Excluded int
 	// OtherAn — устар.; для логов совместимости = Busy
 	OtherAn int
@@ -659,7 +659,8 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 
 	var diag funauthPickDiag
 	var free []*funauthAccount
-	var reuse []*funauthAccount
+	var sameAn []*funauthAccount
+	var otherAn []*funauthAccount
 
 	for _, acc := range p.accounts {
 		if _, skip := exclude[acc.meta.ID]; skip {
@@ -677,27 +678,31 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 		if key != "" && p.nicks[key] == acc.meta.ID {
 			return acc, diag
 		}
+		bound := p.accountBoundCountLocked(acc.meta.ID)
+		if bound == 0 {
+			free = append(free, acc)
+			continue
+		}
+		// Несколько MC на один TG, пока FunTime не скажет «много привязанных».
+		// Предпочитаем ту же анку, но другую тоже ок.
 		effAn := p.effectiveAnarchyLocked(acc)
-		if effAn != 0 && anarchy != 0 && effAn != anarchy {
-			diag.Busy++
-			diag.OtherAn = diag.Busy
-			continue
+		if anarchy != 0 && effAn == anarchy {
+			sameAn = append(sameAn, acc)
+		} else {
+			otherAn = append(otherAn, acc)
 		}
-		if p.accountBoundCountLocked(acc.meta.ID) > 0 {
-			reuse = append(reuse, acc)
-			continue
-		}
-		free = append(free, acc)
 	}
 
-	// Сначала догружаем уже используемый TG той же анки, потом свободные.
-	if len(reuse) > 0 {
-		return reuse[0], diag
+	if len(sameAn) > 0 {
+		return sameAn[0], diag
 	}
-	if len(free) == 0 {
-		return nil, diag
+	if len(free) > 0 {
+		return free[0], diag
 	}
-	return free[0], diag
+	if len(otherAn) > 0 {
+		return otherAn[0], diag
+	}
+	return nil, diag
 }
 
 func (p *funauthPool) pickReadyAny(exclude map[string]struct{}) *funauthAccount {
