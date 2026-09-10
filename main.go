@@ -655,6 +655,142 @@ func syncPriceMarkersFromConfig() {
 	}
 }
 
+// loadDailySnapshotFile читает data_YYYY-MM-DD.json (без смены currentDay).
+func loadDailySnapshotFile(filename string) (DailyData, bool) {
+	var out DailyData
+	raw, err := os.ReadFile(filename)
+	if err != nil || len(raw) == 0 {
+		return out, false
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return out, false
+	}
+	if out.Prices == nil {
+		out.Prices = make(map[string]int)
+	}
+	if out.Nacenkas == nil {
+		out.Nacenkas = make(map[string]int)
+	}
+	if out.AdjustState == nil {
+		out.AdjustState = make(map[string]ItemAdjustState)
+	}
+	return out, true
+}
+
+// findPreviousDailyFile — ближайший data_*.json строго раньше today (YYYY-MM-DD).
+func findPreviousDailyFile(today string) (filename, date string, ok bool) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		return "", "", false
+	}
+	best := ""
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasPrefix(name, "data_") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		d := strings.TrimSuffix(strings.TrimPrefix(name, "data_"), ".json")
+		if len(d) != 10 || d >= today {
+			continue
+		}
+		if d > best {
+			best = d
+		}
+	}
+	if best == "" {
+		return "", "", false
+	}
+	return fmt.Sprintf("data_%s.json", best), best, true
+}
+
+// pricesLookLikeFreshBaseSeed — все известные sku ровно на BasePrice (типичный след
+// холодного старта в новый день без вчерашнего файла).
+func pricesLookLikeFreshBaseSeed(prices map[string]int) bool {
+	if len(itemsConfig) == 0 {
+		return false
+	}
+	matched := 0
+	for item, cfg := range itemsConfig {
+		p, ok := prices[item]
+		if !ok || p <= 0 {
+			return false
+		}
+		if p != cfg.BasePrice {
+			return false
+		}
+		matched++
+	}
+	return matched > 0
+}
+
+// seedCatalogFromPreviousDay — цены/наценки/adjust со вчера, если сегодня дырка
+// или сегодняшний снимок — чистый base-seed после рестарта.
+func seedCatalogFromPreviousDay(today string) (fromDate string, seeded int) {
+	prevFile, prevDate, ok := findPreviousDailyFile(today)
+	if !ok {
+		return "", 0
+	}
+	prev, ok := loadDailySnapshotFile(prevFile)
+	if !ok || len(prev.Prices) == 0 {
+		return "", 0
+	}
+
+	replaceAll := pricesLookLikeFreshBaseSeed(data.Prices)
+	if !replaceAll {
+		// Рестарт после полуночи уже успел чуть отойти от base (+1..3 step),
+		// но сумма всё ещё сильно ниже вчера — это тот же сброс, не рынок.
+		var curSum, prevSum int
+		for item := range itemsConfig {
+			curSum += data.Prices[item]
+			prevSum += prev.Prices[item]
+		}
+		if prevSum > 0 && curSum*100 < prevSum*80 {
+			replaceAll = true
+			log.Printf("[DATA] %s сумма цен %d << вчера %s (%d) → откат цен со вчера", today, curSum, prevDate, prevSum)
+		}
+	}
+	if replaceAll {
+		// Вчера тоже весь base — нечего чинить.
+		if pricesLookLikeFreshBaseSeed(prev.Prices) {
+			replaceAll = false
+		} else if pricesLookLikeFreshBaseSeed(data.Prices) {
+			log.Printf("[DATA] %s выглядит как base-seed → цены со вчера %s", today, prevDate)
+		}
+	}
+
+	for item := range itemsConfig {
+		prevPrice, hasPrev := prev.Prices[item]
+		if !hasPrev || prevPrice <= 0 {
+			continue
+		}
+		cur, hasCur := data.Prices[item]
+		if replaceAll || !hasCur || cur <= 0 {
+			data.Prices[item] = prevPrice
+			dailyData.Prices[item] = prevPrice
+			seeded++
+		}
+		if n, ok := prev.Nacenkas[item]; ok && n > 0 {
+			if _, have := data.Nacenkas[item]; replaceAll || !have {
+				data.Nacenkas[item] = n
+				dailyData.Nacenkas[item] = n
+			}
+		}
+		if st, ok := prev.AdjustState[item]; ok {
+			if _, have := data.AdjustState[item]; replaceAll || !have {
+				data.AdjustState[item] = st
+				dailyData.AdjustState[item] = st
+			}
+		}
+	}
+	if seeded > 0 {
+		log.Printf("[DATA] перенесено %d цен с %s → %s", seeded, prevDate, today)
+	}
+	return prevDate, seeded
+}
+
 func loadDailyData(loc *time.Location) {
 	mutex.Lock()
 
@@ -681,47 +817,53 @@ func loadDailyData(loc *time.Location) {
 		SellSum:      make(map[string]int),
 	}
 
-	if file, err := os.ReadFile(filename); err == nil {
-		if err := json.Unmarshal(file, &dailyData); err == nil && dailyData.Date == today {
-			if dailyData.BuySum == nil {
-				dailyData.BuySum = make(map[string]int)
-			}
-			if dailyData.SellSum == nil {
-				dailyData.SellSum = make(map[string]int)
-			}
-			if dailyData.Nacenkas == nil {
-				dailyData.Nacenkas = make(map[string]int)
-			}
-			if dailyData.AdjustState == nil {
-				dailyData.AdjustState = make(map[string]ItemAdjustState)
-			}
-			for item, sum := range dailyData.BuySum {
-				data.BuySum[item] = sum
-			}
-			for item, sum := range dailyData.SellSum {
-				data.SellSum[item] = sum
-			}
-			for item, price := range dailyData.Prices {
-				data.Prices[item] = price
-			}
-			for item, n := range dailyData.Nacenkas {
-				data.Nacenkas[item] = n
-			}
-			for item, st := range dailyData.AdjustState {
-				data.AdjustState[item] = st
-			}
-			for item, count := range dailyData.BuyStats {
-				data.BuyStats[item] = count
-			}
-			for item, count := range dailyData.SellStats {
-				data.SellStats[item] = count
-			}
-			for item, count := range dailyData.TrySellStats {
-				data.TrySellStats[item] = count
-			}
-			log.Println("Данные успешно загружены из файла")
+	if snap, ok := loadDailySnapshotFile(filename); ok && snap.Date == today {
+		dailyData = snap
+		if dailyData.BuySum == nil {
+			dailyData.BuySum = make(map[string]int)
 		}
+		if dailyData.SellSum == nil {
+			dailyData.SellSum = make(map[string]int)
+		}
+		if dailyData.Nacenkas == nil {
+			dailyData.Nacenkas = make(map[string]int)
+		}
+		if dailyData.AdjustState == nil {
+			dailyData.AdjustState = make(map[string]ItemAdjustState)
+		}
+		if dailyData.Prices == nil {
+			dailyData.Prices = make(map[string]int)
+		}
+		for item, sum := range dailyData.BuySum {
+			data.BuySum[item] = sum
+		}
+		for item, sum := range dailyData.SellSum {
+			data.SellSum[item] = sum
+		}
+		for item, price := range dailyData.Prices {
+			data.Prices[item] = price
+		}
+		for item, n := range dailyData.Nacenkas {
+			data.Nacenkas[item] = n
+		}
+		for item, st := range dailyData.AdjustState {
+			data.AdjustState[item] = st
+		}
+		for item, count := range dailyData.BuyStats {
+			data.BuyStats[item] = count
+		}
+		for item, count := range dailyData.SellStats {
+			data.SellStats[item] = count
+		}
+		for item, count := range dailyData.TrySellStats {
+			data.TrySellStats[item] = count
+		}
+		log.Println("Данные успешно загружены из файла")
 	}
+
+	// Рестарт после полуночи: сегодняшний файл пустой/base → подтянуть вчерашние цены.
+	// Не BasePrice. Цены живут между сутками.
+	seedCatalogFromPreviousDay(today)
 
 	pruneStaleDataKeys()
 	syncPriceMarkersFromConfig()
@@ -745,6 +887,38 @@ func loadDailyData(loc *time.Location) {
 	snap := cloneDailySnapshotLocked()
 	mutex.Unlock()
 	persistDailySnapshot(&snap)
+}
+
+// rollDailyDay — смена суток у живого процесса: счётчики в ноль, цены/наценки/adjust как были.
+func rollDailyDay(loc *time.Location) {
+	mutex.Lock()
+	today := time.Now().In(loc).Format("2006-01-02")
+	if today == currentDay {
+		mutex.Unlock()
+		return
+	}
+	prev := currentDay
+	currentDay = today
+
+	clear(data.BuyStats)
+	clear(data.SellStats)
+	clear(data.TrySellStats)
+	clear(data.BuySum)
+	clear(data.SellSum)
+
+	dailyData.Date = today
+	dailyData.BuyStats = make(map[string]int)
+	dailyData.SellStats = make(map[string]int)
+	dailyData.TrySellStats = make(map[string]int)
+	dailyData.BuySum = make(map[string]int)
+	dailyData.SellSum = make(map[string]int)
+	// Prices / Nacenkas / AdjustState не трогаем — cloneDailySnapshotLocked заберёт из data.*
+
+	log.Printf("[DATA] новый день %s (был %s): цены сохранены, суточные счётчики сброшены", today, prev)
+	snap := cloneDailySnapshotLocked()
+	mutex.Unlock()
+	persistDailySnapshot(&snap)
+	publishPrices()
 }
 
 func maxAnalysisRetain() time.Duration {
@@ -1099,7 +1273,9 @@ func checkDayChange(loc *time.Location) {
 			time.Sleep(time.Until(nextDay))
 
 			saveDailyDataNoMessageUpdate()
-			loadDailyData(loc)
+			// Не loadDailyData: холодный load после рестарта ок, а на ролле суток
+			// он раньше мог увести в BasePrice. Цены переносим as-is.
+			rollDailyDay(loc)
 		})
 	}
 }
