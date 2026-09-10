@@ -2,6 +2,7 @@ package main
 
 import "time"
 
+// legacy merged type — ещё матчим, если оркестратор шлёт netherite_armor-1.21
 const netheriteArmorGoType = "netherite_armor-1.21"
 
 var pieceGoTypeToName = map[string]string{
@@ -22,14 +23,21 @@ func itemConfigActiveIn(activeTypes map[string]struct{}, cfg ItemConfig) bool {
 	if catalogTypeActiveIn(activeTypes, cfg.Type) {
 		return true
 	}
-	if cfg.Type != netheriteArmorGoType {
+	// legacy: орк активировал piece-тип, а в каталоге ещё netherite_armor
+	if cfg.Type == netheriteArmorGoType {
+		for goType, name := range pieceGoTypeToName {
+			if cfg.Name != name {
+				continue
+			}
+			if _, ok := activeTypes[goType]; ok {
+				return true
+			}
+		}
 		return false
 	}
-	for goType, name := range pieceGoTypeToName {
-		if cfg.Name != name {
-			continue
-		}
-		if _, ok := activeTypes[goType]; ok {
+	// legacy: орк активировал merged armor, а в каталоге уже piece-типы
+	if _, ok := activeTypes[netheriteArmorGoType]; ok {
+		if _, isPiece := pieceGoTypeToName[cfg.Type]; isPiece {
 			return true
 		}
 	}
@@ -49,18 +57,23 @@ func typeActiveSinceForItemConfig(cfg ItemConfig) time.Time {
 	if since, ok := typeActiveSince[cfg.Type]; ok && !since.IsZero() {
 		return since
 	}
-	if cfg.Type != netheriteArmorGoType {
-		return time.Time{}
-	}
-	for goType, name := range pieceGoTypeToName {
-		if cfg.Name != name {
-			continue
+	if cfg.Type == netheriteArmorGoType {
+		for goType, name := range pieceGoTypeToName {
+			if cfg.Name != name {
+				continue
+			}
+			if since, ok := typeActiveSince[goType]; ok && !since.IsZero() {
+				return since
+			}
 		}
-		if since, ok := typeActiveSince[goType]; ok && !since.IsZero() {
+		return typeActiveSince[netheriteArmorGoType]
+	}
+	if _, isPiece := pieceGoTypeToName[cfg.Type]; isPiece {
+		if since, ok := typeActiveSince[netheriteArmorGoType]; ok && !since.IsZero() {
 			return since
 		}
 	}
-	return typeActiveSince[netheriteArmorGoType]
+	return time.Time{}
 }
 
 func itemConfigWasActiveForWindowLocked(cfg ItemConfig, windowStart time.Time) bool {

@@ -463,27 +463,14 @@ func (p *funauthPool) syncAnarchyRosterFull(anarchy int) {
 	}
 }
 
-// syncAccountRosterFull — ферма 1 MC = 1 TG; овнер не закрывает слот (следующий овнер той же анки).
+// syncAccountRosterFull — Full только от FunTime («уже много привязанных»), не от числа MC-ников.
+// Один TG можно вешать на несколько ботов, пока markFull.
 func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	acc := p.accounts[accountID]
 	if acc == nil {
 		return false
-	}
-	hasFarm := p.accountHasFarmNickLocked(accountID)
-	complete := hasFarm || acc.meta.Full
-	if acc.meta.Full != complete {
-		was := acc.meta.Full
-		acc.meta.Full = complete
-		if err := p.saveMeta(acc.meta); err != nil {
-			log.Printf("[funauth] save meta %s: %v", accountID, err)
-		}
-		if complete {
-			log.Printf("[funauth] TG %s → full (ферма привязана)", accountID)
-		} else if was {
-			log.Printf("[funauth] TG %s → not full", accountID)
-		}
 	}
 	return acc.meta.Full
 }
@@ -530,12 +517,11 @@ func (p *funauthPool) list() []funauthAccountView {
 		v := a.view()
 		an := a.meta.Anarchy
 		if an > 0 {
-			bound := p.accountBoundCountLocked(a.meta.ID)
-			if bound > 1 {
-				bound = 1
+			v.RosterBound = p.accountBoundCountLocked(a.meta.ID)
+			v.RosterTotal = v.RosterBound
+			if a.meta.Full {
+				v.RosterTotal = v.RosterBound
 			}
-			v.RosterBound = bound
-			v.RosterTotal = 1
 		}
 		out = append(out, v)
 	}
@@ -650,7 +636,7 @@ func (p *funauthPool) cleanupOrphanAnarchies() {
 type funauthPickDiag struct {
 	Offline  int
 	Full     int
-	Busy     int // TG уже привязан к другому MC-нику
+	Busy     int // TG занят другой анархией
 	Excluded int
 	// OtherAn — устар.; для логов совместимости = Busy
 	OtherAn int
@@ -673,8 +659,7 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 
 	var diag funauthPickDiag
 	var free []*funauthAccount
-	var ownerReuse []*funauthAccount
-	ownerJob := nickIsClanOwnerOf(key, anarchy)
+	var reuse []*funauthAccount
 
 	for _, acc := range p.accounts {
 		if _, skip := exclude[acc.meta.ID]; skip {
@@ -692,21 +677,22 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 		if key != "" && p.nicks[key] == acc.meta.ID {
 			return acc, diag
 		}
-		if p.accountBoundCountLocked(acc.meta.ID) > 0 {
-			if ownerJob && !p.accountHasFarmNickLocked(acc.meta.ID) &&
-				(acc.meta.Anarchy == 0 || acc.meta.Anarchy == anarchy) {
-				ownerReuse = append(ownerReuse, acc)
-				continue
-			}
+		effAn := p.effectiveAnarchyLocked(acc)
+		if effAn != 0 && anarchy != 0 && effAn != anarchy {
 			diag.Busy++
 			diag.OtherAn = diag.Busy
+			continue
+		}
+		if p.accountBoundCountLocked(acc.meta.ID) > 0 {
+			reuse = append(reuse, acc)
 			continue
 		}
 		free = append(free, acc)
 	}
 
-	if len(ownerReuse) > 0 {
-		return ownerReuse[0], diag
+	// Сначала догружаем уже используемый TG той же анки, потом свободные.
+	if len(reuse) > 0 {
+		return reuse[0], diag
 	}
 	if len(free) == 0 {
 		return nil, diag

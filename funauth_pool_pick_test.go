@@ -8,10 +8,10 @@ import (
 	"github.com/gotd/td/tg"
 )
 
-func TestPickForAnarchyBindOneToOne(t *testing.T) {
+func TestPickForAnarchyBindMultiUntilFull(t *testing.T) {
 	p := newFunauthPool()
 	p.accounts = map[string]*funauthAccount{
-		"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+1"}, ready: true, api: &tg.Client{}},
+		"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+1", Anarchy: 503}, ready: true, api: &tg.Client{}},
 		"tg2": {meta: funauthAccountMeta{ID: "tg2", Phone: "+2"}, ready: true, api: &tg.Client{}},
 	}
 	p.nicks = map[string]string{
@@ -19,11 +19,8 @@ func TestPickForAnarchyBindOneToOne(t *testing.T) {
 	}
 
 	acc, diag := p.pickForAnarchyBindDiag("nick_b", 503, nil)
-	if acc == nil || acc.meta.ID != "tg2" {
-		t.Fatalf("expected free tg2, got %v", acc)
-	}
-	if diag.Busy != 1 {
-		t.Fatalf("busy=%d want 1", diag.Busy)
+	if acc == nil || acc.meta.ID != "tg1" {
+		t.Fatalf("expected reuse tg1 for second nick, got %v busy=%d full=%d", acc, diag.Busy, diag.Full)
 	}
 
 	acc, _ = p.pickForAnarchyBindDiag("nick_a", 503, nil)
@@ -31,17 +28,33 @@ func TestPickForAnarchyBindOneToOne(t *testing.T) {
 		t.Fatalf("expected tg1 for mapped nick, got %v", acc)
 	}
 
-	p.nicks["nick_b"] = "tg2"
+	p.accounts["tg1"].meta.Full = true
 	acc, diag = p.pickForAnarchyBindDiag("nick_c", 503, nil)
-	if acc != nil {
-		t.Fatalf("expected nil when all busy, got %s", acc.meta.ID)
+	if acc == nil || acc.meta.ID != "tg2" {
+		t.Fatalf("expected free tg2 when tg1 full, got %v", acc)
 	}
-	if diag.Busy != 2 {
-		t.Fatalf("busy=%d want 2", diag.Busy)
+	if diag.Full != 1 {
+		t.Fatalf("full=%d want 1", diag.Full)
 	}
 }
 
-func TestSyncAccountRosterFullOneToOne(t *testing.T) {
+func TestPickSkipsOtherAnarchy(t *testing.T) {
+	p := newFunauthPool()
+	p.accounts = map[string]*funauthAccount{
+		"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+1", Anarchy: 502}, ready: true, api: &tg.Client{}},
+	}
+	p.nicks = map[string]string{"nick_a": "tg1"}
+
+	acc, diag := p.pickForAnarchyBindDiag("nick_b", 503, nil)
+	if acc != nil {
+		t.Fatalf("expected nil for other anarchy, got %s", acc.meta.ID)
+	}
+	if diag.Busy != 1 {
+		t.Fatalf("busy=%d want 1", diag.Busy)
+	}
+}
+
+func TestSyncAccountRosterFullDoesNotAutoFull(t *testing.T) {
 	p := newFunauthPool()
 	p.dir = t.TempDir()
 	p.accounts = map[string]*funauthAccount{
@@ -50,10 +63,10 @@ func TestSyncAccountRosterFullOneToOne(t *testing.T) {
 	p.nicks = map[string]string{"a": "tg1"}
 
 	if p.syncAccountRosterFull("tg1") {
-		t.Fatal("owner-only bind should not mark full")
+		t.Fatal("farm bind must not mark full")
 	}
 	if p.accounts["tg1"].meta.Full {
-		t.Fatal("meta.Full set for owner")
+		t.Fatal("meta.Full set without FunTime limit")
 	}
 }
 
