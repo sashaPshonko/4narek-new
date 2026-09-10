@@ -16,6 +16,9 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8w — v8v + EMPTY_IDLE (Sep 2026):
+//   held=sales=buys=0 → любой DOWN запрещён (вкл. ah_book); recovery UP:
+//   trusted jump / иначе +1 (даже без book и не у пола). Не DOI/fill/paid/recover.
 // stock_corridor_v8v — v8u + floor escape (Sep 2026):
 //   idle-empty near_floor/deep_AH → +1; down_streak≥3 near_floor → +1;
 //   deep pit (our/AH≤0.50) soft trust (≥5 sellers, ≥2 near) → trusted jump;
@@ -999,6 +1002,10 @@ func actionReasonRU(action string) string {
 		return "corridor_v8v: near_floor + down_streak≥3 → +1 step (floor_escape_down_streak)"
 	case "corridor_price_up_floor_escape_trusted_jump":
 		return "corridor_v8v: deep pit + trusted book → jump to AH min (floor_escape_trusted_jump)"
+	case "corridor_price_up_empty_idle":
+		return "corridor_v8w EMPTY_IDLE: held=sales=buys=0, book thin/absent → +1 step recovery"
+	case "corridor_hold_empty_idle":
+		return "corridor_v8w EMPTY_IDLE: ↓ blocked (нет стока/оборота ≠ bearish); ждём recovery UP"
 	case "corridor_price_down_skim_revert":
 		return "corridor_v8o: после ↑ try/buy показывают отказ → soft-↓ в полосе"
 	case "corridor_price_up_floor":
@@ -1340,6 +1347,14 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	applyDown := func(label, note string, stepMult int) {
+		// EMPTY_IDLE: нет стока и нет оборота — любой ↓ запрещён (не bearish).
+		if isEmptyIdle(totalHeld, sales, buys) {
+			notes = append(notes, note+" · blocked empty_idle (held=sales=buys=0 → ↓ запрещён)")
+			if action == "" || action == "hold" {
+				action = "corridor_hold_empty_idle"
+			}
+			return
+		}
 		// v8q belt: stale/overcap/empty_fair никогда не пилят пустой каталог.
 		if isGhostCatalogDown(label) && !ghostPriceDownOK(totalHeld, sales, trySells) {
 			notes = append(notes, note+" · blocked ghost-↓ (нужен held+try-отказ)")
@@ -1654,7 +1669,9 @@ func adjustPrice(item string) AdjustReport {
 	} else if raiseEmptyFromBook {
 		raiseTgt = emptyBookRaiseTarget(priceBefore, p10, minAsk, nacenka, step)
 	}
-	softDownFromBook := bookOK && p10OK && shouldSoftDownFromAhBook(priceBefore, p10, minAsk, nacenka, p10N, step, raiseFromBook, buys > 0, totalHeld)
+	emptyIdle := isEmptyIdle(totalHeld, sales, buys)
+	softDownFromBook := !emptyIdle && bookOK && p10OK &&
+		shouldSoftDownFromAhBook(priceBefore, p10, minAsk, nacenka, p10N, step, raiseFromBook, buys > 0, totalHeld)
 	var softDownTgt int
 	if softDownFromBook {
 		softDownTgt = ahBookSoftDownTarget(p10, minAsk, nacenka, step)
@@ -1686,11 +1703,14 @@ func adjustPrice(item string) AdjustReport {
 			notes = append(notes, fmt.Sprintf("ah_book p10=%d min=%d n=%d → селл %d → %d (пол min+наценка=%d held=%d)",
 				p10, minAsk, p10N, priceBefore, tgt, bookFloor, totalHeld))
 		}
+	} else if emptyIdle && bookOK && p10OK &&
+		shouldSoftDownFromAhBook(priceBefore, p10, minAsk, nacenka, p10N, step, false, false, totalHeld) {
+		notes = append(notes, "ah_book soft-↓ blocked empty_idle (held=sales=buys=0)")
 	}
 
-	// Floor escape BEFORE standalone trusted jump / market_recovery:
-	// idle-empty near_floor|deep_AH → +1 (or trusted jump if book OK);
-	// near_floor + down_streak≥3 → +1. One UP max this cycle.
+	// EMPTY_IDLE / floor escape BEFORE standalone trusted jump / market_recovery:
+	// held=sales=buys=0 → jump or +1 (даже без book); near_floor+down_streak≥3 → +1.
+	// One UP max this cycle.
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
 	manualLock := blockUp || blockDown
 	alreadyDown = strings.Contains(action, "price_down")
@@ -1823,8 +1843,8 @@ func adjustPrice(item string) AdjustReport {
 		}
 	}
 
-	// Floor-escape CD ticks on non-escape cycles (set to N when escape fired).
-	if !strings.Contains(action, "floor_escape") && state.FloorEscapeCooldown > 0 {
+	// Floor-escape / empty-idle CD ticks on non-escape cycles (set to N when escape fired).
+	if !strings.Contains(action, "floor_escape") && action != floorEscapeActionEmptyIdle && state.FloorEscapeCooldown > 0 {
 		state.FloorEscapeCooldown--
 	}
 

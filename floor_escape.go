@@ -24,7 +24,13 @@ const (
 	floorEscapeActionDeepAH      = "corridor_price_up_floor_escape_deep_ah"
 	floorEscapeActionDownStreak  = "corridor_price_up_floor_escape_down_streak"
 	floorEscapeActionTrustedJump = "corridor_price_up_floor_escape_trusted_jump"
+	floorEscapeActionEmptyIdle   = "corridor_price_up_empty_idle" // no book / not near-floor: still recover
 )
+
+// isEmptyIdle — нет товара и нет оборота. sales=0 здесь ≠ bearish.
+func isEmptyIdle(held, sales, buys int) bool {
+	return held == 0 && sales == 0 && buys == 0
+}
 
 // priceNearFloor — цена у экономического пола (не «дешево vs AH»).
 func priceNearFloor(price, floor, step int) bool {
@@ -119,11 +125,9 @@ func evalFloorEscape(
 		return tgt
 	}
 
-	// Idle-empty primary branch (priority over hold_recover_stale).
-	// sales must be 0 — no sales-on-floor special escape (§3).
-	idleEmpty := held == 0 && sales == 0 && buys == 0
-	if idleEmpty && (out.NearFloor || out.DeepAH) {
-		// Deep pit + trusted book → jump (still one UP this cycle).
+	// EMPTY_IDLE recovery (priority over hold_recover_stale / any empty HOLD):
+	// no stock + no turnover → never bearish; jump if trusted, else +1 / cycle.
+	if isEmptyIdle(held, sales, buys) {
 		if jumpWouldFire && jumpPrice > price {
 			tgt := jumpPrice
 			if maxPrice > 0 && tgt > maxPrice {
@@ -146,12 +150,17 @@ func evalFloorEscape(
 		}
 		out.WouldFire = true
 		out.WouldPrice = tgt
-		if out.DeepAH {
+		switch {
+		case out.DeepAH:
 			out.Action = floorEscapeActionDeepAH
 			out.Reason = "floor_escape_deep_ah"
-		} else {
+		case out.NearFloor:
 			out.Action = floorEscapeActionEmpty
 			out.Reason = "floor_escape_empty"
+		default:
+			// no book / thin unconfirmed / not near floor — still climb
+			out.Action = floorEscapeActionEmptyIdle
+			out.Reason = "empty_idle_step"
 		}
 		return out
 	}
