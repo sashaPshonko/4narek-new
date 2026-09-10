@@ -16,6 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8v — v8u + floor escape (Sep 2026):
+//   idle-empty near_floor/deep_AH → +1; down_streak≥3 near_floor → +1;
+//   deep pit (our/AH≤0.50) soft trust (≥5 sellers, ≥2 near) → trusted jump;
+//   buys>sales / sales-on-floor special / recover·demand·paid — не трогаем.
 // stock_corridor_v8u — v8t + Level-2 Policy F (sales≥1 only, Sep 2026):
 //   DOI=held/sales: <3 HOLD; [3,5) OVER −2; [5,10) SOFT −1; ≥10 HOLD.
 //   fill≥25% больше не основной soft-↓ при sales≥1. sales=0: legacy fill dump/over/soft.
@@ -180,6 +184,8 @@ type ItemAdjustState struct {
 	CorridorUpCooldown    int  `json:"corridor_up_cooldown"`      // циклы до следующего ↑
 	CorridorNoBuyUpStreak int  `json:"corridor_no_buy_up_streak"` // ↑ подряд без buys (антиvacuum)
 	IdleHardDownStreak    int  `json:"idle_hard_down_streak"`     // подряд over/dump при sales=0
+	CorridorDownStreak    int  `json:"corridor_down_streak"`      // подряд price_down (HOLD не сбрасывает)
+	FloorEscapeCooldown   int  `json:"floor_escape_cooldown"`     // циклы до следующего floor escape
 	LastCycleSales        int  `json:"last_cycle_sales"`          // sales прошлого цикла
 }
 
@@ -985,6 +991,14 @@ func actionReasonRU(action string) string {
 		return "corridor_v8s: сигнал skim был, но up_skim выключен → hold (matched HOLD лучше ↑)"
 	case "corridor_price_up_trusted_ah_min", "corridor_price_up_trusted_ah_min_shadow":
 		return "corridor_v8t L1: held=0 buys=0, our≪trusted_AH_min → jump to min (без nacenka)"
+	case "corridor_price_up_floor_escape_empty":
+		return "corridor_v8v: held=sales=buys=0 near_floor → +1 step (floor_escape_empty)"
+	case "corridor_price_up_floor_escape_deep_ah":
+		return "corridor_v8v: held=sales=buys=0 deep_vs_AH → +1 step (floor_escape_deep_ah)"
+	case "corridor_price_up_floor_escape_down_streak":
+		return "corridor_v8v: near_floor + down_streak≥3 → +1 step (floor_escape_down_streak)"
+	case "corridor_price_up_floor_escape_trusted_jump":
+		return "corridor_v8v: deep pit + trusted book → jump to AH min (floor_escape_trusted_jump)"
 	case "corridor_price_down_skim_revert":
 		return "corridor_v8o: после ↑ try/buy показывают отказ → soft-↓ в полосе"
 	case "corridor_price_up_floor":
@@ -1674,13 +1688,38 @@ func adjustPrice(item string) AdjustReport {
 		}
 	}
 
-	// Trusted AH-min jump (production test): held=0 buys=0 + deep gap → price = trusted_AH_min.
-	// Без p10/nacenka/κ. Только ↑. Перед market_recovery, чтобы +1 не конкурировал в том же цикле.
+	// Floor escape BEFORE standalone trusted jump / market_recovery:
+	// idle-empty near_floor|deep_AH → +1 (or trusted jump if book OK);
+	// near_floor + down_streak≥3 → +1. One UP max this cycle.
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
 	manualLock := blockUp || blockDown
 	alreadyDown = strings.Contains(action, "price_down")
-	if trustedMinDiscoveryLiveEnabled && !alreadyDown && !manualLock {
-		tmEv := evalTrustedMinDiscovery(priceBefore, step, totalHeld, buys, tmBook, manualLock)
+	alreadyUp := strings.Contains(action, "price_up")
+	tmEv := evalTrustedMinDiscovery(priceBefore, step, totalHeld, buys, tmBook, manualLock)
+	feEv := evalFloorEscape(
+		priceBefore, step, priceFloor, tmBook.TrustedMin,
+		totalHeld, sales, buys, state.CorridorDownStreak, state.FloorEscapeCooldown, 0,
+		manualLock, alreadyUp || alreadyDown, tmEv.WouldFire, tmEv.WouldPrice,
+	)
+	if feEv.WouldFire && feEv.WouldPrice > newPrice {
+		newPrice = feEv.WouldPrice
+		action = feEv.Action
+		changed = true
+		sellers := tmBook.UniqueSellers
+		notes = append(notes, floorEscapeNote(feEv, totalHeld, sales, buys, stockLoad, sellers))
+		log.Printf("[FLOOR_ESCAPE] %s: %s | %d→%d | held=%d sales=%d buys=%d fill=%.1f%% down_streak=%d trusted_AH_min=%d sellers=%d near=%d price/floor=%.3f price/ah=%.3f",
+			item, feEv.Reason, priceBefore, newPrice, totalHeld, sales, buys, stockLoad*100,
+			feEv.DownStreak, feEv.AHMin, sellers, tmBook.SellersNearMin, feEv.FloorRatio, feEv.AHRatio)
+		if feEv.Action == floorEscapeActionTrustedJump {
+			logTrustedMinDiscoveryJump(item, now, priceBefore, newPrice, step, totalHeld, buys, sales, tmEv)
+		}
+		state.FloorEscapeCooldown = floorEscapeCooldownCycles
+	}
+
+	// Trusted AH-min jump (standalone): only if floor escape did not already UP.
+	alreadyUp = strings.Contains(action, "price_up")
+	alreadyDown = strings.Contains(action, "price_down")
+	if trustedMinDiscoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock {
 		if tmEv.WouldFire && tmEv.WouldPrice > newPrice {
 			newPrice = tmEv.WouldPrice
 			action = trustedMinDiscoveryActionLive
@@ -1693,8 +1732,8 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	// B_price_trap live recovery: +1 step, без p10+nacenka, без прыжка к p10.
-	// Не пересекается с уже выбранным ↑/↓ этого цикла (в т.ч. trusted_ah_min).
-	alreadyUp := strings.Contains(action, "price_up")
+	// Не пересекается с уже выбранным ↑/↓ этого цикла (в т.ч. floor escape / trusted_ah_min).
+	alreadyUp = strings.Contains(action, "price_up")
 	alreadyDown = strings.Contains(action, "price_down")
 	if marketRecoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock &&
 		marketRecoveryLiveShouldRaise(item, priceBefore, step, totalHeld, buys, sales, mrBook, manualLock) {
@@ -1744,6 +1783,7 @@ func adjustPrice(item string) AdjustReport {
 		state.CorridorDownCooldown = 0
 		state.CorridorUpCooldown = corridorUpCooldownCycles
 		state.IdleHardDownStreak = 0
+		state.CorridorDownStreak = 0
 		isRecover := strings.Contains(action, "recover") || strings.Contains(action, "price_up_paid")
 		if buys > 0 || !isRecover {
 			state.CorridorNoBuyUpStreak = 0
@@ -1765,6 +1805,10 @@ func adjustPrice(item string) AdjustReport {
 		} else if strings.Contains(action, "price_down_over") || strings.Contains(action, "price_down_dump") {
 			state.IdleHardDownStreak++
 		}
+		if strings.Contains(action, "price_down") {
+			state.CorridorDownStreak++
+		}
+		// HOLD preserves CorridorDownStreak (escape after dump→park on floor).
 		if state.CorridorUpCooldown > 0 {
 			state.CorridorUpCooldown--
 		}
@@ -1777,6 +1821,11 @@ func adjustPrice(item string) AdjustReport {
 		if strings.Contains(action, "price_down_over") || strings.Contains(action, "price_down_dump") {
 			state.CorridorDownCooldown = 0
 		}
+	}
+
+	// Floor-escape CD ticks on non-escape cycles (set to N when escape fired).
+	if !strings.Contains(action, "floor_escape") && state.FloorEscapeCooldown > 0 {
+		state.FloorEscapeCooldown--
 	}
 
 	if state.StockVsSalesCooldown > 0 {

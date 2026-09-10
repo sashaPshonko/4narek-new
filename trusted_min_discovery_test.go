@@ -56,7 +56,7 @@ func TestEvalTrustedMinDiscoveryShallowGapNoJump(t *testing.T) {
 }
 
 func TestEvalTrustedMinDiscoveryTrustGates(t *testing.T) {
-	thin := ahBookTrustedSellerMinSnap{TrustedMin: 1_000_000, UniqueSellers: 5, SellersNearMin: 5, OK: true}
+	thin := ahBookTrustedSellerMinSnap{TrustedMin: 1_000_000, UniqueSellers: 4, SellersNearMin: 5, OK: true}
 	if ev := evalTrustedMinDiscovery(400_000, 100_000, 0, 0, thin, false); ev.WouldFire || ev.SkipReason != "thin_sellers" {
 		t.Fatalf("thin: %+v", ev)
 	}

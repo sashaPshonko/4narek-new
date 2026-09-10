@@ -159,19 +159,29 @@ func evalTrustedMinDiscovery(our, step, held, buys int, book ahBookTrustedSeller
 		out.SkipReason = "no_book"
 		return out
 	}
-	if book.UniqueSellers < trustedMinDiscoveryMinSellers {
-		out.SkipReason = "thin_sellers"
-		return out
-	}
-	if book.SellersNearMin < trustedMinDiscoveryMinNear {
-		out.SkipReason = "min_unconfirmed"
-		return out
-	}
-	out.TrustOK = true
+
 	out.GapAbs = book.TrustedMin - our
 	out.GapSteps = float64(out.GapAbs) / float64(step)
 	out.GapPct = float64(out.GapAbs) / float64(our) * 100
 	out.GapRatio = float64(our) / float64(book.TrustedMin)
+
+	// Soft trust for very deep pits (our/min ≤ 0.50): sellers≥5, near≥2.
+	// Shallower gaps keep the hard gate (15 / 3).
+	minSellers := trustedMinDiscoveryMinSellers
+	minNear := trustedMinDiscoveryMinNear
+	if out.GapRatio > 0 && out.GapRatio <= floorEscapeDeepPitRatio {
+		minSellers = floorEscapeDeepPitMinSellers
+		minNear = floorEscapeDeepPitMinNear
+	}
+	if book.UniqueSellers < minSellers {
+		out.SkipReason = "thin_sellers"
+		return out
+	}
+	if book.SellersNearMin < minNear {
+		out.SkipReason = "min_unconfirmed"
+		return out
+	}
+	out.TrustOK = true
 
 	if !(book.TrustedMin > our+step) {
 		if our >= book.TrustedMin {
