@@ -1284,62 +1284,32 @@ var funauthDCAddr = map[int]string{
 	5: "91.108.56.165:443",
 }
 
-func parseFunauthSessionInput(raw string, dcID int) (*session.Data, error) {
-	s := strings.TrimSpace(raw)
-	s = strings.ReplaceAll(s, "\n", "")
-	s = strings.ReplaceAll(s, "\r", "")
-	s = strings.ReplaceAll(s, " ", "")
-	if s == "" {
-		return nil, errors.New("authkey_required")
-	}
-	if strings.Contains(s, "...") {
-		return nil, errors.New("authkey_truncated: вставь полный ключ без «...»")
-	}
+// Параллельных импортов authkey (каждый ещё крутит DC-probe).
+var funauthImportSem = make(chan struct{}, 4)
 
-	// dc:hexauthkey
-	if i := strings.IndexByte(s, ':'); i > 0 && i < 3 {
-		prefix := s[:i]
-		rest := s[i+1:]
-		if n, err := strconv.Atoi(prefix); err == nil && n >= 1 && n <= 5 {
-			dcID = n
-			s = rest
-		}
-	}
+type funauthParsedAuth struct {
+	// Telethon / готовая сессия с известным DC.
+	Data *session.Data
+	// Сырой auth_key (256 байт) — DC подбираем или берём ForcedDC.
+	Key []byte
+	// 1..5 зафиксирован; 0 = автоперебор.
+	ForcedDC int
+}
 
-	// Telethon StringSession: starts with '1' and is not pure hex of length 512.
-	if len(s) > 1 && s[0] == '1' {
-		hexOnly := true
-		for _, c := range s {
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-				hexOnly = false
-				break
-			}
-		}
-		if !hexOnly || len(s) != 513 {
-			data, err := session.TelethonSession(s)
-			if err != nil {
-				return nil, fmt.Errorf("telethon_session: %w", err)
-			}
-			return data, nil
-		}
+func funauthDCProbeOrder(forcedDC int) []int {
+	if forcedDC >= 1 && forcedDC <= 5 {
+		return []int{forcedDC}
 	}
+	// US часто 1/5, EU — 2/4.
+	return []int{1, 2, 5, 4, 3}
+}
 
-	hexStr := strings.Builder{}
-	for _, c := range s {
-		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
-			hexStr.WriteRune(c)
-		}
-	}
-	h := hexStr.String()
-	if len(h) != 512 {
-		return nil, fmt.Errorf("authkey_len: нужно 512 hex-символов (256 байт), сейчас %d", len(h))
-	}
-	keyBytes, err := hex.DecodeString(h)
-	if err != nil {
-		return nil, errors.New("authkey_hex_invalid")
+func sessionDataFromAuthKey(keyBytes []byte, dcID int) (*session.Data, error) {
+	if len(keyBytes) != 256 {
+		return nil, errors.New("authkey_len")
 	}
 	if dcID < 1 || dcID > 5 {
-		dcID = 2
+		return nil, errors.New("dc_invalid")
 	}
 	addr, ok := funauthDCAddr[dcID]
 	if !ok {
@@ -1356,55 +1326,231 @@ func parseFunauthSessionInput(raw string, dcID int) (*session.Data, error) {
 	}, nil
 }
 
-// importAuthKey — добавить аккаунт из hex auth_key или Telethon StringSession.
-func (p *funauthPool) importAuthKey(raw string, dcID int) (funauthAccountView, error) {
+func parseFunauthSessionInput(raw string, dcID int) (funauthParsedAuth, error) {
+	s := strings.TrimSpace(raw)
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, " ", "")
+	if s == "" {
+		return funauthParsedAuth{}, errors.New("authkey_required")
+	}
+	if strings.Contains(s, "...") {
+		return funauthParsedAuth{}, errors.New("authkey_truncated: вставь полный ключ без «...»")
+	}
+
+	forced := dcID
+	// dc:hexauthkey
+	if i := strings.IndexByte(s, ':'); i > 0 && i < 3 {
+		prefix := s[:i]
+		rest := s[i+1:]
+		if n, err := strconv.Atoi(prefix); err == nil && n >= 1 && n <= 5 {
+			forced = n
+			s = rest
+		}
+	}
+
+	// Telethon StringSession: starts with '1' and is not pure hex of length 512.
+	if len(s) > 1 && s[0] == '1' {
+		hexOnly := true
+		for _, c := range s {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				hexOnly = false
+				break
+			}
+		}
+		if !hexOnly || len(s) != 513 {
+			data, err := session.TelethonSession(s)
+			if err != nil {
+				return funauthParsedAuth{}, fmt.Errorf("telethon_session: %w", err)
+			}
+			return funauthParsedAuth{Data: data, ForcedDC: data.DC}, nil
+		}
+	}
+
+	hexStr := strings.Builder{}
+	for _, c := range s {
+		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
+			hexStr.WriteRune(c)
+		}
+	}
+	h := hexStr.String()
+	if len(h) != 512 {
+		return funauthParsedAuth{}, fmt.Errorf("authkey_len: нужно 512 hex-символов (256 байт), сейчас %d", len(h))
+	}
+	keyBytes, err := hex.DecodeString(h)
+	if err != nil {
+		return funauthParsedAuth{}, errors.New("authkey_hex_invalid")
+	}
+	return funauthParsedAuth{Key: keyBytes, ForcedDC: forced}, nil
+}
+
+func (p *funauthPool) saveSessionData(accountID string, data *session.Data) error {
+	loader := session.Loader{Storage: &session.FileStorage{Path: p.sessionPath(accountID)}}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return loader.Save(ctx, data)
+}
+
+func (p *funauthPool) stopAccountClient(accountID string) {
+	p.mu.Lock()
+	acc := p.accounts[accountID]
+	if acc != nil && acc.cancel != nil {
+		acc.cancel()
+	}
+	p.mu.Unlock()
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		p.mu.Lock()
+		acc := p.accounts[accountID]
+		alive := acc != nil && acc.api != nil
+		p.mu.Unlock()
+		if !alive {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func (p *funauthPool) waitAccountReady(accountID string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		p.mu.Lock()
+		acc := p.accounts[accountID]
+		ready := acc != nil && acc.ready && acc.api != nil
+		p.mu.Unlock()
+		if ready {
+			return true
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	return false
+}
+
+func (p *funauthPool) connectAuthKeyWithDCProbe(meta funauthAccountMeta, key []byte, forcedDC int) {
+	socks := pickFarmLoginSOCKS()
+	order := funauthDCProbeOrder(forcedDC)
+	for _, dc := range order {
+		data, err := sessionDataFromAuthKey(key, dc)
+		if err != nil {
+			continue
+		}
+		if err := p.saveSessionData(meta.ID, data); err != nil {
+			log.Printf("[funauth] authkey %s dc%d session_save: %v", meta.ID[:8], dc, err)
+			continue
+		}
+		log.Printf("[funauth] authkey %s probe dc%d via %s", meta.ID[:8], dc, socksURLHost(socks))
+		p.stopAccountClient(meta.ID)
+		goSafe("funauth:connect:"+meta.ID, func() {
+			p.connectAccount(meta, socks)
+		})
+		if p.waitAccountReady(meta.ID, 22*time.Second) {
+			log.Printf("[funauth] authkey import ok %s dc%d", meta.Phone, dc)
+			return
+		}
+		p.stopAccountClient(meta.ID)
+		time.Sleep(300 * time.Millisecond)
+	}
+	log.Printf("[funauth] authkey %s: ни один DC не подошёл", meta.ID[:8])
+	_ = p.remove(meta.ID)
+}
+
+// queueAuthKeyImport — принять ключ сразу, коннект/DC-probe в фоне.
+func (p *funauthPool) queueAuthKeyImport(raw string, dcID int) (funauthAccountView, error) {
 	if !p.configured() {
 		return funauthAccountView{}, errFunauthNotConfigured
 	}
-	data, err := parseFunauthSessionInput(raw, dcID)
+	parsed, err := parseFunauthSessionInput(raw, dcID)
 	if err != nil {
 		return funauthAccountView{}, err
 	}
 
 	id := uuid.New().String()
-	sessionFile := p.sessionPath(id)
-	loader := session.Loader{Storage: &session.FileStorage{Path: sessionFile}}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	if err := loader.Save(ctx, data); err != nil {
-		return funauthAccountView{}, fmt.Errorf("session_save: %w", err)
-	}
-
 	meta := funauthAccountMeta{
 		ID:    id,
 		Phone: "authkey:" + id[:8],
 	}
 	if err := p.saveMeta(meta); err != nil {
-		_ = os.Remove(sessionFile)
 		return funauthAccountView{}, err
 	}
 
-	goSafe("funauth:connect:"+id, func() {
-		p.connectAccount(meta, pickFarmLoginSOCKS())
+	p.mu.Lock()
+	p.accounts[id] = &funauthAccount{meta: meta, botMsg: make(chan string, 32)}
+	p.mu.Unlock()
+
+	goSafe("funauth:import:"+id, func() {
+		funauthImportSem <- struct{}{}
+		defer func() { <-funauthImportSem }()
+
+		if parsed.Data != nil {
+			if err := p.saveSessionData(id, parsed.Data); err != nil {
+				log.Printf("[funauth] authkey session_save %s: %v", id[:8], err)
+				_ = p.remove(id)
+				return
+			}
+			socks := pickFarmLoginSOCKS()
+			p.connectAccount(meta, socks)
+			return
+		}
+		p.connectAuthKeyWithDCProbe(meta, parsed.Key, parsed.ForcedDC)
 	})
 
-	deadline := time.Now().Add(45 * time.Second)
-	for time.Now().Before(deadline) {
+	return funauthAccountView{
+		ID:    id,
+		Phone: meta.Phone,
+		Ready: false,
+	}, nil
+}
+
+func splitAuthKeyLines(raw string) []string {
+	var out []string
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+type funauthAuthKeyReject struct {
+	Index int    `json:"index"`
+	Error string `json:"error"`
+	Preview string `json:"preview,omitempty"`
+}
+
+// queueAuthKeyImportBatch — много ключей (строки), без ожидания ready.
+func (p *funauthPool) queueAuthKeyImportBatch(keys []string, dcID int) (accepted []funauthAccountView, rejected []funauthAuthKeyReject) {
+	for i, raw := range keys {
+		view, err := p.queueAuthKeyImport(raw, dcID)
+		if err != nil {
+			prev := strings.TrimSpace(raw)
+			if len(prev) > 24 {
+				prev = prev[:24] + "…"
+			}
+			rejected = append(rejected, funauthAuthKeyReject{Index: i, Error: err.Error(), Preview: prev})
+			continue
+		}
+		accepted = append(accepted, view)
+	}
+	return accepted, rejected
+}
+
+// importAuthKey — устар. обёртка: очередь + короткое ожидание ready (для старых клиентов).
+func (p *funauthPool) importAuthKey(raw string, dcID int) (funauthAccountView, error) {
+	view, err := p.queueAuthKeyImport(raw, dcID)
+	if err != nil {
+		return funauthAccountView{}, err
+	}
+	if p.waitAccountReady(view.ID, 45*time.Second) {
 		p.mu.Lock()
-		acc := p.accounts[id]
-		ready := acc != nil && acc.ready
-		var view funauthAccountView
-		if ready {
+		acc := p.accounts[view.ID]
+		if acc != nil {
 			view = acc.view()
 		}
 		p.mu.Unlock()
-		if ready {
-			log.Printf("[funauth] authkey import ok %s (%s)", view.Phone, id[:8])
-			return view, nil
-		}
-		time.Sleep(200 * time.Millisecond)
+		return view, nil
 	}
-
-	_ = p.remove(id)
-	return funauthAccountView{}, errors.New("authkey_connect_timeout")
+	// Оставляем акк в пуле — коннект ещё может добить DC; не удаляем по таймауту UI.
+	return view, nil
 }

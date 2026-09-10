@@ -181,6 +181,10 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 		funauthLoginAuthKey(w, r)
 		return
 
+	case path == "/login/authkey/batch" && r.Method == http.MethodPost:
+		funauthLoginAuthKeyBatch(w, r)
+		return
+
 	case path == "/bind" && r.Method == http.MethodPost:
 		var body funauthBindReq
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
@@ -354,6 +358,7 @@ func funauthLoginAuthKey(w http.ResponseWriter, r *http.Request) {
 		AuthKey string `json:"auth_key"`
 		Session string `json:"session"`
 		DCID    int    `json:"dc_id"`
+		Wait    bool   `json:"wait"` // true = старое поведение (ждать ready до 45с)
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<18)).Decode(&body); err != nil {
 		funauthJSONErr(w, http.StatusBadRequest, "bad json")
@@ -363,19 +368,76 @@ func funauthLoginAuthKey(w http.ResponseWriter, r *http.Request) {
 	if raw == "" {
 		raw = strings.TrimSpace(body.Session)
 	}
-	view, err := funauthPoolInst.importAuthKey(raw, body.DCID)
+	if body.Wait {
+		view, err := funauthPoolInst.importAuthKey(raw, body.DCID)
+		if err != nil {
+			funauthWritePoolErr(w, err)
+			return
+		}
+		funauthJSON(w, http.StatusOK, map[string]any{
+			"ok":       true,
+			"queued":   false,
+			"id":       view.ID,
+			"phone":    view.Phone,
+			"username": view.Username,
+			"ready":    view.Ready,
+			"full":     view.Full,
+			"started":  view.Started,
+		})
+		return
+	}
+	view, err := funauthPoolInst.queueAuthKeyImport(raw, body.DCID)
 	if err != nil {
 		funauthWritePoolErr(w, err)
 		return
 	}
-	funauthJSON(w, http.StatusOK, map[string]any{
-		"ok":       true,
-		"id":       view.ID,
-		"phone":    view.Phone,
-		"username": view.Username,
-		"ready":    view.Ready,
-		"full":     view.Full,
-		"started":  view.Started,
+	funauthJSON(w, http.StatusAccepted, map[string]any{
+		"ok":     true,
+		"queued": true,
+		"id":     view.ID,
+		"phone":  view.Phone,
+		"ready":  false,
+	})
+}
+
+func funauthLoginAuthKeyBatch(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Keys  []string `json:"keys"`
+		Text  string   `json:"text"` // многострочный текст
+		DCID  int      `json:"dc_id"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<22)).Decode(&body); err != nil {
+		funauthJSONErr(w, http.StatusBadRequest, "bad json")
+		return
+	}
+	keys := body.Keys
+	if len(keys) == 0 && strings.TrimSpace(body.Text) != "" {
+		keys = splitAuthKeyLines(body.Text)
+	}
+	if len(keys) == 0 {
+		funauthJSONErr(w, http.StatusBadRequest, "keys_required")
+		return
+	}
+	if len(keys) > 200 {
+		funauthJSONErr(w, http.StatusBadRequest, "keys_limit: max 200")
+		return
+	}
+	accepted, rejected := funauthPoolInst.queueAuthKeyImportBatch(keys, body.DCID)
+	accOut := make([]map[string]any, 0, len(accepted))
+	for _, v := range accepted {
+		accOut = append(accOut, map[string]any{
+			"id":    v.ID,
+			"phone": v.Phone,
+			"ready": false,
+		})
+	}
+	funauthJSON(w, http.StatusAccepted, map[string]any{
+		"ok":         true,
+		"queued":     true,
+		"accepted":   len(accepted),
+		"rejected":   len(rejected),
+		"accounts":   accOut,
+		"errors":     rejected,
 	})
 }
 
