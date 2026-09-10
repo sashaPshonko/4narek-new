@@ -16,6 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8x — v8w + up_cd только на sales-driven ↑ (Sep 2026):
+//   empty_idle / empty_book / floor_escape / floor / market_recovery / trusted_ah_min
+//   не ставят CorridorUpCooldown и не копят UpStreak — иначе нормализация после
+//   сброса/пола тормозит на ~20–30 мин между шагами. deep/skim/ah_book(held>0) — как были.
 // stock_corridor_v8w — v8v + EMPTY_IDLE (Sep 2026):
 //   held=sales=buys=0 → любой DOWN запрещён (вкл. ah_book); recovery UP:
 //   trusted jump / иначе +1 (даже без book и не у пола). Не DOI/fill/paid/recover.
@@ -75,8 +79,8 @@ const (
 	pozorSoftDownFrac          = 0.22
 	pozorOverFrac              = 0.25
 	pozorDumpFrac              = 0.40
-	corridorMaxUpStreak        = 1 // не два ↑ подряд
-	corridorUpCooldownCycles   = 2 // после ↑ ещё N циклов без ↑ (deep-↑ может обойти)
+	corridorMaxUpStreak        = 1 // не два ↑ подряд (только sales-driven ↑)
+	corridorUpCooldownCycles   = 2 // после sales-driven ↑ ещё N циклов без ↑ (deep может обойти)
 	corridorMinSalesForUp      = 3 // дневной пол спроса на ↑
 	corridorNightMinSalesForUp = 4 // ночь 03–09 MSK
 	corridorSoftDownEvery      = 1
@@ -91,7 +95,7 @@ const (
 	corridorPaidClimbEnabled = false // up_paid (paid как market) off
 	// recover-↑: только при цене << paid и sales≥1; без buys — короткая страховка.
 	corridorMaxNoBuyUps       = 2 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
-	corridorRecoverProbeSteps = 1 // recover ≤ max(sell в TTL) + K×step
+	corridorRecoverProbeSteps = 1 // recover ≤ max(sell за TTL) + K×step
 	corridorThinFleetMaxBots  = 2 // ≤ столько ботов в категории → мягче пороги спроса / recover
 	corridorMaxIdleHardDowns = 1 // over/dump при sales=0: один щуп, не цепочка в пол
 	corridorIdleHardDownsDump = 3 // при fill≥50% и sales=0 — до 3 hard-↓ (кирка иначе стоит в переполнении)
@@ -464,6 +468,27 @@ func isGhostCatalogDown(label string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// corridorUpArmCooldown — up_cd/streak только для ↑ от живого разбора.
+// Нормализация с пустого склада / к полу / к книге без стока кулдаун не ставит:
+// иначе после сброса цена ползёт +1 раз в ~30 мин вместо лесенки каждый цикл.
+func corridorUpArmCooldown(action string) bool {
+	if !strings.Contains(action, "price_up") {
+		return false
+	}
+	switch {
+	case strings.Contains(action, "empty_idle"),
+		strings.Contains(action, "empty_book"),
+		strings.Contains(action, "floor_escape"),
+		action == "corridor_price_up_floor",
+		strings.Contains(action, "market_recovery"),
+		strings.Contains(action, "trusted_ah_min"):
+		return false
+	default:
+		// deep / skim / demand / recover / paid / ah_book (held>0)
+		return true
 	}
 }
 
@@ -1734,8 +1759,11 @@ func adjustPrice(item string) AdjustReport {
 			feEv.DownStreak, feEv.AHMin, sellers, tmBook.SellersNearMin, feEv.FloorRatio, feEv.AHRatio)
 		if feEv.Action == floorEscapeActionTrustedJump {
 			logTrustedMinDiscoveryJump(item, now, priceBefore, newPrice, step, totalHeld, buys, sales, tmEv)
+			state.FloorEscapeCooldown = floorEscapeCooldownCycles
+		} else {
+			// empty_idle / near_floor / deep_ah — можно ↑ каждый цикл, пока пусто.
+			state.FloorEscapeCooldown = 0
 		}
-		state.FloorEscapeCooldown = floorEscapeCooldownCycles
 	}
 
 	// Trusted AH-min jump (standalone): only if floor escape did not already UP.
@@ -1800,12 +1828,19 @@ func adjustPrice(item string) AdjustReport {
 
 	// Стрелки коридора + soft↓ cooldown + up-cooldown / last sales
 	if strings.Contains(action, "price_up") {
-		state.CorridorUpStreak++
 		state.CorridorDeadStreak = 0
 		state.CorridorDownCooldown = 0
-		state.CorridorUpCooldown = corridorUpCooldownCycles
 		state.IdleHardDownStreak = 0
 		state.CorridorDownStreak = 0
+		if corridorUpArmCooldown(action) {
+			state.CorridorUpStreak++
+			state.CorridorUpCooldown = corridorUpCooldownCycles
+		} else {
+			// нормализация: не блокируем следующий цикл hold_up_cd / streak
+			state.CorridorUpStreak = 0
+			state.CorridorUpCooldown = 0
+			notes = append(notes, "up_cd skipped (normalization ↑)")
+		}
 		isRecover := strings.Contains(action, "recover") || strings.Contains(action, "price_up_paid")
 		if buys > 0 || !isRecover {
 			state.CorridorNoBuyUpStreak = 0
