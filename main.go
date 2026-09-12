@@ -485,6 +485,7 @@ func removeClient(ws *websocket.Conn) {
 	delete(clientActiveTypes, ws)
 	delete(clientFleetTypes, ws)
 	delete(clientBotsPerType, ws)
+	clearClientTreasuryEmptyTypes(ws)
 	delete(clientBannedBots, ws)
 	delete(clientAuthFaults, ws)
 	delete(clientClanOwners, ws)
@@ -1362,31 +1363,32 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var msg struct {
-			Action        string          `json:"action"`
-			Type          string          `json:"type"`
-			Items         map[string]int  `json:"items"`
-			Inventory     map[string]int  `json:"inventory"`
-			Types         []string        `json:"types"`
-			ActiveTypes   []string        `json:"active_types"`
-			BotsPerType   map[string]int  `json:"bots_per_type"`
-			Banned        []bannedBotView `json:"banned"`
-			AuthFaults    []authFaultView `json:"auth_faults"`
-			ClanOwners    []clanOwnerView `json:"clan_owners"`
-			Bots          []orchBotNick   `json:"bots"`
-			Price         int             `json:"price"`
-			Enchants      []ItemEffect    `json:"enchants"`
-			Durability    *float64        `json:"durability"`
-			Floors        map[string]int  `json:"floors"`
-			WindowStartMs int64           `json:"window_start_ms"`
-			WindowEndMs   int64           `json:"window_end_ms"`
-			WindowMs      int64           `json:"window_ms"`
-			Uuid          string          `json:"uuid"`
-			GoType        string          `json:"go_type"`
-			ItemID        string          `json:"item_id"`
-			Seller        string          `json:"seller"`
-			Anarchy       any             `json:"anarchy"`
-			SeenBy        string          `json:"seen_by"`
-			Lots          []ahBookWire    `json:"lots"`
+			Action              string          `json:"action"`
+			Type                string          `json:"type"`
+			Items               map[string]int  `json:"items"`
+			Inventory           map[string]int  `json:"inventory"`
+			Types               []string        `json:"types"`
+			ActiveTypes         []string        `json:"active_types"`
+			BotsPerType         map[string]int  `json:"bots_per_type"`
+			TreasuryEmptyTypes  []string        `json:"treasury_empty_types"`
+			Banned              []bannedBotView `json:"banned"`
+			AuthFaults          []authFaultView `json:"auth_faults"`
+			ClanOwners          []clanOwnerView `json:"clan_owners"`
+			Bots                []orchBotNick   `json:"bots"`
+			Price               int             `json:"price"`
+			Enchants            []ItemEffect    `json:"enchants"`
+			Durability          *float64        `json:"durability"`
+			Floors              map[string]int  `json:"floors"`
+			WindowStartMs       int64           `json:"window_start_ms"`
+			WindowEndMs         int64           `json:"window_end_ms"`
+			WindowMs            int64           `json:"window_ms"`
+			Uuid                string          `json:"uuid"`
+			GoType              string          `json:"go_type"`
+			ItemID              string          `json:"item_id"`
+			Seller              string          `json:"seller"`
+			Anarchy             any             `json:"anarchy"`
+			SeenBy              string          `json:"seen_by"`
+			Lots                []ahBookWire    `json:"lots"`
 		}
 		if err := json.Unmarshal(rawMsg, &msg); err != nil {
 			log.Printf("json unmarshal error: %v", err)
@@ -1406,31 +1408,32 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
-	Action        string          `json:"action"`
-	Type          string          `json:"type"`
-	Items         map[string]int  `json:"items"`
-	Inventory     map[string]int  `json:"inventory"`
-	Types         []string        `json:"types"`
-	ActiveTypes   []string        `json:"active_types"`
-	BotsPerType   map[string]int  `json:"bots_per_type"`
-	Banned        []bannedBotView `json:"banned"`
-	AuthFaults    []authFaultView `json:"auth_faults"`
-	ClanOwners    []clanOwnerView `json:"clan_owners"`
-	Bots          []orchBotNick   `json:"bots"`
-	Price         int             `json:"price"`
-	Enchants      []ItemEffect    `json:"enchants"`
-	Durability    *float64        `json:"durability"`
-	Floors        map[string]int  `json:"floors"`
-	WindowStartMs int64           `json:"window_start_ms"`
-	WindowEndMs   int64           `json:"window_end_ms"`
-	WindowMs      int64           `json:"window_ms"`
-	Uuid          string          `json:"uuid"`
-	GoType        string          `json:"go_type"`
-	ItemID        string          `json:"item_id"`
-	Seller        string          `json:"seller"`
-	Anarchy       any             `json:"anarchy"`
-	SeenBy        string          `json:"seen_by"`
-	Lots          []ahBookWire    `json:"lots"`
+	Action             string          `json:"action"`
+	Type               string          `json:"type"`
+	Items              map[string]int  `json:"items"`
+	Inventory          map[string]int  `json:"inventory"`
+	Types              []string        `json:"types"`
+	ActiveTypes        []string        `json:"active_types"`
+	BotsPerType        map[string]int  `json:"bots_per_type"`
+	TreasuryEmptyTypes []string        `json:"treasury_empty_types"`
+	Banned             []bannedBotView `json:"banned"`
+	AuthFaults         []authFaultView `json:"auth_faults"`
+	ClanOwners         []clanOwnerView `json:"clan_owners"`
+	Bots               []orchBotNick   `json:"bots"`
+	Price              int             `json:"price"`
+	Enchants           []ItemEffect    `json:"enchants"`
+	Durability         *float64        `json:"durability"`
+	Floors             map[string]int  `json:"floors"`
+	WindowStartMs      int64           `json:"window_start_ms"`
+	WindowEndMs        int64           `json:"window_end_ms"`
+	WindowMs           int64           `json:"window_ms"`
+	Uuid               string          `json:"uuid"`
+	GoType             string          `json:"go_type"`
+	ItemID             string          `json:"item_id"`
+	Seller             string          `json:"seller"`
+	Anarchy            any             `json:"anarchy"`
+	SeenBy             string          `json:"seen_by"`
+	Lots               []ahBookWire    `json:"lots"`
 }) {
 	mutex.Lock()
 	enchJSON := tradeEnchantsJSON(msg.Enchants)
@@ -1518,6 +1521,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		clientInventory[ws] = copyMap(msg.Inventory)
 		setClientActiveTypes(ws, msg.ActiveTypes)
 		setClientBotsPerType(ws, msg.BotsPerType)
+		setClientTreasuryEmptyTypes(ws, msg.TreasuryEmptyTypes)
 		if len(msg.Bots) > 0 {
 			setClientOrchBots(ws, msg.Bots)
 		}

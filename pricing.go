@@ -1742,13 +1742,19 @@ func adjustPrice(item string) AdjustReport {
 	manualLock := blockUp || blockDown
 	alreadyDown = strings.Contains(action, "price_down")
 	alreadyUp := strings.Contains(action, "price_up")
+	suppressEmptyRecovery := suppressEmptyIdlePriceRecoveryLocked(cfg, totalHeld, sales, buys)
+	if suppressEmptyRecovery {
+		log.Printf("[EMPTY_IDLE] suppressed: presence_inactive reason=treasury_empty type=%s item=%s held=%d sales=%d buys=%d",
+			cfg.Type, item, totalHeld, sales, buys)
+		notes = append(notes, "EMPTY_IDLE suppressed: presence_inactive reason=treasury_empty")
+	}
 	tmEv := evalTrustedMinDiscovery(priceBefore, step, totalHeld, buys, tmBook, manualLock)
 	feEv := evalFloorEscape(
 		priceBefore, step, priceFloor, tmBook.TrustedMin,
 		totalHeld, sales, buys, state.CorridorDownStreak, state.FloorEscapeCooldown, 0,
 		manualLock, alreadyUp || alreadyDown, tmEv.WouldFire, tmEv.WouldPrice,
 	)
-	if feEv.WouldFire && feEv.WouldPrice > newPrice {
+	if !suppressEmptyRecovery && feEv.WouldFire && feEv.WouldPrice > newPrice {
 		newPrice = feEv.WouldPrice
 		action = feEv.Action
 		changed = true
@@ -1769,7 +1775,7 @@ func adjustPrice(item string) AdjustReport {
 	// Trusted AH-min jump (standalone): only if floor escape did not already UP.
 	alreadyUp = strings.Contains(action, "price_up")
 	alreadyDown = strings.Contains(action, "price_down")
-	if trustedMinDiscoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock {
+	if !suppressEmptyRecovery && trustedMinDiscoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock {
 		if tmEv.WouldFire && tmEv.WouldPrice > newPrice {
 			newPrice = tmEv.WouldPrice
 			action = trustedMinDiscoveryActionLive
@@ -1785,7 +1791,7 @@ func adjustPrice(item string) AdjustReport {
 	// Не пересекается с уже выбранным ↑/↓ этого цикла (в т.ч. floor escape / trusted_ah_min).
 	alreadyUp = strings.Contains(action, "price_up")
 	alreadyDown = strings.Contains(action, "price_down")
-	if marketRecoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock &&
+	if !suppressEmptyRecovery && marketRecoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock &&
 		marketRecoveryLiveShouldRaise(item, priceBefore, step, totalHeld, buys, sales, mrBook, manualLock) {
 		tgt := priceBefore + step
 		if tgt > newPrice {
