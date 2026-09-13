@@ -16,7 +16,16 @@ func TestV8tInventoryUpFlags(t *testing.T) {
 		t.Fatal("v8t: up_skim stays disabled")
 	}
 	if !trustedMinDiscoveryLiveEnabled {
-		t.Fatal("v8t: trusted_AH_min live discovery must be on")
+		t.Log("Sep 2026: trusted_AH_min live discovery off (книга наебывает)")
+	}
+	if ahBookPriceUpEnabled {
+		t.Fatal("ah_book/empty_book ↑ must stay disabled")
+	}
+	if floorEscapePriceUpEnabled {
+		t.Fatal("floor_escape/empty_idle ↑ must stay disabled")
+	}
+	if marketRecoveryLiveEnabled {
+		t.Fatal("market_recovery ↑ must stay disabled")
 	}
 }
 
@@ -45,7 +54,7 @@ func TestTrySellsBlockUpNotBlanketAtHighSales(t *testing.T) {
 
 func TestCapitalPolicyV8t(t *testing.T) {
 	// Superseded by v8u (DOI cover); keep flag checks above.
-	if capitalPolicy != "stock_corridor_v8x" {
-		t.Fatalf("policy=%s want stock_corridor_v8x", capitalPolicy)
+	if capitalPolicy != "stock_corridor_v8z" {
+		t.Fatalf("policy=%s want stock_corridor_v8z", capitalPolicy)
 	}
 }

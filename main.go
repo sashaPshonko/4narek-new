@@ -137,7 +137,7 @@ type RuntimePersist struct {
 	SavedAt          time.Time                  `json:"saved_at"`
 	LastCycleAt      map[string]time.Time       `json:"last_cycle_at"`
 	LastManualUpdate map[string]time.Time       `json:"last_manual_update"`
-	LastManualKind   map[string]string          `json:"last_manual_kind"` // "min" | "max"
+	LastManualKind   map[string]string          `json:"last_manual_kind"` // "min" | "max" | "set"
 	TradeHistory     map[string][]TradeLog      `json:"trade_history"`
 	PriceHistory     map[string][]PriceRecord   `json:"price_history"`
 	AdjustState      map[string]ItemAdjustState `json:"adjust_state"`

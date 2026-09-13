@@ -196,6 +196,9 @@ func TestEvaluateMarketRecoveryNoPriceMutation(t *testing.T) {
 }
 
 func TestMarketRecoveryLiveShouldRaise(t *testing.T) {
+	if !marketRecoveryLiveEnabled {
+		t.Skip("market_recovery live ↑ disabled (книга наебывает)")
+	}
 	resetMarketRecoveryShadowStateForTest()
 	bookTrap := ahBookMarketRecoverySnap{MinAsk: 1_800_000, P10: 2_000_000, NSell: 20, NUUID: 40, OK: true}
 	// deep trap: our=1kk, p10=2kk
@@ -258,6 +261,9 @@ func TestMarketRecoveryLiveOnlyFullConditions(t *testing.T) {
 }
 
 func TestMarketRecoveryLiveCommitNoPriceMutation(t *testing.T) {
+	if !marketRecoveryLiveEnabled {
+		t.Skip("market_recovery live ↑ disabled (книга наебывает)")
+	}
 	resetMarketRecoveryShadowStateForTest()
 	old := mlDB
 	mlDB = nil

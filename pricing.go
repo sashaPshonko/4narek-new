@@ -16,6 +16,9 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8z — v8y + все ↑ по книге/empty_idle выкл (Sep 2026):
+//   ah_book / empty_book / trusted_min / market_recovery / floor_escape(+empty_idle) ↑ off;
+//   soft-↓ по книге остаётся; ручная цена POST /sales/api/price (kind=set).
 // stock_corridor_v8y — v8x + empty_idle_ah_soft_down (Sep 2026):
 //   EMPTY_IDLE по-прежнему запрещает fill/ghost/dump ↓ через applyDown;
 //   исключение — явная ветка empty_idle_ah_soft_down: толстая AH (≥40) + sell ≫ p10+nac
@@ -111,6 +114,11 @@ const (
 	ahBookMinLotsWhenEmpty    = 12               // deprecated v8q: soft-↓ всегда ahBookMinLotsInWindow
 	ahBookSoftDownSlackSteps  = 2                // soft-↓ только если sell > p10+наценка+2×step (мёртвая зона)
 	ahBookMaxRaiseSteps       = 2                // ah_book-↑ не прыгает к min+наценка за цикл (0.84→2.4)
+	// Sep 2026: книга AH наебывает — все ↑ «по рынку/книге/empty_idle» выкл.
+	// soft-↓ по книге (corridor_price_down_ah_book / empty_idle_ah_soft_down) остаётся.
+	// Ручная цена с /sales → LastManualKind=set (блок ↑↓ на AnalysisTime).
+	ahBookPriceUpEnabled      = false // corridor_price_up_ah_book / empty_book
+	floorEscapePriceUpEnabled = false // empty_idle / deep_ah / trusted_jump / near_floor bounce
 	// После empty_idle_ah_soft_down: N циклов без empty_idle/trusted/MR recovery UP (anti-yoyo).
 	emptyIdleMarketDownCooldownCycles = 3
 	serverBoundLookCycles = 3 // окно закупок для set_min
@@ -1148,6 +1156,8 @@ func actionReasonRU(action string) string {
 		return "hold: после min можно только ↑ — ↓ заблокирован"
 	case "hold_manual_max":
 		return "hold: после max можно только ↓ — ↑ заблокирован"
+	case "hold_manual_set":
+		return "hold: ручная цена с /sales — ↑↓ заблокированы на цикл"
 	case "experiment_ok", "experiment_rollback", "experiment_start":
 		return action
 	default:
@@ -1171,6 +1181,8 @@ func manualDirectionClampLocked(item string, window time.Duration) (blockUp, blo
 		return false, true
 	case "max":
 		return true, false
+	case "set":
+		return true, true
 	default:
 		return true, true
 	}
@@ -1714,8 +1726,13 @@ func adjustPrice(item string) AdjustReport {
 	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
 	mrBook := ahBookMarketRecoveryStats(item, mrBookSince)
 	tmBook := ahBookTrustedSellerMin(item, bookSince, trustedMinDiscoveryNearSteps, step)
-	raiseFromBook := bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, sales, buys, totalHeld, dumpZone, alreadyDown, buys > 0)
-	raiseEmptyFromBook := bookOK && p10OK && shouldRaiseEmptyFromAhBook(priceBefore, p10, minAsk, nacenka, minInt(bookN, p10N), step, totalHeld, buys, alreadyDown, dumpZone)
+	wouldRaiseFromBook := bookOK && shouldRaiseFromAhBook(priceBefore, minAsk, nacenka, bookN, sales, buys, totalHeld, dumpZone, alreadyDown, buys > 0)
+	wouldRaiseEmptyFromBook := bookOK && p10OK && shouldRaiseEmptyFromAhBook(priceBefore, p10, minAsk, nacenka, minInt(bookN, p10N), step, totalHeld, buys, alreadyDown, dumpZone)
+	raiseFromBook := ahBookPriceUpEnabled && wouldRaiseFromBook
+	raiseEmptyFromBook := ahBookPriceUpEnabled && wouldRaiseEmptyFromBook
+	if !ahBookPriceUpEnabled && (wouldRaiseFromBook || wouldRaiseEmptyFromBook) {
+		notes = append(notes, "ah_book/empty_book ↑ disabled (книга наебывает)")
+	}
 	var raiseTgt int
 	if raiseFromBook {
 		raiseTgt = ahBookRaiseTargetCapped(priceBefore, minAsk, nacenka, step)
@@ -1803,7 +1820,7 @@ func adjustPrice(item string) AdjustReport {
 		totalHeld, sales, buys, state.CorridorDownStreak, state.FloorEscapeCooldown, 0,
 		manualLock, alreadyUp || alreadyDown, tmEv.WouldFire, tmEv.WouldPrice,
 	)
-	if !recoveryUpBlocked && feEv.WouldFire && feEv.WouldPrice > newPrice {
+	if floorEscapePriceUpEnabled && !recoveryUpBlocked && feEv.WouldFire && feEv.WouldPrice > newPrice {
 		// Не поднимать empty_idle, пока fresh book говорит, что мы уже выше рынка.
 		if aboveMarketBlocksIdleUp && isEmptyIdle(totalHeld, sales, buys) {
 			notes = append(notes, fmt.Sprintf("floor_escape %s skipped: above market", feEv.Reason))
@@ -1824,6 +1841,8 @@ func adjustPrice(item string) AdjustReport {
 				state.FloorEscapeCooldown = 0
 			}
 		}
+	} else if !floorEscapePriceUpEnabled && feEv.WouldFire {
+		notes = append(notes, fmt.Sprintf("floor_escape %s ↑ disabled (книга/empty_idle наебывают)", feEv.Reason))
 	}
 
 	// Trusted AH-min jump (standalone): only if floor escape did not already UP.
@@ -1860,15 +1879,23 @@ func adjustPrice(item string) AdjustReport {
 
 	// После set_min: только ↑. После set_max: только ↓. Окно = AnalysisTime.
 	if blockDown && newPrice < priceBefore {
-		notes = append(notes, "manual min → ↓ запрещён")
+		notes = append(notes, "manual min/set → ↓ запрещён")
 		newPrice = priceBefore
 		changed = false
-		action = "hold_manual_min"
+		if data.LastManualKind[item] == "set" {
+			action = "hold_manual_set"
+		} else {
+			action = "hold_manual_min"
+		}
 	} else if blockUp && newPrice > priceBefore {
-		notes = append(notes, "manual max → ↑ запрещён")
+		notes = append(notes, "manual max/set → ↑ запрещён")
 		newPrice = priceBefore
 		changed = false
-		action = "hold_manual_max"
+		if data.LastManualKind[item] == "set" {
+			action = "hold_manual_set"
+		} else {
+			action = "hold_manual_max"
+		}
 	}
 
 	if action == "" {

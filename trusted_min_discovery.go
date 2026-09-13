@@ -13,7 +13,7 @@ import (
 // Live winner: corridor_price_up_trusted_ah_min. market_recovery skips same cycle via alreadyUp.
 
 const (
-	trustedMinDiscoveryLiveEnabled  = true
+	trustedMinDiscoveryLiveEnabled  = false // Sep 2026: книга наебывает — jump ↑ выкл
 	trustedMinDiscoveryActionLive   = "corridor_price_up_trusted_ah_min"
 	trustedMinDiscoveryActionShadow = "corridor_price_up_trusted_ah_min_shadow"
 

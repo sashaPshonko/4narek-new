@@ -14,7 +14,7 @@ import (
 // Остальные UP/DOWN / nacenka / v8s skim — не трогаем.
 
 const (
-	marketRecoveryLiveEnabled  = true
+	marketRecoveryLiveEnabled  = false // Sep 2026: книга наебывает — B_price_trap ↑ выкл
 	marketRecoveryActionLive   = "corridor_price_up_market_recovery"
 	marketRecoveryActionShadow = "corridor_price_up_market_recovery_shadow"
 	marketRecoveryBookWindow   = 60 * time.Minute

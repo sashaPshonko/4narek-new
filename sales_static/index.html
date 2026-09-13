@@ -168,6 +168,28 @@
     .stat .k { font-size: 11.5px; color: var(--muted); font-weight: 600; }
     .stat .v { font-family: var(--mono); font-size: 17px; font-weight: 600; margin-top: 3px; }
     .stat .n { font-size: 11.5px; color: var(--faint); margin-top: 2px; }
+    .price-edit {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin: 4px 0 12px; padding: 12px 14px; border-radius: 14px;
+      border: 1px solid var(--line); background: rgba(255,255,255,.72);
+    }
+    .price-edit label { font-size: 12px; font-weight: 700; color: var(--muted); }
+    .price-edit input {
+      font-family: var(--mono); font-size: 15px; font-weight: 600;
+      padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line);
+      min-width: 140px; background: #fff; color: var(--ink);
+    }
+    .price-edit button {
+      font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+      padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(15,118,110,.35);
+      background: var(--accent-soft); color: var(--accent);
+    }
+    .price-edit button:hover { background: rgba(15,118,110,.2); }
+    .price-edit button:disabled { opacity: .5; cursor: default; }
+    .price-edit .hint { font-size: 12px; color: var(--faint); flex: 1 1 100%; margin: 0; line-height: 1.45; }
+    .price-edit .msg { font-size: 12.5px; font-weight: 600; margin: 0; }
+    .price-edit .msg.ok { color: var(--profit); }
+    .price-edit .msg.err { color: var(--loss); }
     .section-label { margin: 20px 0 4px; font-size: 13px; font-weight: 700; color: var(--ink); }
     .section-note { margin: 0 0 10px; font-size: 12px; color: var(--faint); line-height: 1.5; }
     .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
@@ -503,10 +525,18 @@
           <p class="detail-sub">${escapeHtml(i.type || "")} · ${escapeHtml(i.name || "")} · цикл переоценки ${i.cycle_minutes || "?"} мин</p>
 
           <div class="grid2">
-            <div class="stat"><div class="k">Продаём по</div><div class="v mono">${fmt(i.price)}</div><div class="n">целый предмет, битый — пропорционально дешевле</div></div>
+            <div class="stat"><div class="k">Продаём по</div><div class="v mono" id="curSellPrice">${fmt(i.price)}</div><div class="n">целый предмет, битый — пропорционально дешевле</div></div>
             <div class="stat"><div class="k">Готовы платить</div><div class="v mono">${fmt(i.implied_buy)}</div><div class="n">потолок закупа: цена минус наценка ${fmt(i.nacenka)}</div></div>
             <div class="stat"><div class="k">Заработали ${escapeHtml(data.period_label || "")}</div><div class="v mono ${clsMoney(i.profit)}">${fmt(i.profit)}</div><div class="n">${fmt(i.buys)} закупов на ${fmtShort(i.buy_sum)}, ${fmt(i.sells)} продаж на ${fmtShort(i.sell_sum)}</div></div>
             <div class="stat"><div class="k">Наценка факт / план</div><div class="v mono">${i.fact_samples ? fmt(i.fact_markup) : "—"} <span style="color:var(--faint);font-size:13px">/ ${fmt(i.nacenka)}</span></div><div class="n">${i.fact_samples ? `в валюте, в среднем по ${fmt(i.fact_samples)} ${plural(i.fact_samples, "покупке", "покупкам", "покупкам")}` : "за период не было покупок"}</div></div>
+          </div>
+
+          <div class="price-edit" id="priceEdit">
+            <label for="manualPrice">Ручная цена</label>
+            <input id="manualPrice" type="number" min="1" step="1" value="${i.price}" />
+            <button type="button" id="manualPriceBtn">Поставить</button>
+            <p class="hint">Алгоритм не трогает ↑↓ примерно на один цикл переоценки. Книжные ↑ сейчас выключены — это страховка от отката.</p>
+            <p class="msg" id="manualPriceMsg" hidden></p>
           </div>
 
           <div class="section-label">Реальная наценка на закупах</div>
@@ -565,6 +595,7 @@
           drawTimeline("chTime", m.timeline || []);
           drawHistogram("chHist", m.hist || []);
         }
+        bindManualPrice(i.id, i.price);
         body.scrollTop = keepScroll;
         if (scroll) $("detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
       } catch (e) {
@@ -572,6 +603,56 @@
         body.hidden = true;
         empty.textContent = "Не удалось загрузить " + id + ": " + e.message;
       }
+    }
+
+    function bindManualPrice(itemId, currentPrice) {
+      const input = $("manualPrice");
+      const btn = $("manualPriceBtn");
+      const msg = $("manualPriceMsg");
+      if (!input || !btn || !msg) return;
+      const show = (text, ok) => {
+        msg.hidden = false;
+        msg.textContent = text;
+        msg.className = "msg " + (ok ? "ok" : "err");
+      };
+      btn.onclick = async () => {
+        const price = Number(String(input.value || "").replace(/\s+/g, ""));
+        if (!Number.isFinite(price) || price <= 0) {
+          show("Нужна цена > 0", false);
+          return;
+        }
+        btn.disabled = true;
+        show("Сохраняю…", true);
+        try {
+          const res = await fetch("/sales/api/price", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ id: itemId, price: Math.round(price) }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || body.ok === false) {
+            throw new Error(body.error || ("HTTP " + res.status));
+          }
+          const cur = $("curSellPrice");
+          if (cur) cur.textContent = fmt(body.price);
+          input.value = String(body.price);
+          if (overview?.items) {
+            const row = overview.items.find((x) => x.id === itemId);
+            if (row) row.price = body.price;
+            renderTable();
+          }
+          if (body.message === "unchanged") show("Уже стоит эта цена", true);
+          else show(`Поставил ${fmt(body.old_price)} → ${fmt(body.price)}`, true);
+        } catch (e) {
+          show(String(e.message || e), false);
+        } finally {
+          btn.disabled = false;
+        }
+      };
+      input.onkeydown = (ev) => {
+        if (ev.key === "Enter") btn.click();
+      };
+      if (currentPrice > 0) input.value = String(currentPrice);
     }
 
     function renderFeed(trades) {

@@ -170,6 +170,29 @@ func salesAPI(w http.ResponseWriter, r *http.Request) {
 		salesJSON(w, http.StatusOK, item)
 		return
 
+	case path == "/price" && r.Method == http.MethodPost:
+		var req struct {
+			ID    string `json:"id"`
+			Price int    `json:"price"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			salesJSONErr(w, http.StatusBadRequest, "bad json")
+			return
+		}
+		old, ok, msg := applyManualCatalogPriceSet(req.ID, req.Price)
+		if !ok {
+			salesJSONErr(w, http.StatusBadRequest, msg)
+			return
+		}
+		salesJSON(w, http.StatusOK, map[string]any{
+			"ok":        true,
+			"id":        req.ID,
+			"old_price": old,
+			"price":     req.Price,
+			"message":   msg,
+		})
+		return
+
 	case path == "/markups" && r.Method == http.MethodGet:
 		salesJSON(w, http.StatusOK, buildSalesMarkups(r.URL.Query().Get("item"), period))
 		return
@@ -190,6 +213,50 @@ func salesJSON(w http.ResponseWriter, code int, v any) {
 
 func salesJSONErr(w http.ResponseWriter, code int, msg string) {
 	salesJSON(w, code, map[string]any{"ok": false, "error": msg})
+}
+
+// applyManualCatalogPriceSet — ручная цена с /sales UI.
+// kind=set → corridor не двигает ↑↓ в окне AnalysisTime.
+func applyManualCatalogPriceSet(item string, price int) (old int, ok bool, msg string) {
+	item = strings.TrimSpace(item)
+	if item == "" {
+		return 0, false, "missing id"
+	}
+	if price <= 0 {
+		return 0, false, "price must be > 0"
+	}
+
+	mutex.Lock()
+	if _, exists := itemsConfig[item]; !exists {
+		mutex.Unlock()
+		return 0, false, "unknown item"
+	}
+	old = data.Prices[item]
+	if old == price {
+		mutex.Unlock()
+		return old, true, "unchanged"
+	}
+	now := time.Now()
+	data.Prices[item] = price
+	if data.LastManualUpdate == nil {
+		data.LastManualUpdate = make(map[string]time.Time)
+	}
+	if data.LastManualKind == nil {
+		data.LastManualKind = make(map[string]string)
+	}
+	data.LastManualUpdate[item] = now
+	data.LastManualKind[item] = "set"
+	if dailyData.Prices != nil {
+		dailyData.Prices[item] = price
+	}
+	recordExternalPriceChangeLocked(item, "manual_set", old, price)
+	log.Printf("[CONFIG] %s: manual set %d → %d (clamp ↑↓ на цикл)", item, old, price)
+	mutex.Unlock()
+
+	logServerPriceEvent(item, "manual_set", old, price)
+	publishPrices()
+	saveDailyDataNoMessageUpdate()
+	return old, true, "ok"
 }
 
 // ── период ───────────────────────────────────────────────────────────────────
