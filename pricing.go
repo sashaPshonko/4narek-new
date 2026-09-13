@@ -16,12 +16,17 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8y — v8x + empty_idle_ah_soft_down (Sep 2026):
+//   EMPTY_IDLE по-прежнему запрещает fill/ghost/dump ↓ через applyDown;
+//   исключение — явная ветка empty_idle_ah_soft_down: толстая AH (≥40) + sell ≫ p10+nac
+//   → тот же ahBookSoftDownApply; same-cycle alreadyDown блокирует FE/trusted/MR UP;
+//   EmptyIdleMarketDownCooldown=3 + bookOK∧sell>p10+nac → anti-yoyo (нет empty_idle UP).
 // stock_corridor_v8x — v8w + up_cd только на sales-driven ↑ (Sep 2026):
 //   empty_idle / empty_book / floor_escape / floor / market_recovery / trusted_ah_min
 //   не ставят CorridorUpCooldown и не копят UpStreak — иначе нормализация после
 //   сброса/пола тормозит на ~20–30 мин между шагами. deep/skim/ah_book(held>0) — как были.
 // stock_corridor_v8w — v8v + EMPTY_IDLE (Sep 2026):
-//   held=sales=buys=0 → любой DOWN запрещён (вкл. ah_book); recovery UP:
+//   held=sales=buys=0 → обычный DOWN запрещён; recovery UP:
 //   trusted jump / иначе +1 (даже без book и не у пола). Не DOI/fill/paid/recover.
 // stock_corridor_v8v — v8u + floor escape (Sep 2026):
 //   idle-empty near_floor/deep_AH → +1; down_streak≥3 near_floor → +1;
@@ -106,6 +111,8 @@ const (
 	ahBookMinLotsWhenEmpty    = 12               // deprecated v8q: soft-↓ всегда ahBookMinLotsInWindow
 	ahBookSoftDownSlackSteps  = 2                // soft-↓ только если sell > p10+наценка+2×step (мёртвая зона)
 	ahBookMaxRaiseSteps       = 2                // ah_book-↑ не прыгает к min+наценка за цикл (0.84→2.4)
+	// После empty_idle_ah_soft_down: N циклов без empty_idle/trusted/MR recovery UP (anti-yoyo).
+	emptyIdleMarketDownCooldownCycles = 3
 	serverBoundLookCycles = 3 // окно закупок для set_min
 	serverBoundMinBuys    = 2 // одна покупка — шум
 )
@@ -193,7 +200,9 @@ type ItemAdjustState struct {
 	IdleHardDownStreak    int  `json:"idle_hard_down_streak"`     // подряд over/dump при sales=0
 	CorridorDownStreak    int  `json:"corridor_down_streak"`      // подряд price_down (HOLD не сбрасывает)
 	FloorEscapeCooldown   int  `json:"floor_escape_cooldown"`     // циклы до следующего floor escape
-	LastCycleSales        int  `json:"last_cycle_sales"`          // sales прошлого цикла
+	// После empty_idle_ah_soft_down: блочит empty_idle/trusted/MR UP на N циклов.
+	EmptyIdleMarketDownCooldown int `json:"empty_idle_market_down_cooldown"`
+	LastCycleSales             int `json:"last_cycle_sales"` // sales прошлого цикла
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -915,6 +924,25 @@ func shouldSoftDownFromAhBook(sell, p10, minAsk, nacenka, n, step int, alreadyUp
 	return sell > p10+nacenka+ahBookSoftDownSlackSteps*step
 }
 
+// emptyIdleAhSoftDownOK — явный выход из тупика EMPTY_IDLE + высокая цена vs толстая книга.
+// Не снимает !emptyIdle с ordinary softDownFromBook; только эта ветка.
+func emptyIdleAhSoftDownOK(emptyIdle, bookOK, p10OK bool, sell, p10, minAsk, nacenka, n, step int) bool {
+	if !emptyIdle || !bookOK || !p10OK {
+		return false
+	}
+	return shouldSoftDownFromAhBook(sell, p10, minAsk, nacenka, n, step, false, false, 0)
+}
+
+// emptyIdleAboveMarketBlocksUp — fresh trusted book говорит sell > p10+nac:
+// empty_idle recovery UP не должен поднимать каталог «потому что held=0».
+// Thin/no book — не трогаем (caller проверяет bookOK/p10OK).
+func emptyIdleAboveMarketBlocksUp(emptyIdle, bookOK, p10OK bool, sell, p10, nacenka int) bool {
+	if !emptyIdle || !bookOK || !p10OK || p10 <= 0 {
+		return false
+	}
+	return sell > p10+nacenka
+}
+
 // ahBookSoftDownApply — цель книги; при held=0 не больше −N×step за цикл (анти-пила пустого).
 func ahBookSoftDownApply(sell, softDownTgt, priceFloor, step, held int) int {
 	if softDownTgt <= 0 || softDownTgt >= sell {
@@ -1042,7 +1070,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_empty_book":
 		return "corridor_v8r: held=0 и глубокая книга выше нас ≥2 step → +1 step к рынку"
 	case "corridor_price_down_ah_book":
-		return "corridor_v8q: селл > p10+наценка, ≥40 uuid; held=0 → ≤−N×step/цикл"
+		return "corridor_v8y: селл > p10+наценка, ≥40 uuid; held>0 или empty_idle_ah_soft_down → ≤−N×step/цикл"
 	case "corridor_price_down_overcap":
 		return "corridor_v8q: недобор + сток + try-отказ + цена ≥ paid+K×step → soft-↓"
 	case "corridor_price_down_stale":
@@ -1695,10 +1723,13 @@ func adjustPrice(item string) AdjustReport {
 		raiseTgt = emptyBookRaiseTarget(priceBefore, p10, minAsk, nacenka, step)
 	}
 	emptyIdle := isEmptyIdle(totalHeld, sales, buys)
+	// Обычный AH soft-↓: empty_idle по-прежнему блокирует.
 	softDownFromBook := !emptyIdle && bookOK && p10OK &&
 		shouldSoftDownFromAhBook(priceBefore, p10, minAsk, nacenka, p10N, step, raiseFromBook, buys > 0, totalHeld)
+	// Явный выход: EMPTY_IDLE + толстая книга + цена ≫ рынок → тот же soft-↓ actuator.
+	emptyIdleAhSoftDown := emptyIdleAhSoftDownOK(emptyIdle, bookOK, p10OK, priceBefore, p10, minAsk, nacenka, p10N, step)
 	var softDownTgt int
-	if softDownFromBook {
+	if softDownFromBook || emptyIdleAhSoftDown {
 		softDownTgt = ahBookSoftDownTarget(p10, minAsk, nacenka, step)
 	}
 	mutex.Lock()
@@ -1715,7 +1746,8 @@ func adjustPrice(item string) AdjustReport {
 		notes = append(notes, fmt.Sprintf("held=0 ah_book p10=%d min=%d n=%d → рынок выше sell %d, медленный ↑ до %d",
 			p10, minAsk, minInt(bookN, p10N), priceBefore, raiseTgt))
 	}
-	if softDownFromBook && softDownTgt > 0 && softDownTgt < newPrice {
+	emptyIdleAhSoftDownFired := false
+	if (softDownFromBook || emptyIdleAhSoftDown) && softDownTgt > 0 && softDownTgt < newPrice {
 		bookFloor := minAsk + nacenka
 		if softDownTgt < bookFloor {
 			softDownTgt = bookFloor
@@ -1725,12 +1757,16 @@ func adjustPrice(item string) AdjustReport {
 			newPrice = tgt
 			action = "corridor_price_down_ah_book"
 			changed = true
-			notes = append(notes, fmt.Sprintf("ah_book p10=%d min=%d n=%d → селл %d → %d (пол min+наценка=%d held=%d)",
-				p10, minAsk, p10N, priceBefore, tgt, bookFloor, totalHeld))
+			if emptyIdleAhSoftDown {
+				emptyIdleAhSoftDownFired = true
+				notes = append(notes, fmt.Sprintf(
+					"empty_idle_ah_soft_down: p10=%d min=%d n=%d → селл %d → %d (пол min+наценка=%d; floor_escape UP blocked)",
+					p10, minAsk, p10N, priceBefore, tgt, bookFloor))
+			} else {
+				notes = append(notes, fmt.Sprintf("ah_book p10=%d min=%d n=%d → селл %d → %d (пол min+наценка=%d held=%d)",
+					p10, minAsk, p10N, priceBefore, tgt, bookFloor, totalHeld))
+			}
 		}
-	} else if emptyIdle && bookOK && p10OK &&
-		shouldSoftDownFromAhBook(priceBefore, p10, minAsk, nacenka, p10N, step, false, false, totalHeld) {
-		notes = append(notes, "ah_book soft-↓ blocked empty_idle (held=sales=buys=0)")
 	}
 
 	// EMPTY_IDLE / floor escape BEFORE standalone trusted jump / market_recovery:
@@ -1748,34 +1784,52 @@ func adjustPrice(item string) AdjustReport {
 			cfg.Type, item, totalHeld, sales, buys)
 		notes = append(notes, "EMPTY_IDLE suppressed: presence_inactive reason=treasury_empty")
 	}
+	// Anti-yoyo after A: блок empty_idle / trusted / MR recovery UP на N циклов.
+	marketDownCooldownBlocksUp := state.EmptyIdleMarketDownCooldown > 0
+	if marketDownCooldownBlocksUp {
+		notes = append(notes, fmt.Sprintf(
+			"empty_idle_market_down_cd=%d — recovery UP blocked (anti-yoyo)", state.EmptyIdleMarketDownCooldown))
+	}
+	// Fresh book: sell > p10+nac → empty_idle UP «из-за held=0» запрещён (thin/no book не трогаем).
+	aboveMarketBlocksIdleUp := emptyIdleAboveMarketBlocksUp(emptyIdle, bookOK, p10OK, priceBefore, p10, nacenka)
+	if aboveMarketBlocksIdleUp {
+		notes = append(notes, fmt.Sprintf(
+			"empty_idle UP blocked: sell %d > p10+nac %d (fresh book)", priceBefore, p10+nacenka))
+	}
+	recoveryUpBlocked := suppressEmptyRecovery || marketDownCooldownBlocksUp
 	tmEv := evalTrustedMinDiscovery(priceBefore, step, totalHeld, buys, tmBook, manualLock)
 	feEv := evalFloorEscape(
 		priceBefore, step, priceFloor, tmBook.TrustedMin,
 		totalHeld, sales, buys, state.CorridorDownStreak, state.FloorEscapeCooldown, 0,
 		manualLock, alreadyUp || alreadyDown, tmEv.WouldFire, tmEv.WouldPrice,
 	)
-	if !suppressEmptyRecovery && feEv.WouldFire && feEv.WouldPrice > newPrice {
-		newPrice = feEv.WouldPrice
-		action = feEv.Action
-		changed = true
-		sellers := tmBook.UniqueSellers
-		notes = append(notes, floorEscapeNote(feEv, totalHeld, sales, buys, stockLoad, sellers))
-		log.Printf("[FLOOR_ESCAPE] %s: %s | %d→%d | held=%d sales=%d buys=%d fill=%.1f%% down_streak=%d trusted_AH_min=%d sellers=%d near=%d price/floor=%.3f price/ah=%.3f",
-			item, feEv.Reason, priceBefore, newPrice, totalHeld, sales, buys, stockLoad*100,
-			feEv.DownStreak, feEv.AHMin, sellers, tmBook.SellersNearMin, feEv.FloorRatio, feEv.AHRatio)
-		if feEv.Action == floorEscapeActionTrustedJump {
-			logTrustedMinDiscoveryJump(item, now, priceBefore, newPrice, step, totalHeld, buys, sales, tmEv)
-			state.FloorEscapeCooldown = floorEscapeCooldownCycles
+	if !recoveryUpBlocked && feEv.WouldFire && feEv.WouldPrice > newPrice {
+		// Не поднимать empty_idle, пока fresh book говорит, что мы уже выше рынка.
+		if aboveMarketBlocksIdleUp && isEmptyIdle(totalHeld, sales, buys) {
+			notes = append(notes, fmt.Sprintf("floor_escape %s skipped: above market", feEv.Reason))
 		} else {
-			// empty_idle / near_floor / deep_ah — можно ↑ каждый цикл, пока пусто.
-			state.FloorEscapeCooldown = 0
+			newPrice = feEv.WouldPrice
+			action = feEv.Action
+			changed = true
+			sellers := tmBook.UniqueSellers
+			notes = append(notes, floorEscapeNote(feEv, totalHeld, sales, buys, stockLoad, sellers))
+			log.Printf("[FLOOR_ESCAPE] %s: %s | %d→%d | held=%d sales=%d buys=%d fill=%.1f%% down_streak=%d trusted_AH_min=%d sellers=%d near=%d price/floor=%.3f price/ah=%.3f",
+				item, feEv.Reason, priceBefore, newPrice, totalHeld, sales, buys, stockLoad*100,
+				feEv.DownStreak, feEv.AHMin, sellers, tmBook.SellersNearMin, feEv.FloorRatio, feEv.AHRatio)
+			if feEv.Action == floorEscapeActionTrustedJump {
+				logTrustedMinDiscoveryJump(item, now, priceBefore, newPrice, step, totalHeld, buys, sales, tmEv)
+				state.FloorEscapeCooldown = floorEscapeCooldownCycles
+			} else {
+				// empty_idle / near_floor / deep_ah — можно ↑ каждый цикл, пока пусто.
+				state.FloorEscapeCooldown = 0
+			}
 		}
 	}
 
 	// Trusted AH-min jump (standalone): only if floor escape did not already UP.
 	alreadyUp = strings.Contains(action, "price_up")
 	alreadyDown = strings.Contains(action, "price_down")
-	if !suppressEmptyRecovery && trustedMinDiscoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock {
+	if !recoveryUpBlocked && trustedMinDiscoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock {
 		if tmEv.WouldFire && tmEv.WouldPrice > newPrice {
 			newPrice = tmEv.WouldPrice
 			action = trustedMinDiscoveryActionLive
@@ -1791,7 +1845,7 @@ func adjustPrice(item string) AdjustReport {
 	// Не пересекается с уже выбранным ↑/↓ этого цикла (в т.ч. floor escape / trusted_ah_min).
 	alreadyUp = strings.Contains(action, "price_up")
 	alreadyDown = strings.Contains(action, "price_down")
-	if !suppressEmptyRecovery && marketRecoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock &&
+	if !recoveryUpBlocked && marketRecoveryLiveEnabled && !alreadyUp && !alreadyDown && !manualLock &&
 		marketRecoveryLiveShouldRaise(item, priceBefore, step, totalHeld, buys, sales, mrBook, manualLock) {
 		tgt := priceBefore + step
 		if tgt > newPrice {
@@ -1889,6 +1943,13 @@ func adjustPrice(item string) AdjustReport {
 	// Floor-escape / empty-idle CD ticks on non-escape cycles (set to N when escape fired).
 	if !strings.Contains(action, "floor_escape") && action != floorEscapeActionEmptyIdle && state.FloorEscapeCooldown > 0 {
 		state.FloorEscapeCooldown--
+	}
+
+	// Anti-yoyo: после A — 3 цикла без empty_idle/trusted/MR UP; иначе тик.
+	if emptyIdleAhSoftDownFired {
+		state.EmptyIdleMarketDownCooldown = emptyIdleMarketDownCooldownCycles
+	} else if state.EmptyIdleMarketDownCooldown > 0 {
+		state.EmptyIdleMarketDownCooldown--
 	}
 
 	if state.StockVsSalesCooldown > 0 {

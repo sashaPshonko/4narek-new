@@ -141,18 +141,22 @@ func TestEmptyIdleTrustedJump(t *testing.T) {
 	}
 }
 
-func TestEmptyIdleAhBookBearishDownForbidden(t *testing.T) {
-	// Bearish AH conditions would soft-↓ at held=0 without EMPTY_IDLE gate.
+func TestEmptyIdleAhBookOrdinarySoftDownStillGated(t *testing.T) {
+	// Ordinary softDownFromBook gate (!emptyIdle) stays closed on EMPTY_IDLE.
+	// Thick-book escape is only via emptyIdleAhSoftDownOK (separate branch).
 	if !shouldSoftDownFromAhBook(2_000_000, 500_000, 400_000, 300_000, 50, 100_000, false, false, 0) {
 		t.Fatal("precondition: ah_book soft-↓ would fire")
 	}
 	if !isEmptyIdle(0, 0, 0) {
 		t.Fatal("empty idle")
 	}
-	allow := shouldSoftDownFromAhBook(2_000_000, 500_000, 400_000, 300_000, 50, 100_000, false, false, 0) &&
+	ordinary := shouldSoftDownFromAhBook(2_000_000, 500_000, 400_000, 300_000, 50, 100_000, false, false, 0) &&
 		!isEmptyIdle(0, 0, 0)
-	if allow {
-		t.Fatal("EMPTY_IDLE must forbid ah_book DOWN")
+	if ordinary {
+		t.Fatal("EMPTY_IDLE must still forbid ordinary softDownFromBook")
+	}
+	if !emptyIdleAhSoftDownOK(true, true, true, 2_000_000, 500_000, 400_000, 300_000, 50, 100_000) {
+		t.Fatal("explicit empty_idle_ah_soft_down must allow thick-book DOWN")
 	}
 }
 
