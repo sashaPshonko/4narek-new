@@ -142,6 +142,9 @@ type RuntimePersist struct {
 	PriceHistory     map[string][]PriceRecord   `json:"price_history"`
 	AdjustState      map[string]ItemAdjustState `json:"adjust_state"`
 	BuySurgeCount    map[string]int             `json:"buy_surge_count"` // отдельный счётчик всплеска; не трогает цикл
+	// Prices — живой каталог. После loadDailyData(+seed) runtime перекрывает daily:
+	// иначе «вчерашние призраки» / sum-heuristic при рестарте откатывают ручные правки.
+	Prices map[string]int `json:"prices,omitempty"`
 }
 
 var itemsConfig map[string]ItemConfig
@@ -727,6 +730,19 @@ func pricesLookLikeFreshBaseSeed(prices map[string]int) bool {
 	return matched > 0
 }
 
+// shouldReplaceCatalogFromPreviousDay — только чистый base-seed сегодня и
+// не-base вчера. Никаких сравнений сумм: вчерашние завышенные «призраки»
+// иначе при каждом рестарте затирают нормальные сегодняшние цены.
+func shouldReplaceCatalogFromPreviousDay(todayPrices, prevPrices map[string]int) bool {
+	if !pricesLookLikeFreshBaseSeed(todayPrices) {
+		return false
+	}
+	if pricesLookLikeFreshBaseSeed(prevPrices) {
+		return false
+	}
+	return true
+}
+
 // seedCatalogFromPreviousDay — цены/наценки/adjust со вчера, если сегодня дырка
 // или сегодняшний снимок — чистый base-seed после рестарта.
 func seedCatalogFromPreviousDay(today string) (fromDate string, seeded int) {
@@ -739,27 +755,9 @@ func seedCatalogFromPreviousDay(today string) (fromDate string, seeded int) {
 		return "", 0
 	}
 
-	replaceAll := pricesLookLikeFreshBaseSeed(data.Prices)
-	if !replaceAll {
-		// Рестарт после полуночи уже успел чуть отойти от base (+1..3 step),
-		// но сумма всё ещё сильно ниже вчера — это тот же сброс, не рынок.
-		var curSum, prevSum int
-		for item := range itemsConfig {
-			curSum += data.Prices[item]
-			prevSum += prev.Prices[item]
-		}
-		if prevSum > 0 && curSum*100 < prevSum*80 {
-			replaceAll = true
-			log.Printf("[DATA] %s сумма цен %d << вчера %s (%d) → откат цен со вчера", today, curSum, prevDate, prevSum)
-		}
-	}
+	replaceAll := shouldReplaceCatalogFromPreviousDay(data.Prices, prev.Prices)
 	if replaceAll {
-		// Вчера тоже весь base — нечего чинить.
-		if pricesLookLikeFreshBaseSeed(prev.Prices) {
-			replaceAll = false
-		} else if pricesLookLikeFreshBaseSeed(data.Prices) {
-			log.Printf("[DATA] %s выглядит как base-seed → цены со вчера %s", today, prevDate)
-		}
+		log.Printf("[DATA] %s выглядит как base-seed → цены со вчера %s", today, prevDate)
 	}
 
 	for item := range itemsConfig {
@@ -993,6 +991,7 @@ func buildRuntimePersistLocked() RuntimePersist {
 		PriceHistory:     clonePriceHistoryLocked(),
 		AdjustState:      maps.Clone(data.AdjustState),
 		BuySurgeCount:    maps.Clone(data.BuySurgeCount),
+		Prices:           maps.Clone(data.Prices),
 	}
 }
 
@@ -1075,7 +1074,7 @@ func loadRuntimeState() {
 		if _, ok := itemsConfig[item]; !ok {
 			continue
 		}
-		if kind != "min" && kind != "max" {
+		if kind != "min" && kind != "max" && kind != "set" {
 			continue
 		}
 		data.LastManualKind[item] = kind
@@ -1122,8 +1121,24 @@ func loadRuntimeState() {
 		data.BuySurgeCount[item] = n
 	}
 
-	log.Printf("[RUNTIME] загружено: якорей циклов=%d, сделок=%d, adjust_state=%d (saved_at=%v)",
-		nCycle, nTrades, nAdj, snap.SavedAt.Format(time.RFC3339))
+	nPrices := 0
+	if data.Prices == nil {
+		data.Prices = make(map[string]int)
+	}
+	if dailyData.Prices == nil {
+		dailyData.Prices = make(map[string]int)
+	}
+	for item, p := range snap.Prices {
+		if _, ok := itemsConfig[item]; !ok || p <= 0 {
+			continue
+		}
+		data.Prices[item] = p
+		dailyData.Prices[item] = p
+		nPrices++
+	}
+
+	log.Printf("[RUNTIME] загружено: якорей циклов=%d, сделок=%d, adjust_state=%d, цен=%d (saved_at=%v)",
+		nCycle, nTrades, nAdj, nPrices, snap.SavedAt.Format(time.RFC3339))
 }
 
 // firstCycleDelay — сколько ждать до первого adjust после рестарта.
@@ -1143,11 +1158,11 @@ func firstCycleDelay(item string, cfg ItemConfig) time.Duration {
 	}
 	overdue := elapsed - cfg.AnalysisTime
 	if overdue > time.Minute {
-		log.Printf("[TIMER] %s: цикл просрочен на %v (>1м) — новый цикл, старый якорь сброшен",
+		log.Printf("[TIMER] %s: цикл просрочен на %v (>1м) — новый цикл, якорь сброшен (trade_history сохранён)",
 			item, overdue.Round(time.Second))
 		delete(data.LastCycleAt, item)
 		delete(swordTimes, item)
-		delete(data.TradeHistory, item)
+		// TradeHistory НЕ трогаем: после рестарта UI/окна 1h иначе пустые.
 		delete(data.BuySurgeCount, item)
 		rt := buildRuntimePersistLocked()
 		mutex.Unlock()
@@ -1263,8 +1278,13 @@ func persistDailySnapshot(snap *DailyData) {
 		log.Printf("Ошибка сохранения данных: %v", err)
 		return
 	}
-	if err := os.WriteFile(filename, file, 0644); err != nil {
-		log.Printf("Ошибка записи файла: %v", err)
+	tmp := filename + ".tmp"
+	if err := os.WriteFile(tmp, file, 0644); err != nil {
+		log.Printf("Ошибка записи tmp %s: %v", tmp, err)
+		return
+	}
+	if err := os.Rename(tmp, filename); err != nil {
+		_ = os.WriteFile(filename, file, 0644)
 	}
 }
 

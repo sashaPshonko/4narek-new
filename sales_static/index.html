@@ -323,7 +323,36 @@
     let sortKey = "profit";
     let sortDir = -1;
     let period = "today";
+    let priceEditBusy = false;
+    const PRICE_DRAFT_KEY = "sales_manual_price_draft";
 
+    function readPriceDraft() {
+      try {
+        const raw = sessionStorage.getItem(PRICE_DRAFT_KEY);
+        if (!raw) return null;
+        const d = JSON.parse(raw);
+        if (!d || !d.id || d.value == null || d.value === "") return null;
+        return d;
+      } catch (_) {
+        return null;
+      }
+    }
+    function writePriceDraft(id, value) {
+      try {
+        sessionStorage.setItem(PRICE_DRAFT_KEY, JSON.stringify({ id, value: String(value) }));
+      } catch (_) {}
+    }
+    function clearPriceDraft(id) {
+      try {
+        const d = readPriceDraft();
+        if (!d || !id || d.id === id) sessionStorage.removeItem(PRICE_DRAFT_KEY);
+      } catch (_) {}
+    }
+    function isPriceEditing() {
+      if (priceEditBusy) return true;
+      const input = $("manualPrice");
+      return !!(input && document.activeElement === input);
+    }
     const fmt = (n) => {
       if (n == null || Number.isNaN(n)) return "—";
       const sign = n < 0 ? "−" : "";
@@ -362,7 +391,10 @@
         $("statusText").textContent = `${overview.period_label} · считаем с ${since} · обновлено ${t.toLocaleTimeString("ru-RU")} · торгуется ${overview.items_live} ${plural(overview.items_live, "предмет", "предмета", "предметов")}`;
         $("tableTitle").textContent = "Предметы · " + overview.period_label;
         renderAll();
-        if (selectedId) loadDetail(selectedId, false);
+        if (selectedId) {
+          // Пока правим цену — не перерисовываем деталку (сбрасывает input / сбивает клик).
+          if (!isPriceEditing()) loadDetail(selectedId, false);
+        }
       } catch (e) {
         status.classList.add("err");
         $("statusText").textContent = "нет связи с сервером: " + e.message;
@@ -510,10 +542,30 @@
     async function loadDetail(id, scroll) {
       const empty = $("detailEmpty");
       const body = $("detailBody");
+      const prevInput = $("manualPrice");
+      const keepDraft = prevInput && selectedId === id && (
+        document.activeElement === prevInput ||
+        priceEditBusy ||
+        (readPriceDraft() && readPriceDraft().id === id)
+      );
+      const draftValue = keepDraft
+        ? (prevInput && document.activeElement === prevInput ? prevInput.value : (readPriceDraft()?.value ?? prevInput?.value))
+        : null;
       try {
         const res = await fetch(`/sales/api/item/${encodeURIComponent(id)}?period=${period}`, { cache: "no-store" });
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
+        // Пока пользователь в поле цены — не затираем форму ответом API.
+        if (keepDraft && isPriceEditing() && selectedId === id && $("manualPrice")) {
+          const cur = $("curSellPrice");
+          if (cur && data.item) cur.textContent = fmt(data.item.price);
+          if (overview?.items && data.item) {
+            const row = overview.items.find((x) => x.id === id);
+            if (row) row.price = data.item.price;
+            renderTable();
+          }
+          return;
+        }
         const keepScroll = body.hidden ? 0 : body.scrollTop;
         empty.hidden = true;
         body.hidden = false;
@@ -595,7 +647,7 @@
           drawTimeline("chTime", m.timeline || []);
           drawHistogram("chHist", m.hist || []);
         }
-        bindManualPrice(i.id, i.price);
+        bindManualPrice(i.id, i.price, draftValue);
         body.scrollTop = keepScroll;
         if (scroll) $("detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
       } catch (e) {
@@ -605,7 +657,7 @@
       }
     }
 
-    function bindManualPrice(itemId, currentPrice) {
+    function bindManualPrice(itemId, currentPrice, draftValue) {
       const input = $("manualPrice");
       const btn = $("manualPriceBtn");
       const msg = $("manualPriceMsg");
@@ -615,12 +667,22 @@
         msg.textContent = text;
         msg.className = "msg " + (ok ? "ok" : "err");
       };
+      const stored = readPriceDraft();
+      if (draftValue != null && draftValue !== "") {
+        input.value = String(draftValue);
+      } else if (stored && stored.id === itemId) {
+        input.value = String(stored.value);
+      } else if (currentPrice > 0) {
+        input.value = String(currentPrice);
+      }
+      input.oninput = () => writePriceDraft(itemId, input.value);
       btn.onclick = async () => {
         const price = Number(String(input.value || "").replace(/\s+/g, ""));
         if (!Number.isFinite(price) || price <= 0) {
           show("Нужна цена > 0", false);
           return;
         }
+        priceEditBusy = true;
         btn.disabled = true;
         show("Сохраняю…", true);
         try {
@@ -633,6 +695,7 @@
           if (!res.ok || body.ok === false) {
             throw new Error(body.error || ("HTTP " + res.status));
           }
+          clearPriceDraft(itemId);
           const cur = $("curSellPrice");
           if (cur) cur.textContent = fmt(body.price);
           input.value = String(body.price);
@@ -646,13 +709,13 @@
         } catch (e) {
           show(String(e.message || e), false);
         } finally {
+          priceEditBusy = false;
           btn.disabled = false;
         }
       };
       input.onkeydown = (ev) => {
         if (ev.key === "Enter") btn.click();
       };
-      if (currentPrice > 0) input.value = String(currentPrice);
     }
 
     function renderFeed(trades) {
