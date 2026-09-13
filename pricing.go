@@ -16,6 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8aa — v8z + inventory ↑ обратно (Sep 2026):
+//   demand / recover / paid-climb ON: мало стока + мало покупок (sales≥buys / <<paid) → ↑;
+//   книга / empty_idle / trusted_min / market_recovery / floor_escape ↑ по-прежнему OFF;
+//   soft-↓ по книге остаётся.
 // stock_corridor_v8z — v8y + все ↑ по книге/empty_idle выкл (Sep 2026):
 //   ah_book / empty_book / trusted_min / market_recovery / floor_escape(+empty_idle) ↑ off;
 //   soft-↓ по книге остаётся; ручная цена POST /sales/api/price (kind=set).
@@ -97,10 +101,11 @@ const (
 	tryUpVetoPerSale           = 2
 	corridorSkimMinLead        = 3 // legacy порог lead; сам skim-↑ выключен (v8s)
 	corridorSkimEnabled        = false // v8s: up_skim → HOLD (baggage vs matched HOLD)
-	// v8t audit: inventory UP как market discovery — отключить (кроме up_deep).
-	corridorDemandUpEnabled = false // sales>buys → up_demand off
-	corridorRecoverUpEnabled = false // up_recover / up_recover_deep off
-	corridorPaidClimbEnabled = false // up_paid (paid как market) off
+	// v8aa: ↑ когда мало стока и боты мало покупают (sales≥buys / цена << paid).
+	// Книга/empty_idle ↑ остаются выкл (v8z).
+	corridorDemandUpEnabled  = true  // held<lo + sales>buys → up_demand
+	corridorRecoverUpEnabled = true  // held<lo + price<<paid + sales≥1 → recover
+	corridorPaidClimbEnabled = true  // в полосе price<<paid + buys≤sales → up_paid
 	// recover-↑: только при цене << paid и sales≥1; без buys — короткая страховка.
 	corridorMaxNoBuyUps       = 2 // recover-↑ подряд без buys → пауза (антиvacuum), без resume
 	corridorRecoverProbeSteps = 1 // recover ≤ max(sell за TTL) + K×step
@@ -1575,14 +1580,19 @@ func adjustPrice(item string) AdjustReport {
 					totalHeld, targetLo, sales, prevCycleSales))
 			}
 		case sales > buys && deep && !nightMSK && (state.CorridorUpStreak < corridorMaxUpStreak || bypassUpCD):
-			// v8t: up_demand выкл; up_deep оставляем (малый N, отдельное решение).
 			applyUp("corridor_price_up_deep",
-				fmt.Sprintf("held=0 < lo=%d sales=%d > buys=%d — deep-↑ (v8t: demand off, deep kept)",
+				fmt.Sprintf("held=0 < lo=%d sales=%d > buys=%d — deep-↑ (мало стока, мало покупок)",
 					targetLo, sales, buys))
+		case sales > buys && corridorDemandUpEnabled && !nightMSK &&
+			(state.CorridorUpStreak < corridorMaxUpStreak || bypassUpCD) &&
+			(state.CorridorUpCooldown == 0 || bypassUpCD):
+			applyUp("corridor_price_up_demand",
+				fmt.Sprintf("held=%d < lo=%d sales=%d > buys=%d — demand-↑ (мало стока, мало покупок)",
+					totalHeld, targetLo, sales, buys))
 		case sales > buys:
 			action = "corridor_hold_demand_disabled"
 			notes = append(notes, fmt.Sprintf(
-				"held=%d < lo=%d sales=%d > buys=%d — был бы up_demand, v8t hold (audit Δ≪0)",
+				"held=%d < lo=%d sales=%d > buys=%d — был бы up_demand, выкл",
 				totalHeld, targetLo, sales, buys))
 		case recoverOK && corridorRecoverUpEnabled:
 			label := "corridor_price_up_recover"

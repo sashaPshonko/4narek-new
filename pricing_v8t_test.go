@@ -2,21 +2,19 @@ package main
 
 import "testing"
 
-func TestV8tInventoryUpFlags(t *testing.T) {
-	if corridorDemandUpEnabled {
-		t.Fatal("v8t: up_demand must be disabled")
+func TestV8aaInventoryUpFlags(t *testing.T) {
+	// v8aa: inventory ↑ (мало стока + мало покупок) — ON; книга/empty_idle — OFF.
+	if !corridorDemandUpEnabled {
+		t.Fatal("v8aa: up_demand must be enabled")
 	}
-	if corridorRecoverUpEnabled {
-		t.Fatal("v8t: up_recover must be disabled")
+	if !corridorRecoverUpEnabled {
+		t.Fatal("v8aa: up_recover must be enabled")
 	}
-	if corridorPaidClimbEnabled {
-		t.Fatal("v8t: up_paid must be disabled")
+	if !corridorPaidClimbEnabled {
+		t.Fatal("v8aa: up_paid must be enabled")
 	}
 	if corridorSkimEnabled {
-		t.Fatal("v8t: up_skim stays disabled")
-	}
-	if !trustedMinDiscoveryLiveEnabled {
-		t.Log("Sep 2026: trusted_AH_min live discovery off (книга наебывает)")
+		t.Fatal("v8aa: up_skim stays disabled")
 	}
 	if ahBookPriceUpEnabled {
 		t.Fatal("ah_book/empty_book ↑ must stay disabled")
@@ -52,9 +50,8 @@ func TestTrySellsBlockUpNotBlanketAtHighSales(t *testing.T) {
 	}
 }
 
-func TestCapitalPolicyV8t(t *testing.T) {
-	// Superseded by v8u (DOI cover); keep flag checks above.
-	if capitalPolicy != "stock_corridor_v8z" {
-		t.Fatalf("policy=%s want stock_corridor_v8z", capitalPolicy)
+func TestCapitalPolicyV8aa(t *testing.T) {
+	if capitalPolicy != "stock_corridor_v8aa" {
+		t.Fatalf("policy=%s want stock_corridor_v8aa", capitalPolicy)
 	}
 }
