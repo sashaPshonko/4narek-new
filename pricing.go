@@ -16,6 +16,15 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8ae — v8ad + cold-start price discovery (Sep 2026):
+//   !PriceExplored ∧ held=sales=buys=0 ∧ thick book ∧ our/p10 < gap → +1 UP only;
+//   Explored SKU: empty_inventory_up выкл; held=0 never auto-DOWN (grant);
+//   Explored sticky after sell or abort (max cycles / near p10).
+// stock_corridor_v8ad — v8ab + excess grant + Minimal post-grant C (Sep 2026):
+//   grant: held≤hi → авто-↓ запрещён;
+//   C HOLD filters: sales≥2∧excess=+1; sales=0∧streak1∧excess≤1∧buys=0;
+//   C DOWN candidates (bypass idleHard only): sales=0∧(streak≥2 ∨ buys>0∧… ∨ excess≥3);
+//   doi_cover сохранён; sales=1 и sales≥2∧excess≥2 — текущая логика без изменений.
 // stock_corridor_v8ab — v8aa + empty_inventory_up (Sep 2026):
 //   held=0 → exploration +1 step (sales/buys/night/book не обязательны);
 //   cap: p10+nac / paid+5step / safety 24step; CorridorUpCooldown arm;
@@ -219,10 +228,17 @@ type ItemAdjustState struct {
 	FloorEscapeCooldown   int  `json:"floor_escape_cooldown"`     // циклы до следующего floor escape
 	// После empty_idle_ah_soft_down: блочит empty_idle/trusted/MR UP на N циклов.
 	EmptyIdleMarketDownCooldown int `json:"empty_idle_market_down_cooldown"`
-	// empty_inventory_up: счётчик ↑ и якорь цены, пока held==0 (сброс при held>0).
+	// empty_inventory_up (legacy): счётчик ↑ пока held==0. Для Explored SKU ветка выкл.
 	EmptyInventoryClimbSteps  int `json:"empty_inventory_climb_steps"`
 	EmptyInventoryAnchorPrice int `json:"empty_inventory_anchor_price"`
 	LastCycleSales            int `json:"last_cycle_sales"` // sales прошлого цикла
+	// Подряд циклов sales==0 при held>hi (для Minimal C). На решении: +1 за текущий цикл.
+	ZeroSalesExcessStreak int `json:"zero_sales_excess_streak"`
+	// Cold-start sell-price discovery (v8ae). Sticky Explored; не путать с обычным s0b0.
+	PriceExplored            bool   `json:"price_explored"`
+	PriceExplorationCycles   int    `json:"price_exploration_cycles"`
+	PriceOriginKind          string `json:"price_origin_kind,omitempty"`  // base_seed|manual_set|backfill|…
+	PriceOriginPrice         int    `json:"price_origin_price,omitempty"`
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -434,6 +450,62 @@ func recoverBlockedByPaidCap(price, lastPaid, step int) bool {
 	return price >= cap
 }
 
+// automaticDownAllowed — grant: held > targetHi → авто-↓ может рассматриваться.
+func automaticDownAllowed(held, targetHi int) bool {
+	return held > targetHi
+}
+
+func excessDepth(held, targetHi int) int {
+	return held - targetHi
+}
+
+// zeroSalesExcessStreakNow — длина текущей серии sales==0 в excess (включая этот цикл).
+func zeroSalesExcessStreakNow(sales, held, targetHi, prevStreak int) int {
+	if sales != 0 || !automaticDownAllowed(held, targetHi) {
+		return 0
+	}
+	if prevStreak < 0 {
+		prevStreak = 0
+	}
+	return prevStreak + 1
+}
+
+// postGrantCBlockDown — Minimal C: запрет авто-↓ (поверх grant).
+//  1) sales≥2 ∧ excess==+1
+//  2) sales==0 ∧ streak==1 ∧ excess≤+1 ∧ buys==0
+func postGrantCBlockDown(held, targetHi, sales, buys, zeroStreak int) bool {
+	if !automaticDownAllowed(held, targetHi) {
+		return false
+	}
+	d := excessDepth(held, targetHi)
+	if sales >= 2 && d == 1 {
+		return true
+	}
+	if sales == 0 && zeroStreak == 1 && d <= 1 && buys == 0 {
+		return true
+	}
+	return false
+}
+
+// postGrantCDownCandidate — Minimal C: sales==0 + залежь/накопление →
+// не давать idleHard отменить уже выбранный fill/dump/over ↓.
+func postGrantCDownCandidate(held, targetHi, sales, buys, zeroStreak int) bool {
+	if sales != 0 || !automaticDownAllowed(held, targetHi) {
+		return false
+	}
+	d := excessDepth(held, targetHi)
+	if zeroStreak >= 2 {
+		return true
+	}
+	if buys > 0 && (d >= 2 || zeroStreak >= 1) {
+		return true
+	}
+	if d >= 3 {
+		return true
+	}
+	return false
+}
+
 // doiCover — days-of-inventory proxy for Level-2 Policy F (sales≥1).
 func doiCover(held, sales int) float64 {
 	if sales <= 0 {
@@ -442,8 +514,8 @@ func doiCover(held, sales int) float64 {
 	return float64(held) / float64(sales)
 }
 
-// doiCoverIntensity — Policy F actuator for sales≥1: "hold" | "over" | "soft".
-// sales≤0 → "" (caller must use legacy fill dump/over/soft).
+// doiCoverIntensity — Policy F: "hold" | "over" | "soft" (sales≥1).
+// "hold" → corridor_hold_doi_cover (сохранено в v8ad).
 func doiCoverIntensity(held, sales int) string {
 	if sales <= 0 {
 		return ""
@@ -1042,7 +1114,11 @@ func actionReasonRU(action string) string {
 	case "corridor_hold_over_idle":
 		return "corridor_v8h: перезапас, sales=0 после idle-щупа — ждём продажу"
 	case "corridor_hold_doi_cover":
-		return "corridor_v8u L2 F: sales≥1 DOI<3 или DOI≥10 → HOLD (fill≥25% soft/over/dump не режем)"
+		return "corridor_v8u L2 F: sales≥1 DOI<3 или DOI≥10 → HOLD (fill soft/over/dump не режем)"
+	case "corridor_hold_no_excess":
+		return "corridor_v8ad: held ≤ targetHi → авто-↓ запрещён (grant)"
+	case "corridor_hold_post_grant_c":
+		return "corridor_v8ad Minimal C: mild+live (+1∧sales≥2) или zero1 mild → HOLD"
 	case "corridor_price_up_paid":
 		return "corridor_v8h: в полосе цена << lastPaid → ↑ к якорю (и ночью)"
 	case "corridor_price_down_soft":
@@ -1054,7 +1130,9 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_deep":
 		return "corridor_v8h: held=0 днём + сильный спрос → +цена (обход up_cd); v8t: единственный sales>buys ↑"
 	case "corridor_price_up_empty_inventory":
-		return "corridor_v8ab: held=0 → exploration +1 step (sales/buys не обязательны; cap p10+nac/paid/safety)"
+		return "corridor_v8ab(legacy): held=0 empty_inventory ↑ (выкл для PriceExplored; cold-start вместо этого)"
+	case "corridor_price_up_cold_start":
+		return "corridor_v8ae: !Explored ∧ s0b0 ∧ thick book ∧ our≪p10 → разведочный +1 step"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
 		return "corridor_v8p: недобор + цена << paid + sales≥1 → recover (v8t: выкл)"
 	case "corridor_hold_demand_disabled":
@@ -1238,7 +1316,7 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	surgeCount := data.BuySurgeCount[item]
 
 	share := itemSlotShareLocked(cfg.Type)
-	_, _, soft, _, _ := stockTargets(share, stockBandFor(item, cfg))
+	_, targetHi, soft, _, _ := stockTargets(share, stockBandFor(item, cfg))
 	threshold := maxInt(4, soft)
 	held := getItemCount(item) + getInventoryCount(item)
 
@@ -1257,6 +1335,10 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 
 	// Surge↓ только если уже выше гистерезиса soft (не с края полосы).
 	if surgeCount < threshold || held < soft {
+		return ev
+	}
+	// v8ad: grant + Minimal C (mild+live uses cycle sales; zero1-streak N/A on surge path).
+	if !automaticDownAllowed(held, targetHi) || postGrantCBlockDown(held, targetHi, sales, 0, 0) {
 		return ev
 	}
 
@@ -1404,6 +1486,8 @@ func adjustPrice(item string) AdjustReport {
 		stockLoad = float64(totalHeld) / float64(share)
 	}
 	prevCycleSales := state.LastCycleSales // до обновления в конце цикла
+	zeroStreak := zeroSalesExcessStreakNow(sales, totalHeld, targetHi, state.ZeroSalesExcessStreak)
+	cDownCandidate := postGrantCDownCandidate(totalHeld, targetHi, sales, buys, zeroStreak)
 	nightMSK := isNightMSK(now)
 	botsInCat := aggregateBotsPerTypeLocked()[cfg.Type]
 	minSalesForUp := demandMinSalesForUp(botsInCat, nightMSK)
@@ -1426,6 +1510,25 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	applyDown := func(label, note string, stepMult int) {
+		// Grant: held ≤ hi → авто-↓ запрещён.
+		if !automaticDownAllowed(totalHeld, targetHi) {
+			notes = append(notes, note+fmt.Sprintf(
+				" · blocked no-excess (held=%d ≤ hi=%d → авто-↓ запрещён)", totalHeld, targetHi))
+			if action == "" || action == "hold" || strings.Contains(action, "price_down") {
+				action = "corridor_hold_no_excess"
+			}
+			return
+		}
+		// Minimal C: mild+live / zero1 mild → HOLD.
+		if postGrantCBlockDown(totalHeld, targetHi, sales, buys, zeroStreak) {
+			notes = append(notes, note+fmt.Sprintf(
+				" · blocked post_grant_C (held=%d hi=%d excess=+%d sales=%d buys=%d zeroStreak=%d)",
+				totalHeld, targetHi, excessDepth(totalHeld, targetHi), sales, buys, zeroStreak))
+			if action == "" || action == "hold" || strings.Contains(action, "price_down") {
+				action = "corridor_hold_post_grant_c"
+			}
+			return
+		}
 		// EMPTY_IDLE: нет стока и нет оборота — любой ↓ запрещён (не bearish).
 		if isEmptyIdle(totalHeld, sales, buys) {
 			notes = append(notes, note+" · blocked empty_idle (held=sales=buys=0 → ↓ запрещён)")
@@ -1516,28 +1619,32 @@ func adjustPrice(item string) AdjustReport {
 			"doi_cover F: DOI=%.3f inten=%s held=%d sales=%d fill=%.1f%% → HOLD (legacy fill-↓ skipped; DOI<3 or DOI≥10)",
 			doi, inten, totalHeld, sales, stockLoad*100))
 
-	// ─── sales==0: legacy fill dump/over/soft (unchanged) ───
+	// ─── sales==0: legacy fill dump/over/soft (unchanged; C may bypass idleHard) ───
 	case sales == 0 && totalHeld >= targetDump:
-		if !allowHardDown(sales, state.IdleHardDownStreak, stockLoad) {
+		if !allowHardDown(sales, state.IdleHardDownStreak, stockLoad) && !cDownCandidate {
 			action = "corridor_hold_dump_idle"
 			notes = append(notes, fmt.Sprintf("held=%d ≥ dump=%d sales=0 idleHard=%d — ждём продажу, не цепочку в пол", totalHeld, targetDump, state.IdleHardDownStreak))
 		} else {
-			applyDown("corridor_price_down_dump",
-				fmt.Sprintf("held=%d ≥ dump=%d (%.0f%% share=%d ×%d)",
-					totalHeld, targetDump, stockLoad*100, share, corridorHardDownStepMult),
-				corridorHardDownStepMult)
+			note := fmt.Sprintf("held=%d ≥ dump=%d (%.0f%% share=%d ×%d)",
+				totalHeld, targetDump, stockLoad*100, share, corridorHardDownStepMult)
+			if cDownCandidate && !allowHardDown(sales, state.IdleHardDownStreak, stockLoad) {
+				note += " · post_grant_C idleHard bypass"
+			}
+			applyDown("corridor_price_down_dump", note, corridorHardDownStepMult)
 			state.CorridorDownCooldown = 0
 		}
 
 	case sales == 0 && totalHeld >= targetOver:
-		if !allowHardDown(sales, state.IdleHardDownStreak, stockLoad) {
+		if !allowHardDown(sales, state.IdleHardDownStreak, stockLoad) && !cDownCandidate {
 			action = "corridor_hold_over_idle"
 			notes = append(notes, fmt.Sprintf("held=%d ≥ over=%d sales=0 idleHard=%d — ждём продажу, не цепочку в пол", totalHeld, targetOver, state.IdleHardDownStreak))
 		} else {
-			applyDown("corridor_price_down_over",
-				fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d ×%d)",
-					totalHeld, targetOver, stockLoad*100, share, corridorHardDownStepMult),
-				corridorHardDownStepMult)
+			note := fmt.Sprintf("held=%d ≥ over=%d (%.0f%% share=%d ×%d)",
+				totalHeld, targetOver, stockLoad*100, share, corridorHardDownStepMult)
+			if cDownCandidate && !allowHardDown(sales, state.IdleHardDownStreak, stockLoad) {
+				note += " · post_grant_C idleHard bypass"
+			}
+			applyDown("corridor_price_down_over", note, corridorHardDownStepMult)
 		}
 
 	case sales == 0 && totalHeld > targetHi:
@@ -1769,37 +1876,49 @@ func adjustPrice(item string) AdjustReport {
 		softDownTgt = ahBookSoftDownTarget(p10, minAsk, nacenka, step)
 	}
 	mutex.Lock()
-	// empty_inventory_up после книги (нужен p10 для market cap), до soft-↓.
-	// deep/demand/recover уже могли ↑ — тогда не трогаем.
-	// buy-veto / hold_empty при held=0 не блокируют (перезаписываем HOLD).
+	// Cold-start discovery / empty_inventory (v8ae):
+	//   Explored → empty_inventory_up выкл (обычный s0b0 не лезет вверх «потому что пусто»).
+	//   !Explored → только cold-start +1 при thick book + deep gap (не multi-step).
 	blockUpEI, _ := manualDirectionClampLocked(item, cfg.AnalysisTime)
 	if totalHeld > 0 {
 		state.EmptyInventoryClimbSteps = 0
 		state.EmptyInventoryAnchorPrice = 0
-	} else if !strings.Contains(action, "price_up") && !strings.Contains(action, "price_down") {
-		anchor := state.EmptyInventoryAnchorPrice
-		if anchor <= 0 {
-			anchor = priceBefore
+	}
+	if sales > 0 {
+		markPriceExploredLocked(&state, "sell")
+	}
+	thickCold := coldStartThickBook(bookOK, p10OK, bookN, p10)
+	if !state.PriceExplored {
+		if state.PriceExplorationCycles >= coldStartMaxCycles {
+			markPriceExploredLocked(&state, "max_cycles")
+		} else if coldStartNearMarket(priceBefore, p10, thickCold) {
+			markPriceExploredLocked(&state, "near_p10")
 		}
-		effCap, capWhy := emptyInventoryEffectiveCap(
-			step, nacenka, p10, bookN, paidMax, anchor, bookOK, p10OK,
-		)
-		if canEmptyInventoryUp(
-			totalHeld, priceBefore, step, blockUpEI,
-			state.CorridorUpCooldown, state.CorridorUpStreak,
-			state.EmptyIdleMarketDownCooldown, state.EmptyInventoryClimbSteps,
-			effCap,
+	}
+	if !state.PriceExplored &&
+		!strings.Contains(action, "price_up") && !strings.Contains(action, "price_down") &&
+		canColdStartUp(
+			state.PriceExplored, state.PriceExplorationCycles, totalHeld, sales, buys,
+			priceBefore, step, p10, bookN, bookOK, p10OK, blockUpEI,
+			state.CorridorUpCooldown, state.CorridorUpStreak, state.EmptyIdleMarketDownCooldown,
 		) {
-			if state.EmptyInventoryAnchorPrice <= 0 {
-				state.EmptyInventoryAnchorPrice = priceBefore
-			}
-			state.EmptyInventoryClimbSteps++
-			applyUp(emptyInventoryAction,
-				fmt.Sprintf(
-					"held=0 sales=%d buys=%d — empty_inventory ↑ +1 step (cap=%d [%s] climb=%d/%d paid=%d)",
-					sales, buys, effCap, capWhy, state.EmptyInventoryClimbSteps, emptyInventoryMaxClimbSteps, paidMax,
-				))
+		state.PriceExplorationCycles++
+		if state.PriceOriginKind == "" {
+			state.PriceOriginKind = "cold_start"
+			state.PriceOriginPrice = priceBefore
 		}
+		applyUp(coldStartAction, fmt.Sprintf(
+			"cold_start ↑ +1: our=%d p10=%d ratio=%.2f uuid=%d cycles=%d/%d",
+			priceBefore, p10, float64(priceBefore)/float64(p10), bookN,
+			state.PriceExplorationCycles, coldStartMaxCycles,
+		))
+	} else if state.PriceExplored && totalHeld == 0 {
+		// Explored + empty: no empty_inventory_up (legacy path retired for live).
+	}
+	// held=0: не multi-step ah_book raise (cold = +1 only; explored empty ≠ jump).
+	if totalHeld == 0 {
+		raiseFromBook = false
+		raiseEmptyFromBook = false
 	}
 	if raiseFromBook && raiseTgt > newPrice {
 		newPrice = raiseTgt
@@ -1817,7 +1936,11 @@ func adjustPrice(item string) AdjustReport {
 	emptyIdleAhSoftDownFired := false
 	// Same-cycle: corridor/empty_inventory ↑ уже поднял цену — empty_idle_ah_soft_down не откатывает.
 	corridorAlreadyUp := strings.Contains(action, "price_up")
-	if (softDownFromBook || emptyIdleAhSoftDown) && softDownTgt > 0 && softDownTgt < newPrice && !corridorAlreadyUp {
+	// Grant + Minimal C: AH soft-↓ только если авто-↓ не запрещён.
+	ahSoftDownOK := automaticDownAllowed(totalHeld, targetHi) &&
+		!postGrantCBlockDown(totalHeld, targetHi, sales, buys, zeroStreak) &&
+		(softDownFromBook || emptyIdleAhSoftDown)
+	if ahSoftDownOK && softDownTgt > 0 && softDownTgt < newPrice && !corridorAlreadyUp {
 		bookFloor := minAsk + nacenka
 		if softDownTgt < bookFloor {
 			softDownTgt = bookFloor
@@ -1837,6 +1960,13 @@ func adjustPrice(item string) AdjustReport {
 					p10, minAsk, p10N, priceBefore, tgt, bookFloor, totalHeld))
 			}
 		}
+	} else if postGrantCBlockDown(totalHeld, targetHi, sales, buys, zeroStreak) && (softDownFromBook || emptyIdleAhSoftDown) {
+		notes = append(notes, fmt.Sprintf(
+			"ah_book soft-↓ blocked post_grant_C (held=%d hi=%d excess=+%d sales=%d)",
+			totalHeld, targetHi, excessDepth(totalHeld, targetHi), sales))
+	} else if !automaticDownAllowed(totalHeld, targetHi) && (softDownFromBook || emptyIdleAhSoftDown) {
+		notes = append(notes, fmt.Sprintf(
+			"ah_book soft-↓ blocked no-excess (held=%d ≤ hi=%d)", totalHeld, targetHi))
 	} else if corridorAlreadyUp && emptyIdleAhSoftDown {
 		notes = append(notes, "empty_idle_ah_soft_down skipped: already ↑ this cycle")
 	}
@@ -2042,6 +2172,7 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	state.LastCycleSales = sales
+	state.ZeroSalesExcessStreak = zeroStreak
 	state.LastCycleProfit = profitNow
 	state.LastCycleNacenkaSum = nacenkaSumNow
 	if totalHeld > 0 {

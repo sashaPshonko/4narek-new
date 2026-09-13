@@ -1,6 +1,7 @@
 package main
 
-// empty_inventory_up (v8ab): held=0 → exploration +1 step.
+// empty_inventory_up (v8ab, legacy helpers): held=0 → exploration +1 step.
+// Live path retired in v8ae for PriceExplored SKUs; cold_start replaces discovery.
 // sales/buys/paid/book/night не обязательны. AH book только как sell-cap (p10+nac), не диктует цену.
 
 const (

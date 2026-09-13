@@ -143,7 +143,7 @@ func TestEmptyIdleTrustedJump(t *testing.T) {
 
 func TestEmptyIdleAhBookOrdinarySoftDownStillGated(t *testing.T) {
 	// Ordinary softDownFromBook gate (!emptyIdle) stays closed on EMPTY_IDLE.
-	// Thick-book escape is only via emptyIdleAhSoftDownOK (separate branch).
+	// Thick-book signal via emptyIdleAhSoftDownOK; v8ac grant still closed at held=0.
 	if !shouldSoftDownFromAhBook(2_000_000, 500_000, 400_000, 300_000, 50, 100_000, false, false, 0) {
 		t.Fatal("precondition: ah_book soft-↓ would fire")
 	}
@@ -156,7 +156,10 @@ func TestEmptyIdleAhBookOrdinarySoftDownStillGated(t *testing.T) {
 		t.Fatal("EMPTY_IDLE must still forbid ordinary softDownFromBook")
 	}
 	if !emptyIdleAhSoftDownOK(true, true, true, 2_000_000, 500_000, 400_000, 300_000, 50, 100_000) {
-		t.Fatal("explicit empty_idle_ah_soft_down must allow thick-book DOWN")
+		t.Fatal("signal empty_idle_ah_soft_down still detects thick book")
+	}
+	if automaticDownAllowed(0, 1) {
+		t.Fatal("v8ac: held=0 must not grant DOWN even with thick book")
 	}
 }
 

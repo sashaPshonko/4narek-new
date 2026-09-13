@@ -873,6 +873,18 @@ func loadDailyData(loc *time.Location) {
 		if _, exists := data.Prices[item]; !exists {
 			data.Prices[item] = cfg.BasePrice
 			dailyData.Prices[item] = cfg.BasePrice
+			if data.AdjustState == nil {
+				data.AdjustState = make(map[string]ItemAdjustState)
+			}
+			if dailyData.AdjustState == nil {
+				dailyData.AdjustState = make(map[string]ItemAdjustState)
+			}
+			st := data.AdjustState[item]
+			if !st.PriceExplored && st.PriceOriginKind == "" {
+				resetPriceExplorationLocked(&st, "base_seed", cfg.BasePrice)
+				data.AdjustState[item] = st
+				dailyData.AdjustState[item] = st
+			}
 		}
 	}
 

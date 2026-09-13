@@ -188,6 +188,7 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	reloadCapitalPendingFromDB()
 	syncItemsCatalog()
 	ensureCompactSchema()
+	backfillPriceExplorationFromDB()
 	startMLBackupLoop()
 	startMLCompactLoop()
 	log.Printf("[ML] SQLite %s (schema v%d + compact history rewrite)", mlDBPath, mlSchemaVersion)

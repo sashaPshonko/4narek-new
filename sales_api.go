@@ -249,6 +249,15 @@ func applyManualCatalogPriceSet(item string, price int) (old int, ok bool, msg s
 	if dailyData.Prices != nil {
 		dailyData.Prices[item] = price
 	}
+	if data.AdjustState == nil {
+		data.AdjustState = make(map[string]ItemAdjustState)
+	}
+	st := data.AdjustState[item]
+	resetPriceExplorationLocked(&st, "manual_set", price)
+	data.AdjustState[item] = st
+	if dailyData.AdjustState != nil {
+		dailyData.AdjustState[item] = st
+	}
 	recordExternalPriceChangeLocked(item, "manual_set", old, price)
 	log.Printf("[CONFIG] %s: manual set %d → %d (clamp ↑↓ на цикл)", item, old, price)
 	mutex.Unlock()
