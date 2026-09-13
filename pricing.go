@@ -16,6 +16,10 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8ab — v8aa + empty_inventory_up (Sep 2026):
+//   held=0 → exploration +1 step (sales/buys/night/book не обязательны);
+//   cap: p10+nac / paid+5step / safety 24step; CorridorUpCooldown arm;
+//   same-cycle empty_idle_ah_soft_down не откатывает этот ↑.
 // stock_corridor_v8aa — v8z + inventory ↑ обратно (Sep 2026):
 //   demand / recover / paid-climb ON: мало стока + мало покупок (sales≥buys / <<paid) → ↑;
 //   книга / empty_idle / trusted_min / market_recovery / floor_escape ↑ по-прежнему OFF;
@@ -215,7 +219,10 @@ type ItemAdjustState struct {
 	FloorEscapeCooldown   int  `json:"floor_escape_cooldown"`     // циклы до следующего floor escape
 	// После empty_idle_ah_soft_down: блочит empty_idle/trusted/MR UP на N циклов.
 	EmptyIdleMarketDownCooldown int `json:"empty_idle_market_down_cooldown"`
-	LastCycleSales             int `json:"last_cycle_sales"` // sales прошлого цикла
+	// empty_inventory_up: счётчик ↑ и якорь цены, пока held==0 (сброс при held>0).
+	EmptyInventoryClimbSteps  int `json:"empty_inventory_climb_steps"`
+	EmptyInventoryAnchorPrice int `json:"empty_inventory_anchor_price"`
+	LastCycleSales            int `json:"last_cycle_sales"` // sales прошлого цикла
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -1046,6 +1053,8 @@ func actionReasonRU(action string) string {
 		return "corridor_v8: held < lo, сильный спрос (день≥3 / ночь≥4) → +цена (v8t: выкл)"
 	case "corridor_price_up_deep":
 		return "corridor_v8h: held=0 днём + сильный спрос → +цена (обход up_cd); v8t: единственный sales>buys ↑"
+	case "corridor_price_up_empty_inventory":
+		return "corridor_v8ab: held=0 → exploration +1 step (sales/buys не обязательны; cap p10+nac/paid/safety)"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
 		return "corridor_v8p: недобор + цена << paid + sales≥1 → recover (v8t: выкл)"
 	case "corridor_hold_demand_disabled":
@@ -1760,6 +1769,38 @@ func adjustPrice(item string) AdjustReport {
 		softDownTgt = ahBookSoftDownTarget(p10, minAsk, nacenka, step)
 	}
 	mutex.Lock()
+	// empty_inventory_up после книги (нужен p10 для market cap), до soft-↓.
+	// deep/demand/recover уже могли ↑ — тогда не трогаем.
+	// buy-veto / hold_empty при held=0 не блокируют (перезаписываем HOLD).
+	blockUpEI, _ := manualDirectionClampLocked(item, cfg.AnalysisTime)
+	if totalHeld > 0 {
+		state.EmptyInventoryClimbSteps = 0
+		state.EmptyInventoryAnchorPrice = 0
+	} else if !strings.Contains(action, "price_up") && !strings.Contains(action, "price_down") {
+		anchor := state.EmptyInventoryAnchorPrice
+		if anchor <= 0 {
+			anchor = priceBefore
+		}
+		effCap, capWhy := emptyInventoryEffectiveCap(
+			step, nacenka, p10, bookN, paidMax, anchor, bookOK, p10OK,
+		)
+		if canEmptyInventoryUp(
+			totalHeld, priceBefore, step, blockUpEI,
+			state.CorridorUpCooldown, state.CorridorUpStreak,
+			state.EmptyIdleMarketDownCooldown, state.EmptyInventoryClimbSteps,
+			effCap,
+		) {
+			if state.EmptyInventoryAnchorPrice <= 0 {
+				state.EmptyInventoryAnchorPrice = priceBefore
+			}
+			state.EmptyInventoryClimbSteps++
+			applyUp(emptyInventoryAction,
+				fmt.Sprintf(
+					"held=0 sales=%d buys=%d — empty_inventory ↑ +1 step (cap=%d [%s] climb=%d/%d paid=%d)",
+					sales, buys, effCap, capWhy, state.EmptyInventoryClimbSteps, emptyInventoryMaxClimbSteps, paidMax,
+				))
+		}
+	}
 	if raiseFromBook && raiseTgt > newPrice {
 		newPrice = raiseTgt
 		action = "corridor_price_up_ah_book"
@@ -1774,7 +1815,9 @@ func adjustPrice(item string) AdjustReport {
 			p10, minAsk, minInt(bookN, p10N), priceBefore, raiseTgt))
 	}
 	emptyIdleAhSoftDownFired := false
-	if (softDownFromBook || emptyIdleAhSoftDown) && softDownTgt > 0 && softDownTgt < newPrice {
+	// Same-cycle: corridor/empty_inventory ↑ уже поднял цену — empty_idle_ah_soft_down не откатывает.
+	corridorAlreadyUp := strings.Contains(action, "price_up")
+	if (softDownFromBook || emptyIdleAhSoftDown) && softDownTgt > 0 && softDownTgt < newPrice && !corridorAlreadyUp {
 		bookFloor := minAsk + nacenka
 		if softDownTgt < bookFloor {
 			softDownTgt = bookFloor
@@ -1794,6 +1837,8 @@ func adjustPrice(item string) AdjustReport {
 					p10, minAsk, p10N, priceBefore, tgt, bookFloor, totalHeld))
 			}
 		}
+	} else if corridorAlreadyUp && emptyIdleAhSoftDown {
+		notes = append(notes, "empty_idle_ah_soft_down skipped: already ↑ this cycle")
 	}
 
 	// EMPTY_IDLE / floor escape BEFORE standalone trusted jump / market_recovery:
@@ -1999,6 +2044,10 @@ func adjustPrice(item string) AdjustReport {
 	state.LastCycleSales = sales
 	state.LastCycleProfit = profitNow
 	state.LastCycleNacenkaSum = nacenkaSumNow
+	if totalHeld > 0 {
+		state.EmptyInventoryClimbSteps = 0
+		state.EmptyInventoryAnchorPrice = 0
+	}
 	data.AdjustState[item] = state
 	dailyData.AdjustState[item] = state
 
