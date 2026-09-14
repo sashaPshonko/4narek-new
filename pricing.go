@@ -1906,7 +1906,7 @@ func adjustPrice(item string) AdjustReport {
 	}
 	// Catchup streak: только при рыночном evidence (thick+gap), не от held=0 alone.
 	if emptyMarketCatchupEvidence(
-		state.PriceExplored, totalHeld, sales, buys, priceBefore, p10, bookN, bookOK, p10OK,
+		state.PriceExplored, totalHeld, sales, buys, priceBefore, p10, p10N, p10OK,
 	) {
 		state.EmptyMarketGapStreak++
 	} else if state.PriceExplored {
@@ -1934,13 +1934,13 @@ func adjustPrice(item string) AdjustReport {
 		canEmptyMarketCatchupUp(
 			state.PriceExplored, totalHeld, sales, buys,
 			state.EmptyMarketGapStreak, state.EmptyInventoryClimbSteps,
-			priceBefore, step, p10, bookN, bookOK, p10OK, blockUpEI,
+			priceBefore, step, p10, p10N, p10OK, blockUpEI,
 			state.CorridorUpCooldown, state.CorridorUpStreak, state.EmptyIdleMarketDownCooldown,
 		) {
 		state.EmptyInventoryClimbSteps++
 		applyUp(emptyMarketCatchupAction, fmt.Sprintf(
-			"empty_market_catchup ↑ +1: our=%d p10=%d ratio=%.2f uuid=%d streak=%d climb=%d/%d",
-			priceBefore, p10, float64(priceBefore)/float64(p10), bookN,
+			"empty_market_catchup ↑ +1: our=%d p10=%d ratio=%.2f p10N=%d streak=%d climb=%d/%d",
+			priceBefore, p10, float64(priceBefore)/float64(p10), p10N,
 			state.EmptyMarketGapStreak, state.EmptyInventoryClimbSteps, emptyMarketCatchupMaxSteps,
 		))
 	} else if state.PriceExplored && totalHeld == 0 {

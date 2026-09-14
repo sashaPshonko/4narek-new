@@ -17,13 +17,18 @@ const (
 	emptyMarketCatchupMaxSteps = 16
 )
 
+// emptyMarketCatchupThickBook — та же выборка, что p10 (без ban-filter min-book).
+func emptyMarketCatchupThickBook(p10OK bool, p10N, p10 int) bool {
+	return p10OK && p10N >= ahBookMinLotsInWindow && p10 > 0
+}
+
 // emptyMarketCatchupEvidence — B: пусто ИЗ-ЗА заниженной цены vs толстая книга.
 // A (просто пусто / тонкая книга / уже у рынка) → false.
 func emptyMarketCatchupEvidence(
 	explored bool,
 	held, sales, buys int,
-	our, p10, bookN int,
-	bookOK, p10OK bool,
+	our, p10, p10N int,
+	p10OK bool,
 ) bool {
 	if !explored {
 		return false
@@ -31,7 +36,7 @@ func emptyMarketCatchupEvidence(
 	if held != 0 || sales != 0 || buys != 0 {
 		return false
 	}
-	if !coldStartThickBook(bookOK, p10OK, bookN, p10) {
+	if !emptyMarketCatchupThickBook(p10OK, p10N, p10) {
 		return false
 	}
 	if our <= 0 || p10 <= 0 {
@@ -51,12 +56,12 @@ func canEmptyMarketCatchupUp(
 	explored bool,
 	held, sales, buys int,
 	gapStreak, climbSteps int,
-	priceBefore, step, p10, bookN int,
-	bookOK, p10OK bool,
+	priceBefore, step, p10, p10N int,
+	p10OK bool,
 	blockUp bool,
 	upCooldown, upStreak, marketDownCD int,
 ) bool {
-	if !emptyMarketCatchupEvidence(explored, held, sales, buys, priceBefore, p10, bookN, bookOK, p10OK) {
+	if !emptyMarketCatchupEvidence(explored, held, sales, buys, priceBefore, p10, p10N, p10OK) {
 		return false
 	}
 	if gapStreak < emptyMarketCatchupArmCycles {
