@@ -1150,6 +1150,16 @@ func actionReasonRU(action string) string {
 		return "corridor_v4: excess held → ↓ (soft −1 / over·dump −2)"
 	case "corridor_hold_v4_no_signal", "corridor_hold_v4_band", "corridor_hold_v4_empty":
 		return "corridor_v4: нет сигнала / полоса / empty без ↑"
+	case "classic_price_up":
+		return "classic_2026_02_22: sales<N ∧ stock<N×3 → +1"
+	case "classic_price_down_ah":
+		return "classic_2026_02_22: AH раздут ∧ sales<N → −1"
+	case "classic_price_down_buys":
+		return "classic_2026_02_22: buys>sales×2 ∧ stock>N → −1"
+	case "classic_price_down_leader":
+		return "classic_2026_02_22: лидер типа ∧ stock>salesLeader×3.5 → −1"
+	case "classic_hold":
+		return "classic_2026_02_22: нет сигнала"
 	case "corridor_hold_v9_no_signal", "corridor_hold_v9_band":
 		return "corridor_v9: нет сигнала UP/DOWN"
 	case "corridor_hold_v9_low_stock_down_veto":
@@ -1242,15 +1252,11 @@ func actionReasonRU(action string) string {
 		return "corridor_v6: soft↓ на cooldown → hold"
 	case "price_down_buy_surge":
 		return "surge: всплеск buys при стоке ≥ цели → −цена"
-	// legacy (старые логи/БД)
-	case "classic_price_up":
-		return "classic(legacy): sales < normal && stock ≤ normal && onAH < normal → +цена"
+	// legacy (старые логи/БД; имена ≠ live classic_2026_02_22)
 	case "classic_price_down_weak_sales":
 		return "classic(legacy): АХ > sales и АХ > нормы при слабых sales → −цена"
 	case "classic_price_down_buy_excess":
 		return "classic(legacy): buys > 2×sales и запас > нормы → −цена"
-	case "classic_price_down_leader":
-		return "classic(legacy): лидер категории, запас > 3×sales → −цена"
 	case "oldoldold_price_up":
 		return "oldoldold: АХ+инв < normal_sales → +цена"
 	case "oldoldold_price_down":
@@ -1512,6 +1518,19 @@ func adjustPrice(item string) AdjustReport {
 	action := ""
 	var notes []string
 	var experimentTG *experimentTelegramEvent
+
+	if isPricingPolicyClassic() {
+		return adjustPriceClassic(
+			item, cfg, now, lastUpdate,
+			sales, buys, trySells, profitNow,
+			state,
+			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
+			onAH, invCount, totalHeld, share, free, need, stockNorm,
+			underbuyOK, tryRatio, stockLoad,
+			onlineForCap, onlineMaxForML,
+			ahCounts, invCounts,
+		)
+	}
 
 	if isPricingPolicyV4() {
 		return adjustPriceV4(

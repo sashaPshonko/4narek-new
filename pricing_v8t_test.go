@@ -51,7 +51,7 @@ func TestTrySellsBlockUpNotBlanketAtHighSales(t *testing.T) {
 }
 
 func TestCapitalPolicyCurrent(t *testing.T) {
-	if capitalPolicy != capitalPolicyV4 && capitalPolicy != capitalPolicyV9 && capitalPolicy != capitalPolicyV8af {
-		t.Fatalf("policy=%s want stock_corridor_v4|v9|v8af", capitalPolicy)
+	if capitalPolicy != capitalPolicyClassic && capitalPolicy != capitalPolicyV4 && capitalPolicy != capitalPolicyV9 && capitalPolicy != capitalPolicyV8af {
+		t.Fatalf("policy=%s want classic|v4|v9|v8af", capitalPolicy)
 	}
 }

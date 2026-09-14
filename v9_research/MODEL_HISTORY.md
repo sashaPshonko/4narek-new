@@ -150,6 +150,23 @@ OOS почти плоский. Чистый max profit → **0.85**. Проти�
 **Не EKB:** отдельный бинарь, empty↑/NormalSales-риск на over+empty; OOS −7.6% к peak corridor; live p/h Jul уступал v4.  
 **Не V10:** robust LOW confidence.
 
+### 2026-09-14 — prod → `classic_2026_02_22` (NormalSales=5)
+**Решение Sasha:** вернуть алгоритм до `*-1.21` / до `enoughItems` — Exact `b96739c5` (22.02).  
+Код: `pricing_classic.go`, `capitalPolicy = capitalPolicyClassic`. Во всех SKU `items_config.json`: **`normal_sales = 5`**.
+
+Источник: `full_compare.log` — sim `classic_ns` mean **10828.4M**.
+
+| vs | Δ mean profit | Δ p/h |
+|----|--------------:|------:|
+| v9 | **−13.6%** | −13.9% |
+| corridor_v5/v6 | **−9.2%** | −9.8% |
+| corridor_v4 | −9.0% | −9.5% |
+| **ekb** | **−2.4%** | −2.8% |
+| corridor_v1 | +1.8% | +2.1% |
+| hold | −13.8% | −13.5% |
+
+Осознанный откат на запрос (live curiosity / старый режим), не OOS-оптимум.
+
 ### Решение (Sasha 14.09): оптимальное условие empty catchup
 **Расти по шагам, пока `sell < p10` (и `sell+step ≤ p10`), thick p10.**  
 Эквивалент: `v9CatchupGapRatio = 1.0` — лимит «пока нет покупательной способности», не стоп на 0.80.  
