@@ -86,6 +86,8 @@ func TestFleetLaunchDropsStaleHead(t *testing.T) {
 		t.Fatalf("alive should grant after stale drop: %+v", r)
 	}
 }
+
+func TestFleetLaunchHTTP(t *testing.T) {
 	old := fleetLaunch
 	fleetLaunch = &fleetLaunchState{inQueue: make(map[string]bool)}
 	t.Cleanup(func() { fleetLaunch = old })
