@@ -11,15 +11,13 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Go решает, когда орх запускает clan-setup (owner login).
- // Орк только репортит clan_needed / clan_setup_result.
+// Go вызывает clan-setup (owner), когда орх репортит clan_needed.
+// Без batch «ready» и без success-lock: каждый not_in_clan снова планирует owner.
+// Сериализация входа owner vs боты, которые тоже сейчас логинятся — fleet launch gate.
 
 const (
-	clanSetupBatchWait      = 1 * time.Minute  // быстрее копить дырки
-	clanSetupMaxWait        = 8 * time.Minute
-	clanSetupSuccessCD      = 25 * time.Minute // было 2h — не блокируем ретрай надолго
 	clanSetupBanCD          = 24 * time.Hour
-	clanSetupFailCD         = 3 * time.Minute  // было 15m
+	clanSetupFailCD         = 90 * time.Second // только после fail (VPN и т.п.), needs не чистим
 	clanSetupRunningTimeout = 25 * time.Minute
 	clanSetupTick           = 15 * time.Second
 )
@@ -81,11 +79,11 @@ func noteClanSetupResult(anarchy int, ok, banned bool, detail string) {
 		st.cooldownUntil = now.Add(clanSetupBanCD)
 		log.Printf("[CLAN] result an%d BANNED — cooldown %s (%s)", anarchy, clanSetupBanCD, detail)
 	} else if ok {
+		// Успех не запирает анку: бот снова не в клане → noteClanNeeded снова поставит need.
 		st.needs = make(map[string]time.Time)
-		st.cooldownUntil = now.Add(clanSetupSuccessCD)
-		log.Printf("[CLAN] result an%d OK — cleared needs, cooldown %s", anarchy, clanSetupSuccessCD)
+		st.cooldownUntil = time.Time{}
+		log.Printf("[CLAN] result an%d OK — cleared needs (no success lock)", anarchy)
 	} else {
-		// неудача без бана — короткий отдых, дырки оставляем
 		st.cooldownUntil = now.Add(clanSetupFailCD)
 		log.Printf("[CLAN] result an%d fail — retry after %s (%s) needs=%d", anarchy, clanSetupFailCD, detail, len(st.needs))
 	}
@@ -118,18 +116,9 @@ func maybeDispatchClanSetups() {
 		if len(st.needs) == 0 {
 			continue
 		}
-		earliest := now
 		nicks := make([]string, 0, len(st.needs))
-		for nick, t0 := range st.needs {
+		for nick := range st.needs {
 			nicks = append(nicks, nick)
-			if t0.Before(earliest) {
-				earliest = t0
-			}
-		}
-		waited := now.Sub(earliest)
-		ready := waited >= clanSetupBatchWait || len(nicks) >= 2 || waited >= clanSetupMaxWait
-		if !ready {
-			continue
 		}
 		st.running = true
 		st.runningSince = now
