@@ -1,0 +1,196 @@
+=== V10 ROBUST VALIDATION ===
+cycles=52373
+fold0: train=15232 val=4989 oos=5372 oos=[2026-08-03..2026-08-08]
+fold1: train=19178 val=4655 oos=5356 oos=[2026-08-06..2026-08-17]
+fold2: train=22960 val=4509 oos=5442 oos=[2026-08-16..2026-08-20]
+fold3: train=26518 val=4410 oos=6433 oos=[2026-08-19..2026-08-25]
+
+[1] Elasticity (full sample associative)
+  lt70: n=3281 mean=0.491 med=0.0 ci=[0.431, 0.552]
+  70_85: n=3257 mean=2.581 med=1.0 ci=[2.452, 2.71]
+  85_95: n=5816 mean=2.949 med=2.0 ci=[2.852, 3.046]
+  95_105: n=14730 mean=3.439 med=2.0 ci=[3.369, 3.508]
+  105_120: n=14749 mean=3.259 med=2.0 ci=[3.194, 3.323]
+  gt120: n=10512 mean=1.653 med=0.0 ci=[1.596, 1.71]
+
+[2] Event study ΔP → Δ sales rate
+{
+  "UP": {
+    "n_events": 9814,
+    "by_horizon": {
+      "1": {
+        "n": 9807,
+        "mean_delta_sales_rate": -0.6435,
+        "ci95": [
+          -0.6987,
+          -0.5883
+        ],
+        "minutes_approx": 10
+      },
+      "3": {
+        "n": 9807,
+        "mean_delta_sales_rate": -0.4049,
+        "ci95": [
+          -0.4531,
+          -0.3568
+        ],
+        "minutes_approx": 30
+      },
+      "6": {
+        "n": 9807,
+        "mean_delta_sales_rate": -0.2537,
+        "ci95": [
+          -0.3007,
+          -0.2067
+        ],
+        "minutes_approx": 60
+      },
+      "18": {
+        "n": 9807,
+        "mean_delta_sales_rate": -0.1998,
+        "ci95": [
+          -0.2479,
+          -0.1518
+        ],
+        "minutes_approx": 180
+      },
+      "36": {
+        "n": 9807,
+        "mean_delta_sales_rate": -0.3607,
+        "ci95": [
+          -0.4143,
+          -0.3071
+        ],
+        "minutes_approx": 360
+      },
+      "72": {
+        "n": 9807,
+        "mean_delta_sales_rate": -0.6296,
+        "ci95": [
+          -0.6894,
+          -0.5697
+        ],
+        "minutes_approx": 720
+      },
+      "144": {
+        "n": 9807,
+        "mean_delta_sales_rate": -0.6601,
+        "ci95": [
+          -0.7173,
+          -0.6029
+        ],
+        "minutes_approx": 1440
+      }
+    }
+  },
+  "DOWN": {
+    "n_events": 5086,
+    "by_horizon": {
+      "1": {
+        "n": 5086,
+        "mean_delta_sales_rate": 1.6111,
+        "ci95": [
+          1.5084,
+          1.7138
+
+
+[3] Under vs profit scan (Demand A)
+  corr(under, profit24h)=-0.359
+  top5 by profit: [('r1', 872.09, 0.038), ('r15', 845.1, 0.093), ('r16', 802.39, 0.32), ('r59', 798.92, 0.273), ('r32', 798.83, 0.398)]
+  bottom5 under: [{'name': 'r3', 'under': 0.945, 'over': 0.005, 'profit_24h_m': 614.47, 'profit_m': 35639.4, 'style': 'corridor', 'lo': 0.12, 'hi': 0.16999999999999998}, {'name': 'r8', 'under': 0.942, 'over': 0.004, 'profit_24h_m': 563.37, 'profit_m': 32675.7, 'style': 'velocity', 'lo': 0.12, 'hi': 0.16999999999999998}, {'name': 'r24', 'under': 0.917, 'over': 0.018, 'profit_24h_m': 619.83, 'profit_m': 35950.0, 'style': 'corridor', 'lo': 0.1, 'hi': 0.17}]
+
+[4] Multi-demand matrix on folds
+  fold0 A_current…
+  fold0 B_knn…
+  fold0 C_empirical…
+  fold0 D_ols…
+  fold1 A_current…
+  fold1 B_knn…
+  fold1 C_empirical…
+  fold1 D_ols…
+  fold2 A_current…
+  fold2 B_knn…
+  fold2 C_empirical…
+  fold2 D_ols…
+  fold3 A_current…
+  fold3 B_knn…
+  fold3 C_empirical…
+  fold3 D_ols…
+
+  x_v9 summary:
+    fold0 A_current v10_r131: x=1.202 under=0.244
+    fold0 A_current v10_r1100: x=0.842 under=0.492
+    fold0 A_current old_corridor_v4ish: x=0.786 under=0.5
+    fold0 A_current hold: x=1.119 under=0.15
+    fold0 B_knn v10_r131: x=1.045 under=0.218
+    fold0 B_knn v10_r1100: x=0.903 under=0.448
+    fold0 B_knn old_corridor_v4ish: x=0.812 under=0.609
+    fold0 B_knn hold: x=0.966 under=0.15
+    fold0 C_empirical v10_r131: x=1.09 under=0.244
+    fold0 C_empirical v10_r1100: x=0.96 under=0.455
+    fold0 C_empirical old_corridor_v4ish: x=0.891 under=0.5
+    fold0 C_empirical hold: x=0.998 under=0.15
+    fold0 D_ols v10_r131: x=1.058 under=0.299
+    fold0 D_ols v10_r1100: x=1.137 under=0.483
+    fold0 D_ols old_corridor_v4ish: x=1.129 under=0.658
+    fold0 D_ols hold: x=0.953 under=0.15
+    fold1 A_current v10_r131: x=1.188 under=0.375
+    fold1 A_current v10_r1100: x=1.004 under=0.703
+    fold1 A_current old_corridor_v4ish: x=0.879 under=0.768
+    fold1 A_current hold: x=0.817 under=0.028
+    fold1 B_knn v10_r131: x=1.043 under=0.339
+    fold1 B_knn v10_r1100: x=0.82 under=0.652
+    fold1 B_knn old_corridor_v4ish: x=0.872 under=0.668
+    fold1 B_knn hold: x=0.894 under=0.028
+    fold1 C_empirical v10_r131: x=1.183 under=0.375
+    fold1 C_empirical v10_r1100: x=1.06 under=0.703
+    fold1 C_empirical old_corridor_v4ish: x=1.031 under=0.768
+    fold1 C_empirical hold: x=0.813 under=0.028
+    fold1 D_ols v10_r131: x=1.089 under=0.375
+    fold1 D_ols v10_r1100: x=1.131 under=0.707
+    fold1 D_ols old_corridor_v4ish: x=1.278 under=0.746
+    fold1 D_ols hold: x=0.833 under=0.028
+    fold2 A_current v10_r131: x=1.155 under=0.099
+    fold2 A_current v10_r1100: x=1.079 under=0.759
+    fold2 A_current old_corridor_v4ish: x=1.137 under=0.298
+    fold2 A_current hold: x=0.879 under=0.0
+    fold2 B_knn v10_r131: x=1.182 under=0.15
+    fold2 B_knn v10_r1100: x=0.967 under=0.805
+    fold2 B_knn old_corridor_v4ish: x=1.135 under=0.33
+    fold2 B_knn hold: x=0.961 under=0.0
+    fold2 C_empirical v10_r131: x=1.155 under=0.099
+    fold2 C_empirical v10_r1100: x=1.144 under=0.759
+    fold2 C_empirical old_corridor_v4ish: x=1.137 under=0.298
+    fold2 C_empirical hold: x=0.879 under=0.0
+    fold2 D_ols v10_r131: x=1.032 under=0.256
+    fold2 D_ols v10_r1100: x=1.351 under=0.691
+    fold2 D_ols old_corridor_v4ish: x=1.175 under=0.319
+    fold2 D_ols hold: x=0.849 under=0.0
+    fold3 A_current v10_r131: x=1.084 under=0.097
+    fold3 A_current v10_r1100: x=1.423 under=0.424
+    fold3 A_current old_corridor_v4ish: x=1.001 under=0.101
+    fold3 A_current hold: x=0.993 under=0.03
+    fold3 B_knn v10_r131: x=1.067 under=0.15
+    fold3 B_knn v10_r1100: x=1.133 under=0.46
+    fold3 B_knn old_corridor_v4ish: x=1.001 under=0.042
+    fold3 B_knn hold: x=1.005 under=0.03
+    fold3 C_empirical v10_r131: x=1.084 under=0.097
+    fold3 C_empirical v10_r1100: x=1.423 under=0.424
+    fold3 C_empirical old_corridor_v4ish: x=1.001 under=0.101
+    fold3 C_empirical hold: x=0.993 under=0.03
+    fold3 D_ols v10_r131: x=1.151 under=0.229
+    fold3 D_ols v10_r1100: x=1.157 under=0.345
+    fold3 D_ols old_corridor_v4ish: x=1.008 under=0.101
+    fold3 D_ols hold: x=0.999 under=0.03
+
+[5] Ablation r1100 / r131 on last fold Demand A
+  r1100 ablation: {'full': {'profit_24h_mean_m': 1017.78, 'under': 0.424, 'x_full': 1.0, 'delta_vs_full_m': 0.0}, 'no_low_band': {'profit_24h_mean_m': 935.59, 'under': 0.201, 'x_full': 0.919, 'delta_vs_full_m': -82.19}, 'no_soft_over_mkt': {'profit_24h_mean_m': 1035.91, 'under': 0.393, 'x_full': 1.018, 'delta_vs_full_m': 18.13}, 'no_aggr_style': {'profit_24h_mean_m': 1037.76, 'under': 0.393, 'x_full': 1.02, 'delta_vs_full_m': 19.98}, 'restore_down_block': {'profit_24h_mean_m': 990.81, 'under': 0.707, 'x_full': 0.974, 'delta_vs_full_m': -26.97}, 'smaller_hard_down': {'profit_24h_mean_m': 962.94, 'under': 0.286, 'x_full': 0.946, 'delta_vs_full_m': -54.84}, 'bigger_up': {'profit_24h_mean_m': 1006.39, 'under': 0.416, 'x_full': 0.989, 'delta_vs_full_m': -11.39}}
+
+[6] Bootstrap + SKU LOO (last fold, Demand A)
+  boot r1100 vs v9 {'mean_diff_m': 301.221, 'ci95': [216.719, 396.239], 'p_a_gt_b': 1.0, 'n_days': 7}
+  sku r1100 {'overall_x': 1.423, 'x_without_top1': 1.031, 'x_without_top2': 0.997, 'median_sku_ratio': 1.079}
+
+[7] AH p10 coverage check
+
+Wrote /tmp/results_v10_robust.json in 268s
+DONE

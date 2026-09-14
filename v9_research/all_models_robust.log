@@ -1,0 +1,151 @@
+
+=== fold0 OOS 2026-08-03..2026-08-08 train=15234 oos=5370 ===
+  A TOP5:
+    1. hold             profit=  6161.4M x_v9=1.050 under=0.147 p/h=6.88
+    2. hold             profit=  6161.4M x_v9=1.050 under=0.147 p/h=6.88
+    3. v9               profit=  5865.8M x_v9=1.000 under=0.300 p/h=6.55
+    4. v9_baseline      profit=  5865.8M x_v9=1.000 under=0.300 p/h=6.55
+    5. ekb              profit=  4603.2M x_v9=0.785 under=0.000 p/h=5.14
+    v9 rank #3/12 x=1.0 under=0.300
+    v9 rank #4/12 x=1.0 under=0.300
+  B TOP5:
+    1. v9               profit=  5716.1M x_v9=1.000 under=0.236 p/h=6.39
+    2. v9_baseline      profit=  5716.1M x_v9=1.000 under=0.236 p/h=6.39
+    3. hold             profit=  5631.7M x_v9=0.985 under=0.147 p/h=6.29
+    4. hold             profit=  5631.7M x_v9=0.985 under=0.147 p/h=6.29
+    5. corridor_v4      profit=  4932.6M x_v9=0.863 under=0.298 p/h=5.51
+    v9 rank #1/12 x=1.0 under=0.236
+    v9 rank #2/12 x=1.0 under=0.236
+  C TOP5:
+    1. v9               profit=  6204.8M x_v9=1.000 under=0.274 p/h=6.93
+    2. v9_baseline      profit=  6204.8M x_v9=1.000 under=0.274 p/h=6.93
+    3. hold             profit=  6190.4M x_v9=0.998 under=0.147 p/h=6.92
+    4. hold             profit=  6190.4M x_v9=0.998 under=0.147 p/h=6.92
+    5. corridor_v4      profit=  5198.7M x_v9=0.838 under=0.292 p/h=5.81
+    v9 rank #1/12 x=1.0 under=0.274
+    v9 rank #2/12 x=1.0 under=0.274
+  D TOP5:
+    1. ekb              profit= 40660.4M x_v9=6.490 under=0.000 p/h=45.43
+    2. classic_ns       profit= 14647.1M x_v9=2.338 under=0.082 p/h=16.37
+    3. corridor_v3      profit=  7396.8M x_v9=1.181 under=0.442 p/h=8.26
+    4. corridor_v4      profit=  7396.8M x_v9=1.181 under=0.442 p/h=8.26
+    5. corridor_v5      profit=  7396.8M x_v9=1.181 under=0.442 p/h=8.26
+    v9 rank #8/12 x=1.0 under=0.334
+    v9 rank #9/12 x=1.0 under=0.334
+
+=== fold1 OOS 2026-08-06..2026-08-17 train=19183 oos=5358 ===
+  A TOP5:
+    1. v9               profit=  6398.7M x_v9=1.000 under=0.460 p/h=7.17
+    2. v9_baseline      profit=  6398.7M x_v9=1.000 under=0.460 p/h=7.17
+    3. corridor_v3      profit=  6185.1M x_v9=0.967 under=0.634 p/h=6.93
+    4. corridor_v4      profit=  6185.1M x_v9=0.967 under=0.634 p/h=6.93
+    5. corridor_v5      profit=  6185.1M x_v9=0.967 under=0.634 p/h=6.93
+    v9 rank #1/12 x=1.0 under=0.460
+    v9 rank #2/12 x=1.0 under=0.460
+  B TOP5:
+    1. v9               profit=  6163.4M x_v9=1.000 under=0.379 p/h=6.9
+    2. v9_baseline      profit=  6163.4M x_v9=1.000 under=0.379 p/h=6.9
+    3. hold             profit=  5470.7M x_v9=0.888 under=0.102 p/h=6.13
+    4. hold             profit=  5470.7M x_v9=0.888 under=0.102 p/h=6.13
+    5. corridor_v3      profit=  5123.6M x_v9=0.831 under=0.600 p/h=5.74
+    v9 rank #1/12 x=1.0 under=0.379
+    v9 rank #2/12 x=1.0 under=0.379
+  C TOP5:
+    1. corridor_v3      profit=  6947.2M x_v9=1.072 under=0.634 p/h=7.78
+    2. corridor_v4      profit=  6947.2M x_v9=1.072 under=0.634 p/h=7.78
+    3. corridor_v5      profit=  6947.2M x_v9=1.072 under=0.634 p/h=7.78
+    4. corridor_v6      profit=  6947.2M x_v9=1.072 under=0.634 p/h=7.78
+    5. v8_late          profit=  6947.2M x_v9=1.072 under=0.634 p/h=7.78
+    v9 rank #6/12 x=1.0 under=0.420
+    v9 rank #7/12 x=1.0 under=0.420
+  D TOP5:
+    1. ekb              profit= 24081.3M x_v9=3.569 under=0.002 p/h=26.97
+    2. classic_ns       profit= 13568.6M x_v9=2.011 under=0.168 p/h=15.19
+    3. corridor_v3      profit=  9001.0M x_v9=1.334 under=0.569 p/h=10.08
+    4. corridor_v4      profit=  8999.9M x_v9=1.334 under=0.569 p/h=10.08
+    5. corridor_v5      profit=  8999.9M x_v9=1.334 under=0.569 p/h=10.08
+    v9 rank #9/12 x=1.0 under=0.444
+    v9 rank #10/12 x=1.0 under=0.444
+
+=== fold2 OOS 2026-08-16..2026-08-20 train=22963 oos=5445 ===
+  A TOP5:
+    1. corridor_v5      profit=  6366.0M x_v9=1.226 under=0.325 p/h=7.01
+    2. corridor_v6      profit=  6366.0M x_v9=1.226 under=0.325 p/h=7.01
+    3. corridor_v4      profit=  6275.0M x_v9=1.208 under=0.308 p/h=6.91
+    4. v8_late          profit=  6275.0M x_v9=1.208 under=0.308 p/h=6.91
+    5. corridor_v3      profit=  6266.8M x_v9=1.206 under=0.308 p/h=6.91
+    v9 rank #6/12 x=1.0 under=0.059
+    v9 rank #7/12 x=1.0 under=0.059
+  B TOP5:
+    1. v9               profit=  4897.4M x_v9=1.000 under=0.050 p/h=5.4
+    2. v9_baseline      profit=  4897.4M x_v9=1.000 under=0.050 p/h=5.4
+    3. hold             profit=  4609.3M x_v9=0.941 under=0.000 p/h=5.08
+    4. hold             profit=  4609.3M x_v9=0.941 under=0.000 p/h=5.08
+    5. corridor_v3      profit=  4561.7M x_v9=0.931 under=0.265 p/h=5.03
+    v9 rank #1/12 x=1.0 under=0.050
+    v9 rank #2/12 x=1.0 under=0.050
+  C TOP5:
+    1. corridor_v5      profit=  6366.0M x_v9=1.226 under=0.325 p/h=7.01
+    2. corridor_v6      profit=  6366.0M x_v9=1.226 under=0.325 p/h=7.01
+    3. corridor_v4      profit=  6275.0M x_v9=1.208 under=0.308 p/h=6.91
+    4. v8_late          profit=  6275.0M x_v9=1.208 under=0.308 p/h=6.91
+    5. corridor_v3      profit=  6266.8M x_v9=1.206 under=0.308 p/h=6.91
+    v9 rank #6/12 x=1.0 under=0.059
+    v9 rank #7/12 x=1.0 under=0.059
+  D TOP5:
+    1. ekb              profit= 20245.3M x_v9=3.159 under=0.000 p/h=22.31
+    2. corridor_v3      profit=  8079.0M x_v9=1.261 under=0.263 p/h=8.9
+    3. corridor_v4      profit=  8075.5M x_v9=1.260 under=0.263 p/h=8.9
+    4. corridor_v5      profit=  8075.5M x_v9=1.260 under=0.263 p/h=8.9
+    5. corridor_v6      profit=  8075.5M x_v9=1.260 under=0.263 p/h=8.9
+    v9 rank #8/12 x=1.0 under=0.129
+    v9 rank #9/12 x=1.0 under=0.129
+
+=== fold3 OOS 2026-08-19..2026-08-25 train=26521 oos=6438 ===
+  A TOP5:
+    1. v9               profit=  5017.8M x_v9=1.000 under=0.092 p/h=4.68
+    2. v9_baseline      profit=  5017.8M x_v9=1.000 under=0.092 p/h=4.68
+    3. hold             profit=  4984.5M x_v9=0.993 under=0.030 p/h=4.65
+    4. hold             profit=  4984.5M x_v9=0.993 under=0.030 p/h=4.65
+    5. corridor_v3      profit=  4512.3M x_v9=0.899 under=0.100 p/h=4.21
+    v9 rank #1/12 x=1.0 under=0.092
+    v9 rank #2/12 x=1.0 under=0.092
+  B TOP5:
+    1. hold             profit=  5529.7M x_v9=1.006 under=0.030 p/h=5.15
+    2. hold             profit=  5529.7M x_v9=1.006 under=0.030 p/h=5.15
+    3. v9               profit=  5496.7M x_v9=1.000 under=0.034 p/h=5.12
+    4. v9_baseline      profit=  5496.7M x_v9=1.000 under=0.034 p/h=5.12
+    5. corridor_v3      profit=  4031.9M x_v9=0.734 under=0.039 p/h=3.76
+    v9 rank #3/12 x=1.0 under=0.034
+    v9 rank #4/12 x=1.0 under=0.034
+  C TOP5:
+    1. v9               profit=  5017.8M x_v9=1.000 under=0.092 p/h=4.68
+    2. v9_baseline      profit=  5017.8M x_v9=1.000 under=0.092 p/h=4.68
+    3. hold             profit=  4984.5M x_v9=0.993 under=0.030 p/h=4.65
+    4. hold             profit=  4984.5M x_v9=0.993 under=0.030 p/h=4.65
+    5. corridor_v3      profit=  4512.3M x_v9=0.899 under=0.100 p/h=4.21
+    v9 rank #1/12 x=1.0 under=0.092
+    v9 rank #2/12 x=1.0 under=0.092
+  D TOP5:
+    1. ekb              profit= 12775.6M x_v9=2.116 under=0.000 p/h=11.91
+    2. classic_ns       profit=  6139.7M x_v9=1.017 under=0.000 p/h=5.72
+    3. v9               profit=  6036.3M x_v9=1.000 under=0.093 p/h=5.63
+    4. v9_baseline      profit=  6036.3M x_v9=1.000 under=0.093 p/h=5.63
+    5. hold             profit=  6031.7M x_v9=0.999 under=0.030 p/h=5.62
+    v9 rank #3/12 x=1.0 under=0.093
+    v9 rank #4/12 x=1.0 under=0.093
+
+=== AGGREGATE mean x_v9 across fold×demand ===
+   1. ekb              mean_x=1.483 med=0.800 min=0.437 rank=8.5 beat_v9=25% under=0.000
+   2. v9               mean_x=1.000 med=1.000 min=1.000 rank=3.7 beat_v9=0% under=0.216
+   3. v9_baseline      mean_x=1.000 med=1.000 min=1.000 rank=4.7 beat_v9=0% under=0.216
+   4. classic_ns       mean_x=0.986 med=0.835 min=0.551 rank=8.3 beat_v9=19% under=0.083
+   5. corridor_v5      mean_x=0.985 med=0.925 min=0.701 rank=5.6 beat_v9=38% under=0.333
+   6. corridor_v6      mean_x=0.985 med=0.925 min=0.701 rank=6.6 beat_v9=38% under=0.333
+   7. corridor_v4      mean_x=0.983 med=0.931 min=0.701 rank=4.9 beat_v9=38% under=0.328
+   8. v8_late          mean_x=0.983 med=0.931 min=0.701 rank=7.5 beat_v9=38% under=0.328
+   9. corridor_v3      mean_x=0.982 med=0.931 min=0.697 rank=5.2 beat_v9=38% under=0.328
+  10. hold             mean_x=0.930 med=0.943 min=0.820 rank=6.2 beat_v9=6% under=0.070
+  11. corridor_v1      mean_x=0.778 med=0.812 min=0.548 rank=10.8 beat_v9=6% under=0.148
+Wrote /tmp/all_models_robust.json
+DONE

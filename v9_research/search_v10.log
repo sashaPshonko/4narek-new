@@ -1,0 +1,29 @@
+=== MODEL SEARCH V10  N_random=800 ===
+cycles=52361 items=10
+candidate pool=966 (grid=164 random=800)
+
+--- fold 0 train<=2026-08-01 val<=2026-08-16 oos<=2026-08-25 ---
+  sizes train=17575 val=9425 oos=9656
+  v9 24h_mean: train=1441.12 val=862.05 oos=731.72 M
+  … scored 400/966 on train
+  … scored 800/966 on train
+  BEST OOS: r173 24h=1701.87M  x_v9=2.326  (v9=731.72M)
+
+--- fold 1 train<=2026-08-16 val<=2026-08-25 oos<=2026-09-14 ---
+  sizes train=27000 val=9656 oos=15700
+  v9 24h_mean: train=1136.19 val=740.4 oos=518.95 M
+  … scored 400/966 on train
+  … scored 800/966 on train
+  BEST OOS: r112 24h=1102.57M  x_v9=2.125  (v9=518.95M)
+
+--- fold 2 train<=2026-08-25 val<=2026-09-14 oos<=2026-09-14 ---
+  sizes train=36656 val=15700 oos=4
+  skip thin fold
+
+=== AGGREGATE ===
+per-fold best x_v9: [2.326, 2.125]  mean=2.226  max=2.326
+folds with ≥2× OOS: 2/2
+
+Wrote /tmp/v10_search_results.json in 472s
+BEST overall: r173 mean_x=2.326 min_x=2.326 mean_24h=1701.87M
+DONE
