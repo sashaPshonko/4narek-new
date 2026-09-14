@@ -1160,6 +1160,8 @@ func actionReasonRU(action string) string {
 		return "classic_2026_02_22: лидер типа ∧ stock>salesLeader×3.5 → −1"
 	case "classic_hold":
 		return "classic_2026_02_22: нет сигнала"
+	case "classic_hold_buy_floor":
+		return "classic_2026_02_22: ↓ упёрся в самую дешёвую покупку за 10м"
 	case "corridor_hold_v9_no_signal", "corridor_hold_v9_band":
 		return "corridor_v9: нет сигнала UP/DOWN"
 	case "corridor_hold_v9_low_stock_down_veto":

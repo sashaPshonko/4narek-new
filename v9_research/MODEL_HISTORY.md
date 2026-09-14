@@ -167,6 +167,9 @@ OOS почти плоский. Чистый max profit → **0.85**. Проти�
 
 Осознанный откат на запрос (live curiosity / старый режим), не OOS-оптимум.
 
+### 2026-09-14 — classic: пол = max(minBuy+nac, min buy 10м)
+`classicEffectiveFloor`: sell не ниже самой дешёвой покупки за 10 минут (`priceHistory`). Без покупок в окне — прежний nac-floor.
+
 ### Решение (Sasha 14.09): оптимальное условие empty catchup
 **Расти по шагам, пока `sell < p10` (и `sell+step ≤ p10`), thick p10.**  
 Эквивалент: `v9CatchupGapRatio = 1.0` — лимит «пока нет покупательной способности», не стоп на 0.80.  

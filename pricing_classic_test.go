@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClassicUpLowSalesLowStock(t *testing.T) {
@@ -69,6 +70,39 @@ func TestClassicNonLeaderNoOversupplyDown(t *testing.T) {
 	if strings.Contains(d.Action, "price_down") {
 		t.Fatalf("non-leader must not dump: %+v", d)
 	}
+}
+
+func TestClassicDownRespectsBuyFloor(t *testing.T) {
+	// DOWN хотел бы −step, но пол = 1.95M
+	d := classicDecide(classicInput{
+		Sales: 2, Buys: 0, OnAH: 16, Inv: 0, NormalSales: 5,
+		Price: 2_000_000, Step: 100_000, PriceFloor: 1_950_000,
+	})
+	if d.NewPrice < 1_950_000 {
+		t.Fatalf("must not go below buy floor: %+v", d)
+	}
+	if d.Action != "classic_price_down_ah" || d.NewPrice != 1_950_000 {
+		t.Fatalf("want down to floor got %+v", d)
+	}
+}
+
+func TestClassicEffectiveFloorPrefersRecentBuy(t *testing.T) {
+	item := "test-classic-floor"
+	now := time.Now()
+	priceHistory[item] = &PriceHistory{
+		Records: []PriceRecord{
+			{Price: 1_000_000, Time: now.Add(-20 * time.Minute)},
+			{Price: 2_200_000, Time: now.Add(-5 * time.Minute)},
+			{Price: 2_500_000, Time: now.Add(-2 * time.Minute)},
+		},
+		Limit: 30,
+	}
+	// nac-floor низкий; buy10m = 2.2M
+	got := classicEffectiveFloor(item, now, 1_300_000)
+	if got != 2_200_000 {
+		t.Fatalf("want 2200000 got %d", got)
+	}
+	delete(priceHistory, item)
 }
 
 func TestCapitalPolicyClassic(t *testing.T) {

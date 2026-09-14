@@ -13,8 +13,38 @@ import (
 
 const capitalPolicyClassic = "classic_2026_02_22"
 
+// classicBuyFloorWindow — sell не ниже самой дешёвой покупки за это окно.
+const classicBuyFloorWindow = 10 * time.Minute
+
 func isPricingPolicyClassic() bool {
 	return capitalPolicy == capitalPolicyClassic
+}
+
+// cheapestBuySince — min цена закупа из priceHistory после since (0 если нет).
+func cheapestBuySince(item string, since time.Time) int {
+	hist := priceHistory[item]
+	if hist == nil || len(hist.Records) == 0 {
+		return 0
+	}
+	minP := 0
+	for _, r := range hist.Records {
+		if !r.Time.After(since) || r.Price <= 0 {
+			continue
+		}
+		if minP == 0 || r.Price < minP {
+			minP = r.Price
+		}
+	}
+	return minP
+}
+
+// classicEffectiveFloor — max(пол minBuy+nac, самая дешёвая покупка за 10м).
+func classicEffectiveFloor(item string, now time.Time, priceFloor int) int {
+	buyFloor := cheapestBuySince(item, now.Add(-classicBuyFloorWindow))
+	if buyFloor > priceFloor {
+		return buyFloor
+	}
+	return priceFloor
 }
 
 type classicInput struct {
@@ -142,6 +172,7 @@ func adjustPriceClassic(
 ) AdjustReport {
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
 	leaderID := classicTypeLeaderLocked(cfg.Type, ahCounts, invCounts)
+	effFloor := classicEffectiveFloor(item, now, priceFloor)
 
 	dec := classicDecide(classicInput{
 		Sales:       sales,
@@ -151,7 +182,7 @@ func adjustPriceClassic(
 		NormalSales: cfg.NormalSales,
 		Price:       priceBefore,
 		Step:        step,
-		PriceFloor:  priceFloor,
+		PriceFloor:  effFloor,
 		IsLeader:    item == leaderID,
 		BlockUp:     blockUp,
 		BlockDown:   blockDown,
@@ -160,8 +191,8 @@ func adjustPriceClassic(
 	newPrice := dec.NewPrice
 	action := dec.Action
 	notes := []string{
-		fmt.Sprintf("classic reason=%s sales=%d N=%d onAH=%d inv=%d stock=%d leader=%s",
-			dec.Reason, sales, cfg.NormalSales, onAH, invCount, totalHeld, leaderID),
+		fmt.Sprintf("classic reason=%s sales=%d N=%d onAH=%d inv=%d stock=%d leader=%s floor=%d (buy10m/nac)",
+			dec.Reason, sales, cfg.NormalSales, onAH, invCount, totalHeld, leaderID, effFloor),
 	}
 
 	if blockDown && strings.Contains(action, "price_down") {
@@ -181,11 +212,14 @@ func adjustPriceClassic(
 		notes = append(notes, "manual max/set → ↑ запрещён")
 	}
 
-	if newPrice < priceFloor {
-		newPrice = priceFloor
+	if newPrice < effFloor {
+		newPrice = effFloor
 		if newPrice > priceBefore {
 			action = "corridor_price_up_floor"
-			notes = append(notes, fmt.Sprintf("цена %d < пола %d → поднимаем", priceBefore, priceFloor))
+			notes = append(notes, fmt.Sprintf("цена %d < пола %d → поднимаем", priceBefore, effFloor))
+		} else if newPrice == priceBefore && strings.Contains(action, "price_down") {
+			action = "classic_hold_buy_floor"
+			notes = append(notes, fmt.Sprintf("↓ упёрся в min buy 10м = %d", effFloor))
 		}
 	}
 
@@ -253,7 +287,7 @@ func adjustPriceClassic(
 		NacenkaAfter:   nacenka,
 		NacenkaSumNow:  nacenkaSumNow,
 		NacenkaSumPrev: nacenkaSumPrev,
-		PriceFloor:     priceFloor,
+		PriceFloor:     effFloor,
 		Step:           step,
 		Cooldown:       0,
 		PlayersOnline:  onlineForCap,
@@ -303,7 +337,7 @@ func adjustPriceClassic(
 		Share:         share,
 		Free:          free,
 		Need:          need,
-		PriceFloor:    priceFloor,
+		PriceFloor:    effFloor,
 		Step:          step,
 	}
 }
