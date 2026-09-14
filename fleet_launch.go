@@ -73,6 +73,17 @@ func (s *fleetLaunchState) enqueueLocked(req fleetLaunchReq) (pos int) {
 				if req.Kind != "" {
 					s.queue[i].Kind = req.Kind
 				}
+				// owner уже в хвосте — поднять вперёд ботов
+				if s.queue[i].Kind == fleetLaunchOwner {
+					item := s.queue[i]
+					s.queue = append(s.queue[:i], s.queue[i+1:]...)
+					j := 0
+					for j < len(s.queue) && s.queue[j].Kind == fleetLaunchOwner {
+						j++
+					}
+					s.queue = append(s.queue[:j], append([]fleetLaunchReq{item}, s.queue[j:]...)...)
+					return iPos(s, key)
+				}
 				return i + 1
 			}
 		}
@@ -80,8 +91,26 @@ func (s *fleetLaunchState) enqueueLocked(req fleetLaunchReq) (pos int) {
 	}
 	req.QueuedAt = now
 	req.LastSeen = now
-	s.queue = append(s.queue, req)
+	if req.Kind == fleetLaunchOwner {
+		// owners вперёд ботов (клан/деньги), после других owners уже в очереди
+		i := 0
+		for i < len(s.queue) && s.queue[i].Kind == fleetLaunchOwner {
+			i++
+		}
+		s.queue = append(s.queue[:i], append([]fleetLaunchReq{req}, s.queue[i:]...)...)
+	} else {
+		s.queue = append(s.queue, req)
+	}
 	s.inQueue[key] = true
+	return iPos(s, key)
+}
+
+func iPos(s *fleetLaunchState, key string) int {
+	for i, q := range s.queue {
+		if fleetLaunchKey(q.Anarchy, q.Username) == key {
+			return i + 1
+		}
+	}
 	return len(s.queue)
 }
 

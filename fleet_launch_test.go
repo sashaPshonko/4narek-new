@@ -47,22 +47,21 @@ func TestFleetLaunchQueueOrder(t *testing.T) {
 	t.Cleanup(func() { fleetLaunch = old })
 	fleetLaunch.nextAt = time.Now().Add(time.Hour) // block grants
 
+	fleetLaunch.tryGrant(502, "a", fleetLaunchBot)
+	fleetLaunch.tryGrant(503, "b", fleetLaunchBot)
+	fleetLaunch.tryGrant(504, "c", fleetLaunchOwner)
+	// re-poll: owner вперёд ботов
 	a := fleetLaunch.tryGrant(502, "a", fleetLaunchBot)
 	b := fleetLaunch.tryGrant(503, "b", fleetLaunchBot)
 	c := fleetLaunch.tryGrant(504, "c", fleetLaunchOwner)
-	if a.Position != 1 || b.Position != 2 || c.Position != 3 {
-		t.Fatalf("positions a=%d b=%d c=%d", a.Position, b.Position, c.Position)
-	}
-	// duplicate enqueue keeps position
-	a2 := fleetLaunch.tryGrant(502, "a", fleetLaunchBot)
-	if a2.Position != 1 {
-		t.Fatalf("dup a pos=%d", a2.Position)
+	if c.Position != 1 || a.Position != 2 || b.Position != 3 {
+		t.Fatalf("positions owner-first c=%d a=%d b=%d", c.Position, a.Position, b.Position)
 	}
 
 	fleetLaunch.cancel(503, "b")
 	c2 := fleetLaunch.tryGrant(504, "c", fleetLaunchOwner)
-	if c2.Position != 2 {
-		t.Fatalf("after cancel b, c should be 2 got %d", c2.Position)
+	if c2.Position != 1 {
+		t.Fatalf("after cancel b, owner c should stay 1 got %d", c2.Position)
 	}
 }
 

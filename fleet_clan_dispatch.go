@@ -15,12 +15,13 @@ import (
  // Орк только репортит clan_needed / clan_setup_result.
 
 const (
-	clanSetupBatchWait     = 3 * time.Minute  // копить дырки перед первым заходом owner
-	clanSetupMaxWait       = 12 * time.Minute // даже одна дырка — не дольше
-	clanSetupSuccessCD     = 2 * time.Hour
-	clanSetupBanCD         = 24 * time.Hour
+	clanSetupBatchWait      = 1 * time.Minute  // быстрее копить дырки
+	clanSetupMaxWait        = 8 * time.Minute
+	clanSetupSuccessCD      = 25 * time.Minute // было 2h — не блокируем ретрай надолго
+	clanSetupBanCD          = 24 * time.Hour
+	clanSetupFailCD         = 3 * time.Minute  // было 15m
 	clanSetupRunningTimeout = 25 * time.Minute
-	clanSetupTick          = 20 * time.Second
+	clanSetupTick           = 15 * time.Second
 )
 
 type clanAnarchyState struct {
@@ -85,8 +86,8 @@ func noteClanSetupResult(anarchy int, ok, banned bool, detail string) {
 		log.Printf("[CLAN] result an%d OK — cleared needs, cooldown %s", anarchy, clanSetupSuccessCD)
 	} else {
 		// неудача без бана — короткий отдых, дырки оставляем
-		st.cooldownUntil = now.Add(15 * time.Minute)
-		log.Printf("[CLAN] result an%d fail — retry after 15m (%s) needs=%d", anarchy, detail, len(st.needs))
+		st.cooldownUntil = now.Add(clanSetupFailCD)
+		log.Printf("[CLAN] result an%d fail — retry after %s (%s) needs=%d", anarchy, clanSetupFailCD, detail, len(st.needs))
 	}
 	clanSetupCtl.mu.Unlock()
 }
