@@ -74,7 +74,7 @@ func TestDoiCoverStepMapping(t *testing.T) {
 }
 
 func TestCapitalPolicyV8u(t *testing.T) {
-	if capitalPolicy != capitalPolicyV9 && capitalPolicy != capitalPolicyV8af {
-		t.Fatalf("policy=%s want stock_corridor_v8af", capitalPolicy)
+	if capitalPolicy != capitalPolicyV4 && capitalPolicy != capitalPolicyV9 && capitalPolicy != capitalPolicyV8af {
+		t.Fatalf("policy=%s want stock_corridor_v4|v9|v8af", capitalPolicy)
 	}
 }

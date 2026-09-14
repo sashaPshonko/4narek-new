@@ -132,6 +132,24 @@ OOS почти плоский. Чистый max profit → **0.85**. Проти�
 
 \*sim over↑ — не доказательство лучше. **no_cap токсичен** на переоцен+empty. Оптимум логики закупа: **until_buy = gap 1.0**.
 
+### 2026-09-14 — prod rollback → `stock_corridor_v4` (эпоха v4–v6)
+**Решение:** снять v9/late-v8 с боя; вернуть чистый inventory corridor (live peak ~199M/h Jul).  
+Код: `pricing_v4.go`, `capitalPolicy = capitalPolicyV4`. Логика ≈ sim `corridor_v5`/`v6` (weak_demand≥3/ночь≥4, empty↑ запрет, hard↓×2, без book/catchup/DOI).
+
+Источник цифр: `full_compare.log` (уже прогнанный WF). Prod ≈ corridor_v5 mean **11929.5M**.
+
+| vs | Δ mean profit | Δ p/h | зачем смотрим |
+|----|--------------:|------:|---|
+| **v9** | **−4.8%** | −4.6% | sim хуже v9; live late Sep v9/v8 мёртвые — откат осознанный |
+| corridor_v4 (sim) | +0.3% | +0.4% | почти то же |
+| **ekb** | **+7.6%** | +7.8% | EKB живой, но OOS слабее peak corridor |
+| classic_ns | +10.2% | +10.9% | |
+| corridor_v1 | +12.2% | +13.2% | |
+| hold | −5.0% | −4.1% | артефакт, не цель |
+
+**Не EKB:** отдельный бинарь, empty↑/NormalSales-риск на over+empty; OOS −7.6% к peak corridor; live p/h Jul уступал v4.  
+**Не V10:** robust LOW confidence.
+
 ### Решение (Sasha 14.09): оптимальное условие empty catchup
 **Расти по шагам, пока `sell < p10` (и `sell+step ≤ p10`), thick p10.**  
 Эквивалент: `v9CatchupGapRatio = 1.0` — лимит «пока нет покупательной способности», не стоп на 0.80.  

@@ -7,9 +7,10 @@ import (
 
 // classic_2026_02_22 — правила adjustPrice от 22.02.2026 15:46 (b96739c5).
 // Переключатель production-политики:
-//   capitalPolicyV9   — новая inventory+market model (research Sep 2026)
-//   capitalPolicyV8af — rollback на предыдущий corridor
-const capitalPolicy = capitalPolicyV9
+//   capitalPolicyV4   — пик live p/h Jul (inventory corridor v4–v6)
+//   capitalPolicyV9   — inventory+market (research Sep 2026)
+//   capitalPolicyV8af — late-v8 corridor
+const capitalPolicy = capitalPolicyV4
 const capitalForwardCycles = 3
 
 // capitalPendingForward — ждём 3 следующих окна analysis_time и дописываем profit в capital_cycles.

@@ -1144,6 +1144,12 @@ func actionReasonRU(action string) string {
 		return "corridor_v9: empty∧no buys streak≥2 ∧ ratio<p10 ∧ price+step≤p10 → +1 (buy-stop + p10 safety)"
 	case "corridor_price_down_v9_soft", "corridor_price_down_v9_over", "corridor_price_down_v9_dump":
 		return "corridor_v9: excess held ∧ ratio≥0.90 → ↓"
+	case "corridor_price_up_v4_demand":
+		return "corridor_v4: understock ∧ sales≥3 (ночь≥4) ∧ sales>buys → +1"
+	case "corridor_price_down_v4_soft", "corridor_price_down_v4_over", "corridor_price_down_v4_dump":
+		return "corridor_v4: excess held → ↓ (soft −1 / over·dump −2)"
+	case "corridor_hold_v4_no_signal", "corridor_hold_v4_band", "corridor_hold_v4_empty":
+		return "corridor_v4: нет сигнала / полоса / empty без ↑"
 	case "corridor_hold_v9_no_signal", "corridor_hold_v9_band":
 		return "corridor_v9: нет сигнала UP/DOWN"
 	case "corridor_hold_v9_low_stock_down_veto":
@@ -1506,6 +1512,18 @@ func adjustPrice(item string) AdjustReport {
 	action := ""
 	var notes []string
 	var experimentTG *experimentTelegramEvent
+
+	if isPricingPolicyV4() {
+		return adjustPriceV4(
+			item, cfg, now, lastUpdate,
+			sales, buys, trySells, profitNow,
+			state,
+			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
+			onAH, invCount, totalHeld, share, free, need, stockNorm,
+			underbuyOK, tryRatio, stockLoad,
+			onlineForCap, onlineMaxForML,
+		)
+	}
 
 	if isPricingPolicyV9() {
 		return adjustPriceV9(
