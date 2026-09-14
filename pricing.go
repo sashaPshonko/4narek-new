@@ -1138,6 +1138,22 @@ func actionReasonRU(action string) string {
 		return "corridor_v8ab(legacy): held=0 empty_inventory ↑ (выкл для PriceExplored; cold-start вместо этого)"
 	case "corridor_price_up_cold_start":
 		return "corridor_v8ae: !Explored ∧ s0b0 ∧ thick book ∧ our≪p10 → разведочный +1 step"
+	case "corridor_price_up_v9_demand":
+		return "corridor_v9: understock ∧ sales≥threshold ∧ sales>buys ∧ ratio<1.05 → +1"
+	case "corridor_price_up_v9_empty_catchup":
+		return "corridor_v9: empty_streak≥2 ∧ ratio<0.80 ∧ price+step≤p10 → +1"
+	case "corridor_price_down_v9_soft", "corridor_price_down_v9_over", "corridor_price_down_v9_dump":
+		return "corridor_v9: excess held ∧ ratio≥0.90 → ↓"
+	case "corridor_hold_v9_no_signal", "corridor_hold_v9_band":
+		return "corridor_v9: нет сигнала UP/DOWN"
+	case "corridor_hold_v9_low_stock_down_veto":
+		return "corridor_v9: held≤hi → DOWN запрещён"
+	case "corridor_hold_v9_underprice_down_veto":
+		return "corridor_v9: ratio<0.90 → DOWN запрещён"
+	case "corridor_hold_v9_demand_above_market":
+		return "corridor_v9: demand был, но ratio≥1.05"
+	case "corridor_hold_v9_catchup_no_gap", "corridor_hold_v9_catchup_cap":
+		return "corridor_v9: empty catchup без gap / выше market"
 	case "corridor_price_up_empty_market_catchup":
 		return "corridor_v8af: Explored ∧ empty ∧ thick book ∧ our/p10<0.85 streak≥2 → +1 catchup"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
@@ -1476,22 +1492,41 @@ func adjustPrice(item string) AdjustReport {
 		need = sales - buys
 	}
 
+	stockLoad := 0.0
+	if share > 0 {
+		stockLoad = float64(totalHeld) / float64(share)
+	}
+	underbuyOK := buys < sales && share > 0 && free >= need
+	tryRatio := 0.0
+	if sales > 0 {
+		tryRatio = float64(trySells) / float64(sales)
+	}
+
 	changed := false
 	action := ""
 	var notes []string
 	var experimentTG *experimentTelegramEvent
 
+	if isPricingPolicyV9() {
+		return adjustPriceV9(
+			item, cfg, now, lastUpdate,
+			sales, buys, trySells, profitNow,
+			state,
+			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
+			onAH, invCount, totalHeld, share, free, need, stockNorm,
+			underbuyOK, tryRatio, stockLoad,
+			onlineForCap, onlineMaxForML,
+		)
+	}
+
 	// ═══════════════════════════════════════════════════════════════════
 	// stock_corridor_v8u — L2 Policy F (sales≥1 DOI cover) + legacy sales=0 fill↓.
 	// L1 trusted_AH_min / floor / disabled UP — без изменений в этом блоке.
+	// (v8af path; не трогать при работе над v9)
 	// ═══════════════════════════════════════════════════════════════════
 
 	band := stockBandFor(item, cfg)
 	targetLo, targetHi, targetSoft, targetOver, targetDump := stockTargets(share, band)
-	stockLoad := 0.0
-	if share > 0 {
-		stockLoad = float64(totalHeld) / float64(share)
-	}
 	prevCycleSales := state.LastCycleSales // до обновления в конце цикла
 	zeroStreak := zeroSalesExcessStreakNow(sales, totalHeld, targetHi, state.ZeroSalesExcessStreak)
 	cDownCandidate := postGrantCDownCandidate(totalHeld, targetHi, sales, buys, zeroStreak)
@@ -1499,7 +1534,6 @@ func adjustPrice(item string) AdjustReport {
 	botsInCat := aggregateBotsPerTypeLocked()[cfg.Type]
 	minSalesForUp := demandMinSalesForUp(botsInCat, nightMSK)
 
-	underbuyOK := false
 	if buys < sales {
 		need = sales - buys
 		free = share - totalHeld
@@ -1507,13 +1541,16 @@ func adjustPrice(item string) AdjustReport {
 			free = 0
 		}
 		underbuyOK = share > 0 && free >= need
+	} else {
+		underbuyOK = false
 	}
 
-	tryRatio := 0.0
 	if sales > 0 {
 		tryRatio = float64(trySells) / float64(sales)
 	} else if trySells > 0 {
 		tryRatio = float64(trySells)
+	} else {
+		tryRatio = 0
 	}
 
 	applyDown := func(label, note string, stepMult int) {

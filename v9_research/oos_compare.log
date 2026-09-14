@@ -1,0 +1,18 @@
+
+=== fold 0 2026-07-25T11:48:54Z .. 2026-08-05T08:31:38Z ===
+  classic      profit= 11563.1M p/h=   6.0 under=0.294 over=0.544 dd=0.000 up=113 dn=863
+  v8af_approx  profit= 11563.1M p/h=   6.0 under=0.294 over=0.544 dd=0.000 up=113 dn=863
+  v9           profit= 13514.8M p/h=   7.0 under=0.269 over=0.528 dd=0.000 up=47 dn=84
+
+=== fold 1 2026-08-05T08:31:38Z .. 2026-08-22T20:22:02Z ===
+  classic      profit= 10393.6M p/h=   5.5 under=0.767 over=0.131 dd=0.000 up=83 dn=2029
+  v8af_approx  profit= 10393.6M p/h=   5.5 under=0.767 over=0.131 dd=0.000 up=83 dn=2029
+  v9           profit= 11008.3M p/h=   5.8 under=0.269 over=0.371 dd=0.000 up=84 dn=72
+
+=== fold 2 2026-08-22T20:22:02Z .. 2026-09-14T08:49:11Z ===
+  classic      profit= 12703.4M p/h=   4.1 under=0.254 over=0.589 dd=0.000 up=334 dn=436
+  v8af_approx  profit= 12703.4M p/h=   4.1 under=0.254 over=0.589 dd=0.000 up=334 dn=436
+  v9           profit= 13121.2M p/h=   4.3 under=0.186 over=0.465 dd=0.000 up=132 dn=70
+
+Wrote /tmp/v9_oos_compare.json
+DONE
