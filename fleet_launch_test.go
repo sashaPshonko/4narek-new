@@ -66,7 +66,26 @@ func TestFleetLaunchQueueOrder(t *testing.T) {
 	}
 }
 
-func TestFleetLaunchHTTP(t *testing.T) {
+func TestFleetLaunchDropsStaleHead(t *testing.T) {
+	old := fleetLaunch
+	fleetLaunch = &fleetLaunchState{inQueue: make(map[string]bool)}
+	t.Cleanup(func() { fleetLaunch = old })
+	fleetLaunch.nextAt = time.Time{}
+
+	fleetLaunch.mu.Lock()
+	fleetLaunch.queue = []fleetLaunchReq{{
+		Anarchy: 502, Username: "ghost", Kind: fleetLaunchBot,
+		QueuedAt: time.Now().Add(-5 * time.Minute),
+		LastSeen: time.Now().Add(-5 * time.Minute),
+	}}
+	fleetLaunch.inQueue["ghost@502"] = true
+	fleetLaunch.mu.Unlock()
+
+	r := fleetLaunch.tryGrant(503, "alive", fleetLaunchBot)
+	if !r.Granted {
+		t.Fatalf("alive should grant after stale drop: %+v", r)
+	}
+}
 	old := fleetLaunch
 	fleetLaunch = &fleetLaunchState{inQueue: make(map[string]bool)}
 	t.Cleanup(func() { fleetLaunch = old })

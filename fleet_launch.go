@@ -17,6 +17,8 @@ import (
 const (
 	fleetLaunchMinGap = 90 * time.Second
 	fleetLaunchJitter = 120 * time.Second // итого 90–210 с между грантами
+	// Голова очереди без poll дольше этого — считаем брошенной (рестарт орха).
+	fleetLaunchStaleHead = 90 * time.Second
 )
 
 type fleetLaunchKind string
@@ -31,6 +33,7 @@ type fleetLaunchReq struct {
 	Username string          `json:"username"`
 	Kind     fleetLaunchKind `json:"kind"`
 	QueuedAt time.Time       `json:"-"`
+	LastSeen time.Time       `json:"-"`
 }
 
 type fleetLaunchResp struct {
@@ -62,18 +65,39 @@ func fleetLaunchKey(anarchy int, username string) string {
 
 func (s *fleetLaunchState) enqueueLocked(req fleetLaunchReq) (pos int) {
 	key := fleetLaunchKey(req.Anarchy, req.Username)
+	now := time.Now()
 	if s.inQueue[key] {
-		for i, q := range s.queue {
-			if fleetLaunchKey(q.Anarchy, q.Username) == key {
+		for i := range s.queue {
+			if fleetLaunchKey(s.queue[i].Anarchy, s.queue[i].Username) == key {
+				s.queue[i].LastSeen = now
+				if req.Kind != "" {
+					s.queue[i].Kind = req.Kind
+				}
 				return i + 1
 			}
 		}
 		return len(s.queue)
 	}
-	req.QueuedAt = time.Now()
+	req.QueuedAt = now
+	req.LastSeen = now
 	s.queue = append(s.queue, req)
 	s.inQueue[key] = true
 	return len(s.queue)
+}
+
+// dropStaleHeadsLocked — убрать брошенную голову (орк убит, poll нет).
+func (s *fleetLaunchState) dropStaleHeadsLocked(now time.Time) {
+	for len(s.queue) > 0 {
+		head := s.queue[0]
+		if now.Sub(head.LastSeen) <= fleetLaunchStaleHead {
+			return
+		}
+		key := fleetLaunchKey(head.Anarchy, head.Username)
+		s.queue = s.queue[1:]
+		delete(s.inQueue, key)
+		log.Printf("[LAUNCH] drop stale head an%d %s idle=%s",
+			head.Anarchy, head.Username, now.Sub(head.LastSeen).Round(time.Second))
+	}
 }
 
 func (s *fleetLaunchState) positionLocked(anarchy int, username string) int {
@@ -101,6 +125,12 @@ func (s *fleetLaunchState) tryGrant(anarchy int, username string, kind fleetLaun
 	req := fleetLaunchReq{Anarchy: anarchy, Username: username, Kind: kind}
 	pos := s.enqueueLocked(req)
 	now := time.Now()
+	s.dropStaleHeadsLocked(now)
+	pos = s.positionLocked(anarchy, username)
+	if pos == 0 {
+		// могли выкинуть себя как stale (не должны) — re-enqueue
+		pos = s.enqueueLocked(req)
+	}
 
 	if now.Before(s.nextAt) {
 		wait := int(s.nextAt.Sub(now).Milliseconds())
@@ -124,7 +154,6 @@ func (s *fleetLaunchState) tryGrant(anarchy int, username string, kind fleetLaun
 	headKey := fleetLaunchKey(head.Anarchy, head.Username)
 	myKey := fleetLaunchKey(anarchy, username)
 	if headKey != myKey {
-		// Не голова: короткий poll, очередь двигается только через grant головы.
 		wait := 3000
 		if now.Before(s.nextAt) {
 			w := int(s.nextAt.Sub(now).Milliseconds())
