@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -18,7 +19,7 @@ const (
 	fleetLaunchMinGap = 90 * time.Second
 	fleetLaunchJitter = 120 * time.Second // итого 90–210 с между грантами
 	// Голова очереди без poll дольше этого — считаем брошенной (рестарт орха).
-	fleetLaunchStaleHead = 90 * time.Second
+	fleetLaunchStaleHead = 45 * time.Second
 )
 
 type fleetLaunchKind string
@@ -73,16 +74,26 @@ func (s *fleetLaunchState) enqueueLocked(req fleetLaunchReq) (pos int) {
 				if req.Kind != "" {
 					s.queue[i].Kind = req.Kind
 				}
-				// owner уже в хвосте — поднять вперёд ботов
+				// Owner bump только если впереди есть бот — иначе каждый poll
+				// кидает owner в хвост секции owners (двое owners вечно на pos=2).
 				if s.queue[i].Kind == fleetLaunchOwner {
-					item := s.queue[i]
-					s.queue = append(s.queue[:i], s.queue[i+1:]...)
-					j := 0
-					for j < len(s.queue) && s.queue[j].Kind == fleetLaunchOwner {
-						j++
+					botAhead := false
+					for j := 0; j < i; j++ {
+						if s.queue[j].Kind != fleetLaunchOwner {
+							botAhead = true
+							break
+						}
 					}
-					s.queue = append(s.queue[:j], append([]fleetLaunchReq{item}, s.queue[j:]...)...)
-					return iPos(s, key)
+					if botAhead {
+						item := s.queue[i]
+						s.queue = append(s.queue[:i], s.queue[i+1:]...)
+						k := 0
+						for k < len(s.queue) && s.queue[k].Kind == fleetLaunchOwner {
+							k++
+						}
+						s.queue = append(s.queue[:k], append([]fleetLaunchReq{item}, s.queue[k:]...)...)
+						return iPos(s, key)
+					}
 				}
 				return i + 1
 			}
@@ -92,7 +103,6 @@ func (s *fleetLaunchState) enqueueLocked(req fleetLaunchReq) (pos int) {
 	req.QueuedAt = now
 	req.LastSeen = now
 	if req.Kind == fleetLaunchOwner {
-		// owners вперёд ботов (клан/деньги), после других owners уже в очереди
 		i := 0
 		for i < len(s.queue) && s.queue[i].Kind == fleetLaunchOwner {
 			i++
@@ -105,6 +115,31 @@ func (s *fleetLaunchState) enqueueLocked(req fleetLaunchReq) (pos int) {
 	return iPos(s, key)
 }
 
+// promoteOwnersLocked — все owners стабильно перед ботами (порядок как в очереди).
+func (s *fleetLaunchState) promoteOwnersLocked() {
+	if len(s.queue) < 2 {
+		return
+	}
+	var owners, rest []fleetLaunchReq
+	botBeforeOwner := false
+	seenBot := false
+	for _, q := range s.queue {
+		if q.Kind == fleetLaunchOwner {
+			if seenBot {
+				botBeforeOwner = true
+			}
+			owners = append(owners, q)
+		} else {
+			seenBot = true
+			rest = append(rest, q)
+		}
+	}
+	if len(owners) == 0 || !botBeforeOwner {
+		return
+	}
+	s.queue = append(owners, rest...)
+}
+
 func iPos(s *fleetLaunchState, key string) int {
 	for i, q := range s.queue {
 		if fleetLaunchKey(q.Anarchy, q.Username) == key {
@@ -112,6 +147,18 @@ func iPos(s *fleetLaunchState, key string) int {
 		}
 	}
 	return len(s.queue)
+}
+
+func queueSummary(q []fleetLaunchReq) string {
+	parts := make([]string, 0, len(q))
+	for i, e := range q {
+		if i >= 8 {
+			parts = append(parts, "…")
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%s:%s@%d", e.Kind, e.Username, e.Anarchy))
+	}
+	return strings.Join(parts, ",")
 }
 
 // dropStaleHeadsLocked — убрать брошенную голову (орк убит, poll нет).
@@ -155,10 +202,17 @@ func (s *fleetLaunchState) tryGrant(anarchy int, username string, kind fleetLaun
 	pos := s.enqueueLocked(req)
 	now := time.Now()
 	s.dropStaleHeadsLocked(now)
+	s.promoteOwnersLocked()
 	pos = s.positionLocked(anarchy, username)
 	if pos == 0 {
 		// могли выкинуть себя как stale (не должны) — re-enqueue
 		pos = s.enqueueLocked(req)
+		s.promoteOwnersLocked()
+		pos = s.positionLocked(anarchy, username)
+	}
+	if kind == fleetLaunchOwner && pos > 1 {
+		log.Printf("[LAUNCH] owner %s an%d still pos=%d queue=%s",
+			username, anarchy, pos, queueSummary(s.queue))
 	}
 
 	if now.Before(s.nextAt) {
