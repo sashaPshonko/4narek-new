@@ -170,6 +170,9 @@ OOS почти плоский. Чистый max profit → **0.85**. Проти�
 ### 2026-09-14 — classic: пол = max(minBuy+nac, min buy 10м)
 `classicEffectiveFloor`: sell не ниже самой дешёвой покупки за 10 минут (`priceHistory`). Без покупок в окне — прежний nac-floor.
 
+### 2026-09-14 — prod → `stock_corridor_v9` (снова)
+После classic-лесенки на тонких мечах (−27M/h). План: полный флот (1 sword / 1 pick / 3 armor shared). OOS: v9 +5% к v4/v5; live thin-fleet v4 был выше — принимаем ради market guards на толстом флоте.
+
 ### Решение (Sasha 14.09): оптимальное условие empty catchup
 **Расти по шагам, пока `sell < p10` (и `sell+step ≤ p10`), thick p10.**  
 Эквивалент: `v9CatchupGapRatio = 1.0` — лимит «пока нет покупательной способности», не стоп на 0.80.  

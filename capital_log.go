@@ -11,7 +11,7 @@ import (
 //   capitalPolicyV4      — inventory corridor Jul peak
 //   capitalPolicyV9      — inventory+market
 //   capitalPolicyV8af    — late-v8 corridor
-const capitalPolicy = capitalPolicyClassic
+const capitalPolicy = capitalPolicyV9
 const capitalForwardCycles = 3
 
 // capitalPendingForward — ждём 3 следующих окна analysis_time и дописываем profit в capital_cycles.
