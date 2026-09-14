@@ -1,0 +1,37 @@
+loading…
+cycles=52349
+
+mode                 | fold0 | fold1 | fold2 | mean | under | over | ups
+------------------------------------------------------------------------------------------
+gap080               | 13517.6 | 11010.2 | 13072.7 | 12533.5 | 0.239 | 0.455 | 260
+  current: stop empty↑ at 80% mkt
+  under empty 0.5→3M: end 0.7M (23.3%) can_buy=False buy_max=0.5 vs mkt_buy=2.8 in 60m
+  OVER empty 3→1.2M: end 3.0M (250.0%) (no_cap would keep climbing!)
+  OVER dump: end 1.0M (83.3%)
+until_buy            | 13517.6 | 10983.2 | 13079.3 | 12526.7 | 0.230 | 0.456 | 269
+  grow empty while sell < mkt (can buy)
+  under empty 0.5→3M: end 0.7M (23.3%) can_buy=False buy_max=0.5 vs mkt_buy=2.8 in 60m
+  OVER empty 3→1.2M: end 3.0M (250.0%) (no_cap would keep climbing!)
+  OVER dump: end 1.0M (83.3%)
+until_buy_plus_nac   | 13861.3 | 10587.5 | 13604.0 | 12684.3 | 0.227 | 0.510 | 307
+  grow empty to mkt+nac (100%+nac)
+  under empty 0.5→3M: end 0.7M (23.3%) can_buy=False buy_max=0.5 vs mkt_buy=2.8 in 60m
+  OVER empty 3→1.2M: end 3.0M (250.0%) (no_cap would keep climbing!)
+  OVER dump: end 1.0M (83.3%)
+no_cap_empty         | 13861.3 | 10587.5 | 13446.3 | 12631.7 | 0.226 | 0.521 | 376
+  empty↑ forever, no market stop
+  under empty 0.5→3M: end 0.7M (23.3%) can_buy=False buy_max=0.5 vs mkt_buy=2.8 in 60m
+  OVER empty 3→1.2M: end 3.2M (266.7%) (no_cap would keep climbing!)
+  OVER dump: end 1.0M (83.3%)
+
+=== vs gap080 ===
+  gap080                12533.5M  (+0.00%)  over=0.455
+  until_buy             12526.7M  (-0.05%)  over=0.456
+  until_buy_plus_nac    12684.3M  (+1.20%)  over=0.51
+  no_cap_empty          12631.7M  (+0.78%)  over=0.521
+
+VERDICT:
+  until_buy (= grow until sell reaches mkt): restores can_buy; OOS ≈ gap080
+  no_cap_empty: on OVER+empty keeps UPping forever — toxic
+  until_buy_plus_nac: targets above sell-mkt — overprice on empty
+Wrote /tmp/v9_until_buy_compare.json

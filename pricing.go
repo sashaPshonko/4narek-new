@@ -1141,7 +1141,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_v9_demand":
 		return "corridor_v9: understock ∧ sales≥threshold ∧ sales>buys ∧ ratio<1.05 → +1"
 	case "corridor_price_up_v9_empty_catchup":
-		return "corridor_v9: empty_streak≥2 ∧ ratio<0.80 ∧ price+step≤p10 → +1"
+		return "corridor_v9: empty∧no buys streak≥2 ∧ ratio<p10 ∧ price+step≤p10 → +1 (buy-stop + p10 safety)"
 	case "corridor_price_down_v9_soft", "corridor_price_down_v9_over", "corridor_price_down_v9_dump":
 		return "corridor_v9: excess held ∧ ratio≥0.90 → ↓"
 	case "corridor_hold_v9_no_signal", "corridor_hold_v9_band":

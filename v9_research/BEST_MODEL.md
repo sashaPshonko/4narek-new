@@ -118,7 +118,8 @@ Market `mkt` = raw p10 за 10m при `p10N≥40` (как catchup thick), ин�
 - **Veto:** `held ≤ hi` → никогда auto-DOWN (grant)
 
 **UP:**
-1. **Empty catchup:** `held=0` ∧ `empty_streak≥2` ∧ `price/mkt < 0.80` ∧ `price+step ≤ mkt` ∧ up_cd=0 → +1  
+1. **Empty catchup:** `held=0` ∧ `sales=buys=0` streak≥2 ∧ `price < p10` ∧ `price+step ≤ p10` ∧ up_cd=0 → +1  
+   (стоп по покупкам через сброс streak; **p10 = safety**, не early-stop 0.80)  
 2. **Demand:** `0 < held < lo` ∧ `sales ≥ 3` (ночь MSK 03–09: ≥4) ∧ `sales > buys` ∧ up_cd=0 ∧ `price/mkt < 1.05` → +1  
 3. Иначе HOLD  
 

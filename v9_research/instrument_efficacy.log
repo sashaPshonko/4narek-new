@@ -1,0 +1,61 @@
+cycles=99926
+HOLD n=75516 mean_fwd3=2.6075M
+
+=== INSTRUMENTS (bucket) ranked by Δfwd3 vs HOLD ===
+instrument                                    n     fwd3    Δhold       %  verdict
+DOWN dump                                  1009   11.428   +8.821 +338.3%  STRONG+
+DOWN over                                  3697   10.327   +7.720 +296.1%  STRONG+
+DOWN soft/hi                               3456    8.266   +5.658 +217.0%  STRONG+
+UP paid / trusted_min                        30    5.301   +2.693 +103.3%  STRONG+
+UP skim                                    2242    4.034   +1.427  +54.7%  STRONG+
+UP demand / weak_demand path               7235    3.111   +0.504  +19.3%  STRONG+
+UP deep (low stock)                         663    2.644   +0.036   +1.4%  NEUTRAL
+HOLD (all holds)                          75515    2.607   +0.000   +0.0%  NEUTRAL
+UP floor / floor_escape                     116    0.934   -1.673  -64.2%  STRONG-
+DOWN empty_fair / soft_idle                  50    0.275   -2.333  -89.5%  STRONG-
+DOWN stale                                  189   -0.006   -2.614 -100.2%  STRONG-
+UP recover / recover_deep                  4719   -0.015   -2.623 -100.6%  STRONG-
+UP empty_idle                               942   -0.251   -2.858 -109.6%  STRONG-
+UP ah_book / empty_book                      36   -6.751   -9.359 -358.9%  STRONG-
+
+=== DOWN conditioned ===
+  DOWN @ empty                   n=  242 fwd3=  0.000 Δ= -2.607
+  DOWN @ under_fill<0.15         n= 1243 fwd3= 10.914 Δ= +8.306
+  DOWN @ band_0.15-0.28          n=  383 fwd3=  9.071 Δ= +6.463
+  DOWN @ over_0.28-0.45          n= 5223 fwd3=  8.868 Δ= +6.261
+  DOWN @ dump>=0.45              n= 1322 fwd3= 11.320 Δ= +8.713
+
+=== UP conditioned ===
+  UP @ held=0                    n= 4492 fwd3=  0.271 Δ= -2.337
+  UP @ held>0 sales>=3           n= 8096 fwd3=  3.907 Δ= +1.299
+  UP @ held>0 sales<3            n= 3409 fwd3=  0.052 Δ= -2.555
+  UP @ sales=0 buys=0            n= 4077 fwd3= -0.284 Δ= -2.892
+
+=== Top exact actions (n≥50) by Δ vs HOLD ===
+  corridor_price_down_hi                             n=  478 Δ= +8.971 fwd= 11.579
+  corridor_price_down_dump                           n= 1009 Δ= +8.821 fwd= 11.428
+  corridor_price_down_over                           n= 3695 Δ= +7.729 fwd= 10.336
+  corridor_price_down_soft                           n= 2978 Δ= +5.126 fwd=  7.734
+  corridor_price_up_skim                             n= 2242 Δ= +1.427 fwd=  4.034
+  corridor_price_up_demand                           n= 7235 Δ= +0.504 fwd=  3.111
+  corridor_price_up_deep                             n=  663 Δ= +0.036 fwd=  2.644
+  corridor_price_down_empty_fair                     n=   50 Δ= -2.333 fwd=  0.275
+  corridor_price_up_recover                          n= 3984 Δ= -2.492 fwd=  0.116
+  corridor_price_down_stale                          n=  189 Δ= -2.614 fwd= -0.006
+  corridor_price_up_empty_idle                       n=  942 Δ= -2.858 fwd= -0.251
+  corridor_price_up_recover_deep                     n=  735 Δ= -3.331 fwd= -0.723
+  --- worst ---
+  corridor_price_down_hi                             n=  478 Δ= +8.971 fwd= 11.579
+  corridor_price_down_dump                           n= 1009 Δ= +8.821 fwd= 11.428
+  corridor_price_down_over                           n= 3695 Δ= +7.729 fwd= 10.336
+  corridor_price_down_soft                           n= 2978 Δ= +5.126 fwd=  7.734
+  corridor_price_up_skim                             n= 2242 Δ= +1.427 fwd=  4.034
+  corridor_price_up_demand                           n= 7235 Δ= +0.504 fwd=  3.111
+  corridor_price_up_deep                             n=  663 Δ= +0.036 fwd=  2.644
+  corridor_price_down_empty_fair                     n=   50 Δ= -2.333 fwd=  0.275
+  corridor_price_up_recover                          n= 3984 Δ= -2.492 fwd=  0.116
+  corridor_price_down_stale                          n=  189 Δ= -2.614 fwd= -0.006
+  corridor_price_up_empty_idle                       n=  942 Δ= -2.858 fwd= -0.251
+  corridor_price_up_recover_deep                     n=  735 Δ= -3.331 fwd= -0.723
+
+Wrote /tmp/v9_instrument_efficacy.json

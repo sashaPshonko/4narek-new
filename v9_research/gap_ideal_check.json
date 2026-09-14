@@ -1,0 +1,417 @@
+{
+  "results": {
+    "0.8": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13517.6,
+          "pph": 6.967,
+          "under": 0.2677,
+          "over": 0.5322,
+          "ups": 42,
+          "downs": 82,
+          "cycles": 11642
+        },
+        {
+          "fold": 1,
+          "profit_m": 10972.7,
+          "pph": 5.775,
+          "under": 0.2707,
+          "over": 0.3659,
+          "ups": 83,
+          "downs": 70,
+          "cycles": 11400
+        },
+        {
+          "fold": 2,
+          "profit_m": 13073.4,
+          "pph": 4.25,
+          "under": 0.1794,
+          "over": 0.4674,
+          "ups": 134,
+          "downs": 71,
+          "cycles": 18457
+        }
+      ],
+      "mean_profit_m": 12521.2,
+      "mean_under": 0.2393,
+      "mean_over": 0.4552,
+      "stress": {
+        "final_m": 2.4,
+        "pct": 80.0,
+        "can_buy": false,
+        "min": 410,
+        "ups": 19
+      },
+      "fold_profits": [
+        13517.6,
+        10972.7,
+        13073.4
+      ],
+      "delta_vs_100_pct": 0.13
+    },
+    "0.85": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13517.6,
+          "pph": 6.967,
+          "under": 0.2677,
+          "over": 0.5322,
+          "ups": 42,
+          "downs": 82,
+          "cycles": 11642
+        },
+        {
+          "fold": 1,
+          "profit_m": 10982.4,
+          "pph": 5.78,
+          "under": 0.2668,
+          "over": 0.3659,
+          "ups": 85,
+          "downs": 71,
+          "cycles": 11400
+        },
+        {
+          "fold": 2,
+          "profit_m": 13079.9,
+          "pph": 4.252,
+          "under": 0.1638,
+          "over": 0.4696,
+          "ups": 135,
+          "downs": 71,
+          "cycles": 18457
+        }
+      ],
+      "mean_profit_m": 12526.6,
+      "mean_under": 0.2328,
+      "mean_over": 0.4559,
+      "stress": {
+        "final_m": 2.6,
+        "pct": 86.7,
+        "can_buy": false,
+        "min": 450,
+        "ups": 21
+      },
+      "fold_profits": [
+        13517.6,
+        10982.4,
+        13079.9
+      ],
+      "delta_vs_100_pct": 0.173
+    },
+    "0.9": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13517.6,
+          "pph": 6.967,
+          "under": 0.2677,
+          "over": 0.5322,
+          "ups": 42,
+          "downs": 82,
+          "cycles": 11642
+        },
+        {
+          "fold": 1,
+          "profit_m": 10933.5,
+          "pph": 5.754,
+          "under": 0.2625,
+          "over": 0.3666,
+          "ups": 89,
+          "downs": 74,
+          "cycles": 11400
+        },
+        {
+          "fold": 2,
+          "profit_m": 13080.0,
+          "pph": 4.252,
+          "under": 0.1638,
+          "over": 0.4696,
+          "ups": 135,
+          "downs": 71,
+          "cycles": 18457
+        }
+      ],
+      "mean_profit_m": 12510.4,
+      "mean_under": 0.2313,
+      "mean_over": 0.4561,
+      "stress": {
+        "final_m": 2.7,
+        "pct": 90.0,
+        "can_buy": false,
+        "min": 470,
+        "ups": 22
+      },
+      "fold_profits": [
+        13517.6,
+        10933.5,
+        13080.0
+      ],
+      "delta_vs_100_pct": 0.043
+    },
+    "0.95": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13517.6,
+          "pph": 6.967,
+          "under": 0.2677,
+          "over": 0.5322,
+          "ups": 42,
+          "downs": 82,
+          "cycles": 11642
+        },
+        {
+          "fold": 1,
+          "profit_m": 10917.3,
+          "pph": 5.746,
+          "under": 0.2596,
+          "over": 0.3666,
+          "ups": 92,
+          "downs": 77,
+          "cycles": 11400
+        },
+        {
+          "fold": 2,
+          "profit_m": 13080.0,
+          "pph": 4.252,
+          "under": 0.1638,
+          "over": 0.4696,
+          "ups": 135,
+          "downs": 71,
+          "cycles": 18457
+        }
+      ],
+      "mean_profit_m": 12505.0,
+      "mean_under": 0.2304,
+      "mean_over": 0.4561,
+      "stress": {
+        "final_m": 2.9,
+        "pct": 96.7,
+        "can_buy": false,
+        "min": 510,
+        "ups": 24
+      },
+      "fold_profits": [
+        13517.6,
+        10917.3,
+        13080.0
+      ],
+      "delta_vs_100_pct": 0.0
+    },
+    "0.98": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13517.6,
+          "pph": 6.967,
+          "under": 0.2677,
+          "over": 0.5322,
+          "ups": 42,
+          "downs": 82,
+          "cycles": 11642
+        },
+        {
+          "fold": 1,
+          "profit_m": 10917.3,
+          "pph": 5.746,
+          "under": 0.2596,
+          "over": 0.3666,
+          "ups": 92,
+          "downs": 77,
+          "cycles": 11400
+        },
+        {
+          "fold": 2,
+          "profit_m": 13080.0,
+          "pph": 4.252,
+          "under": 0.1638,
+          "over": 0.4696,
+          "ups": 135,
+          "downs": 71,
+          "cycles": 18457
+        }
+      ],
+      "mean_profit_m": 12505.0,
+      "mean_under": 0.2304,
+      "mean_over": 0.4561,
+      "stress": {
+        "final_m": 3.0,
+        "pct": 100.0,
+        "can_buy": true,
+        "min": 520,
+        "ups": 25
+      },
+      "fold_profits": [
+        13517.6,
+        10917.3,
+        13080.0
+      ],
+      "delta_vs_100_pct": 0.0
+    },
+    "1.0": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13517.6,
+          "pph": 6.967,
+          "under": 0.2677,
+          "over": 0.5322,
+          "ups": 42,
+          "downs": 82,
+          "cycles": 11642
+        },
+        {
+          "fold": 1,
+          "profit_m": 10917.3,
+          "pph": 5.746,
+          "under": 0.2596,
+          "over": 0.3666,
+          "ups": 92,
+          "downs": 77,
+          "cycles": 11400
+        },
+        {
+          "fold": 2,
+          "profit_m": 13080.0,
+          "pph": 4.252,
+          "under": 0.1638,
+          "over": 0.4696,
+          "ups": 135,
+          "downs": 71,
+          "cycles": 18457
+        }
+      ],
+      "mean_profit_m": 12505.0,
+      "mean_under": 0.2304,
+      "mean_over": 0.4561,
+      "stress": {
+        "final_m": 3.0,
+        "pct": 100.0,
+        "can_buy": true,
+        "min": 520,
+        "ups": 25
+      },
+      "fold_profits": [
+        13517.6,
+        10917.3,
+        13080.0
+      ],
+      "delta_vs_100_pct": 0.0
+    },
+    "1.02": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13517.6,
+          "pph": 6.967,
+          "under": 0.2677,
+          "over": 0.5322,
+          "ups": 42,
+          "downs": 82,
+          "cycles": 11642
+        },
+        {
+          "fold": 1,
+          "profit_m": 10917.3,
+          "pph": 5.746,
+          "under": 0.2596,
+          "over": 0.3666,
+          "ups": 92,
+          "downs": 77,
+          "cycles": 11400
+        },
+        {
+          "fold": 2,
+          "profit_m": 13080.0,
+          "pph": 4.252,
+          "under": 0.1638,
+          "over": 0.4696,
+          "ups": 135,
+          "downs": 71,
+          "cycles": 18457
+        }
+      ],
+      "mean_profit_m": 12505.0,
+      "mean_under": 0.2304,
+      "mean_over": 0.4561,
+      "stress": {
+        "final_m": 3.0,
+        "pct": 100.0,
+        "can_buy": true,
+        "min": 520,
+        "ups": 25
+      },
+      "fold_profits": [
+        13517.6,
+        10917.3,
+        13080.0
+      ],
+      "delta_vs_100_pct": 0.0
+    },
+    "1.05": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13517.6,
+          "pph": 6.967,
+          "under": 0.2677,
+          "over": 0.5322,
+          "ups": 42,
+          "downs": 82,
+          "cycles": 11642
+        },
+        {
+          "fold": 1,
+          "profit_m": 10917.3,
+          "pph": 5.746,
+          "under": 0.2596,
+          "over": 0.3666,
+          "ups": 92,
+          "downs": 77,
+          "cycles": 11400
+        },
+        {
+          "fold": 2,
+          "profit_m": 13080.0,
+          "pph": 4.252,
+          "under": 0.1638,
+          "over": 0.4696,
+          "ups": 135,
+          "downs": 71,
+          "cycles": 18457
+        }
+      ],
+      "mean_profit_m": 12505.0,
+      "mean_under": 0.2304,
+      "mean_over": 0.4561,
+      "stress": {
+        "final_m": 3.0,
+        "pct": 100.0,
+        "can_buy": true,
+        "min": 520,
+        "ups": 25
+      },
+      "fold_profits": [
+        13517.6,
+        10917.3,
+        13080.0
+      ],
+      "delta_vs_100_pct": 0.0
+    }
+  },
+  "rank": [
+    "0.98",
+    "1.0",
+    "1.02",
+    "1.05",
+    "0.85",
+    "0.8",
+    "0.9",
+    "0.95"
+  ],
+  "best_by_can_buy_then_profit": "0.98",
+  "best_oos_profit": "0.85",
+  "ideal_claim_1_0": false
+}

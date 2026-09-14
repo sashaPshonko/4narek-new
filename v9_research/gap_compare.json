@@ -1,0 +1,319 @@
+{
+  "gaps": {
+    "0.75": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13359.1,
+          "pph_m": 6.89,
+          "under": 0.268,
+          "over": 0.542,
+          "ups": 41,
+          "downs": 83,
+          "cycles": 11640
+        },
+        {
+          "fold": 1,
+          "profit_m": 10995.9,
+          "pph_m": 5.79,
+          "under": 0.27,
+          "over": 0.366,
+          "ups": 83,
+          "downs": 71,
+          "cycles": 11397
+        },
+        {
+          "fold": 2,
+          "profit_m": 13161.2,
+          "pph_m": 4.28,
+          "under": 0.149,
+          "over": 0.481,
+          "ups": 138,
+          "downs": 75,
+          "cycles": 18453
+        }
+      ],
+      "mean_profit_m": 12505.4,
+      "mean_pph_m": 5.65,
+      "mean_under": 0.229,
+      "mean_over": 0.463,
+      "ups_total": 262,
+      "stress_under_empty": {
+        "final_m": 2.3,
+        "final_pct": 76.7,
+        "min": 380,
+        "cycles": 38
+      },
+      "stress_over_dump": {
+        "final_m": 1.0,
+        "final_pct": 83.3,
+        "min": 110
+      },
+      "delta_vs_080_pct": -0.0
+    },
+    "0.8": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13359.1,
+          "pph_m": 6.89,
+          "under": 0.268,
+          "over": 0.542,
+          "ups": 41,
+          "downs": 83,
+          "cycles": 11640
+        },
+        {
+          "fold": 1,
+          "profit_m": 10995.9,
+          "pph_m": 5.79,
+          "under": 0.27,
+          "over": 0.366,
+          "ups": 83,
+          "downs": 71,
+          "cycles": 11397
+        },
+        {
+          "fold": 2,
+          "profit_m": 13163.1,
+          "pph_m": 4.28,
+          "under": 0.149,
+          "over": 0.481,
+          "ups": 139,
+          "downs": 75,
+          "cycles": 18453
+        }
+      ],
+      "mean_profit_m": 12506.0,
+      "mean_pph_m": 5.65,
+      "mean_under": 0.229,
+      "mean_over": 0.463,
+      "ups_total": 263,
+      "stress_under_empty": {
+        "final_m": 2.4,
+        "final_pct": 80.0,
+        "min": 400,
+        "cycles": 40
+      },
+      "stress_over_dump": {
+        "final_m": 1.0,
+        "final_pct": 83.3,
+        "min": 110
+      },
+      "delta_vs_080_pct": 0.0
+    },
+    "0.85": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13359.1,
+          "pph_m": 6.89,
+          "under": 0.268,
+          "over": 0.542,
+          "ups": 41,
+          "downs": 83,
+          "cycles": 11640
+        },
+        {
+          "fold": 1,
+          "profit_m": 11005.2,
+          "pph_m": 5.79,
+          "under": 0.266,
+          "over": 0.366,
+          "ups": 85,
+          "downs": 72,
+          "cycles": 11397
+        },
+        {
+          "fold": 2,
+          "profit_m": 13169.5,
+          "pph_m": 4.28,
+          "under": 0.133,
+          "over": 0.483,
+          "ups": 140,
+          "downs": 75,
+          "cycles": 18453
+        }
+      ],
+      "mean_profit_m": 12511.3,
+      "mean_pph_m": 5.65,
+      "mean_under": 0.222,
+      "mean_over": 0.464,
+      "ups_total": 266,
+      "stress_under_empty": {
+        "final_m": 2.6,
+        "final_pct": 86.7,
+        "min": 440,
+        "cycles": 44
+      },
+      "stress_over_dump": {
+        "final_m": 1.0,
+        "final_pct": 83.3,
+        "min": 110
+      },
+      "delta_vs_080_pct": 0.04
+    },
+    "0.9": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13359.1,
+          "pph_m": 6.89,
+          "under": 0.268,
+          "over": 0.542,
+          "ups": 41,
+          "downs": 83,
+          "cycles": 11640
+        },
+        {
+          "fold": 1,
+          "profit_m": 10984.8,
+          "pph_m": 5.78,
+          "under": 0.262,
+          "over": 0.366,
+          "ups": 88,
+          "downs": 74,
+          "cycles": 11397
+        },
+        {
+          "fold": 2,
+          "profit_m": 13148.1,
+          "pph_m": 4.28,
+          "under": 0.132,
+          "over": 0.483,
+          "ups": 141,
+          "downs": 74,
+          "cycles": 18453
+        }
+      ],
+      "mean_profit_m": 12497.3,
+      "mean_pph_m": 5.65,
+      "mean_under": 0.221,
+      "mean_over": 0.464,
+      "ups_total": 270,
+      "stress_under_empty": {
+        "final_m": 2.7,
+        "final_pct": 90.0,
+        "min": 460,
+        "cycles": 46
+      },
+      "stress_over_dump": {
+        "final_m": 1.0,
+        "final_pct": 83.3,
+        "min": 110
+      },
+      "delta_vs_080_pct": -0.07
+    },
+    "0.95": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13359.1,
+          "pph_m": 6.89,
+          "under": 0.268,
+          "over": 0.542,
+          "ups": 41,
+          "downs": 83,
+          "cycles": 11640
+        },
+        {
+          "fold": 1,
+          "profit_m": 10968.6,
+          "pph_m": 5.77,
+          "under": 0.259,
+          "over": 0.366,
+          "ups": 91,
+          "downs": 77,
+          "cycles": 11397
+        },
+        {
+          "fold": 2,
+          "profit_m": 13145.1,
+          "pph_m": 4.27,
+          "under": 0.132,
+          "over": 0.483,
+          "ups": 143,
+          "downs": 75,
+          "cycles": 18453
+        }
+      ],
+      "mean_profit_m": 12490.9,
+      "mean_pph_m": 5.64,
+      "mean_under": 0.22,
+      "mean_over": 0.464,
+      "ups_total": 275,
+      "stress_under_empty": {
+        "final_m": 2.9,
+        "final_pct": 96.7,
+        "min": 500,
+        "cycles": 50
+      },
+      "stress_over_dump": {
+        "final_m": 1.0,
+        "final_pct": 83.3,
+        "min": 110
+      },
+      "delta_vs_080_pct": -0.12
+    },
+    "1.0": {
+      "folds": [
+        {
+          "fold": 0,
+          "profit_m": 13359.1,
+          "pph_m": 6.89,
+          "under": 0.268,
+          "over": 0.542,
+          "ups": 41,
+          "downs": 83,
+          "cycles": 11640
+        },
+        {
+          "fold": 1,
+          "profit_m": 10968.6,
+          "pph_m": 5.77,
+          "under": 0.259,
+          "over": 0.366,
+          "ups": 91,
+          "downs": 77,
+          "cycles": 11397
+        },
+        {
+          "fold": 2,
+          "profit_m": 13145.1,
+          "pph_m": 4.27,
+          "under": 0.132,
+          "over": 0.483,
+          "ups": 143,
+          "downs": 75,
+          "cycles": 18453
+        }
+      ],
+      "mean_profit_m": 12490.9,
+      "mean_pph_m": 5.64,
+      "mean_under": 0.22,
+      "mean_over": 0.464,
+      "ups_total": 275,
+      "stress_under_empty": {
+        "final_m": 3.0,
+        "final_pct": 100.0,
+        "min": 520,
+        "cycles": 52
+      },
+      "stress_over_dump": {
+        "final_m": 1.0,
+        "final_pct": 83.3,
+        "min": 110
+      },
+      "delta_vs_080_pct": -0.12
+    }
+  },
+  "rank": [
+    "0.85",
+    "0.8",
+    "0.75",
+    "0.9",
+    "1.0",
+    "0.95"
+  ],
+  "optimal": "0.85"
+}

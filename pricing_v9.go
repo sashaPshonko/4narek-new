@@ -14,9 +14,11 @@ const (
 	capitalPolicyV8af = "stock_corridor_v8af"
 	capitalPolicyV9   = "stock_corridor_v9"
 
-	v9DownBlockRatio   = 0.90 // ratio < this → DOWN запрещён
-	v9CatchupGapRatio  = 0.80 // empty catchup только при our/mkt < this
-	v9DemandMaxRatio   = 1.05 // demand UP только при our/mkt < this
+	v9DownBlockRatio = 0.90 // ratio < this → DOWN запрещён
+	// Empty catchup: главный стоп — появились покупки (empty streak сбрасывается при buys>0).
+	// p10 — предохранитель на «боты/лоты сломаны», не цель «рано остановиться».
+	v9CatchupGapRatio = 1.00 // safety: our/p10 < 1 ∧ price+step ≤ p10
+	v9DemandMaxRatio  = 1.05 // demand UP только при our/mkt < this
 	v9CatchupArmCycles = 2
 	v9UpCooldownCycles  = 2
 	v9MaxUpStreak      = 1

@@ -1,0 +1,464 @@
+{
+  "summary": {
+    "ekb": {
+      "mean_profit_m": 11091.1,
+      "mean_pph_m": 5.02,
+      "mean_under": 0.003,
+      "wins_vs_v9": null,
+      "folds": [
+        {
+          "profit_m": 13259.3,
+          "pph_m": 6.84,
+          "under_frac": 0.005,
+          "over_frac": 0.989,
+          "avg_held": 7.08,
+          "ups": 9486,
+          "downs": 328,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 42430.0
+        },
+        {
+          "profit_m": 8479.4,
+          "pph_m": 4.47,
+          "under_frac": 0.0,
+          "over_frac": 0.998,
+          "avg_held": 5.21,
+          "ups": 10343,
+          "downs": 200,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 27246.0
+        },
+        {
+          "profit_m": 11534.5,
+          "pph_m": 3.75,
+          "under_frac": 0.003,
+          "over_frac": 0.996,
+          "avg_held": 2.72,
+          "ups": 17777,
+          "downs": 121,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 36973.0
+        }
+      ]
+    },
+    "classic_ns": {
+      "mean_profit_m": 10828.4,
+      "mean_pph_m": 4.88,
+      "mean_under": 0.057,
+      "wins_vs_v9": null,
+      "folds": [
+        {
+          "profit_m": 11723.3,
+          "pph_m": 6.04,
+          "under_frac": 0.109,
+          "over_frac": 0.877,
+          "avg_held": 7.11,
+          "ups": 5038,
+          "downs": 1448,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 37311.0
+        },
+        {
+          "profit_m": 9201.9,
+          "pph_m": 4.85,
+          "under_frac": 0.056,
+          "over_frac": 0.928,
+          "avg_held": 5.04,
+          "ups": 8651,
+          "downs": 593,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 29653.0
+        },
+        {
+          "profit_m": 11560.1,
+          "pph_m": 3.76,
+          "under_frac": 0.005,
+          "over_frac": 0.99,
+          "avg_held": 2.71,
+          "ups": 17302,
+          "downs": 461,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 37051.0
+        }
+      ]
+    },
+    "corridor_v1": {
+      "mean_profit_m": 10632.3,
+      "mean_pph_m": 4.78,
+      "mean_under": 0.154,
+      "wins_vs_v9": null,
+      "folds": [
+        {
+          "profit_m": 10354.0,
+          "pph_m": 5.34,
+          "under_frac": 0.19,
+          "over_frac": 0.791,
+          "avg_held": 7.38,
+          "ups": 1716,
+          "downs": 1081,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 32747.0
+        },
+        {
+          "profit_m": 9956.7,
+          "pph_m": 5.24,
+          "under_frac": 0.241,
+          "over_frac": 0.724,
+          "avg_held": 5.14,
+          "ups": 2989,
+          "downs": 1493,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 32085.0
+        },
+        {
+          "profit_m": 11586.2,
+          "pph_m": 3.77,
+          "under_frac": 0.032,
+          "over_frac": 0.962,
+          "avg_held": 2.68,
+          "ups": 5593,
+          "downs": 628,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 37110.0
+        }
+      ]
+    },
+    "corridor_v3": {
+      "mean_profit_m": 11801.6,
+      "mean_pph_m": 5.34,
+      "mean_under": 0.387,
+      "wins_vs_v9": null,
+      "folds": [
+        {
+          "profit_m": 12668.8,
+          "pph_m": 6.53,
+          "under_frac": 0.223,
+          "over_frac": 0.619,
+          "avg_held": 6.93,
+          "ups": 144,
+          "downs": 702,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 39829.0
+        },
+        {
+          "profit_m": 10414.5,
+          "pph_m": 5.49,
+          "under_frac": 0.749,
+          "over_frac": 0.171,
+          "avg_held": 5.1,
+          "ups": 92,
+          "downs": 2031,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 33858.0
+        },
+        {
+          "profit_m": 12321.6,
+          "pph_m": 4.01,
+          "under_frac": 0.189,
+          "over_frac": 0.686,
+          "avg_held": 2.47,
+          "ups": 606,
+          "downs": 497,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 39411.0
+        }
+      ]
+    },
+    "corridor_v4": {
+      "mean_profit_m": 11898.2,
+      "mean_pph_m": 5.39,
+      "mean_under": 0.366,
+      "wins_vs_v9": null,
+      "folds": [
+        {
+          "profit_m": 12673.6,
+          "pph_m": 6.53,
+          "under_frac": 0.224,
+          "over_frac": 0.618,
+          "avg_held": 6.93,
+          "ups": 142,
+          "downs": 702,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 39845.0
+        },
+        {
+          "profit_m": 10704.0,
+          "pph_m": 5.64,
+          "under_frac": 0.684,
+          "over_frac": 0.24,
+          "avg_held": 4.89,
+          "ups": 95,
+          "downs": 1485,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 34823.0
+        },
+        {
+          "profit_m": 12317.1,
+          "pph_m": 4.01,
+          "under_frac": 0.189,
+          "over_frac": 0.684,
+          "avg_held": 2.49,
+          "ups": 605,
+          "downs": 496,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 39397.0
+        }
+      ]
+    },
+    "corridor_v5": {
+      "mean_profit_m": 11929.5,
+      "mean_pph_m": 5.41,
+      "mean_under": 0.369,
+      "wins_vs_v9": null,
+      "folds": [
+        {
+          "profit_m": 12673.6,
+          "pph_m": 6.53,
+          "under_frac": 0.224,
+          "over_frac": 0.618,
+          "avg_held": 6.93,
+          "ups": 142,
+          "downs": 702,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 39845.0
+        },
+        {
+          "profit_m": 10797.9,
+          "pph_m": 5.69,
+          "under_frac": 0.693,
+          "over_frac": 0.229,
+          "avg_held": 4.88,
+          "ups": 92,
+          "downs": 1485,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 35136.0
+        },
+        {
+          "profit_m": 12317.1,
+          "pph_m": 4.01,
+          "under_frac": 0.189,
+          "over_frac": 0.684,
+          "avg_held": 2.49,
+          "ups": 605,
+          "downs": 496,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 39397.0
+        }
+      ]
+    },
+    "corridor_v6": {
+      "mean_profit_m": 11929.5,
+      "mean_pph_m": 5.41,
+      "mean_under": 0.369,
+      "wins_vs_v9": null,
+      "folds": [
+        {
+          "profit_m": 12673.6,
+          "pph_m": 6.53,
+          "under_frac": 0.224,
+          "over_frac": 0.618,
+          "avg_held": 6.93,
+          "ups": 142,
+          "downs": 702,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 39845.0
+        },
+        {
+          "profit_m": 10797.9,
+          "pph_m": 5.69,
+          "under_frac": 0.693,
+          "over_frac": 0.229,
+          "avg_held": 4.88,
+          "ups": 92,
+          "downs": 1485,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 35136.0
+        },
+        {
+          "profit_m": 12317.1,
+          "pph_m": 4.01,
+          "under_frac": 0.189,
+          "over_frac": 0.684,
+          "avg_held": 2.49,
+          "ups": 605,
+          "downs": 496,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 39397.0
+        }
+      ]
+    },
+    "v8_late": {
+      "mean_profit_m": 11898.2,
+      "mean_pph_m": 5.39,
+      "mean_under": 0.366,
+      "wins_vs_v9": null,
+      "folds": [
+        {
+          "profit_m": 12673.6,
+          "pph_m": 6.53,
+          "under_frac": 0.224,
+          "over_frac": 0.618,
+          "avg_held": 6.93,
+          "ups": 142,
+          "downs": 702,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 39845.0
+        },
+        {
+          "profit_m": 10704.0,
+          "pph_m": 5.64,
+          "under_frac": 0.684,
+          "over_frac": 0.24,
+          "avg_held": 4.89,
+          "ups": 95,
+          "downs": 1485,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 34823.0
+        },
+        {
+          "profit_m": 12317.1,
+          "pph_m": 4.01,
+          "under_frac": 0.189,
+          "over_frac": 0.684,
+          "avg_held": 2.49,
+          "ups": 605,
+          "downs": 496,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 39397.0
+        }
+      ]
+    },
+    "v9": {
+      "mean_profit_m": 12535.6,
+      "mean_pph_m": 5.67,
+      "mean_under": 0.242,
+      "wins_vs_v9": null,
+      "folds": [
+        {
+          "profit_m": 13514.8,
+          "pph_m": 6.97,
+          "under_frac": 0.269,
+          "over_frac": 0.528,
+          "avg_held": 6.42,
+          "ups": 47,
+          "downs": 84,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 42629.0
+        },
+        {
+          "profit_m": 10970.9,
+          "pph_m": 5.78,
+          "under_frac": 0.27,
+          "over_frac": 0.371,
+          "avg_held": 4.31,
+          "ups": 83,
+          "downs": 71,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 35270.0
+        },
+        {
+          "profit_m": 13121.2,
+          "pph_m": 4.27,
+          "under_frac": 0.186,
+          "over_frac": 0.465,
+          "avg_held": 2.05,
+          "ups": 132,
+          "downs": 70,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 42021.0
+        }
+      ]
+    },
+    "hold": {
+      "mean_profit_m": 12554.9,
+      "mean_pph_m": 5.64,
+      "mean_under": 0.151,
+      "wins_vs_v9": 2,
+      "folds": [
+        {
+          "profit_m": 13845.6,
+          "pph_m": 7.14,
+          "under_frac": 0.045,
+          "over_frac": 0.814,
+          "avg_held": 6.75,
+          "ups": 0,
+          "downs": 0,
+          "cycles": 11637,
+          "drawdown": 0.0,
+          "sales": 44110.0
+        },
+        {
+          "profit_m": 10158.2,
+          "pph_m": 5.35,
+          "under_frac": 0.067,
+          "over_frac": 0.588,
+          "avg_held": 4.55,
+          "ups": 0,
+          "downs": 0,
+          "cycles": 11392,
+          "drawdown": 0.0,
+          "sales": 32572.0
+        },
+        {
+          "profit_m": 13660.8,
+          "pph_m": 4.44,
+          "under_frac": 0.342,
+          "over_frac": 0.163,
+          "avg_held": 1.85,
+          "ups": 0,
+          "downs": 0,
+          "cycles": 18447,
+          "drawdown": 0.0,
+          "sales": 44043.0
+        }
+      ]
+    }
+  },
+  "rank": [
+    "hold",
+    "v9",
+    "corridor_v5",
+    "corridor_v6",
+    "corridor_v4",
+    "v8_late",
+    "corridor_v3",
+    "ekb",
+    "classic_ns",
+    "corridor_v1"
+  ],
+  "notes": [
+    "EKB = exact port of ekb/ekb.go adjustPrice",
+    "classic_ns = NormalSales UP/DOWN (pre-corridor)",
+    "corridor_v* = simplified from PRICING_EXPERIMENTS",
+    "v8_late = empty stuck HOLD + inventory DOWN (no market catchup)",
+    "v9 = production stock_corridor_v9",
+    "Demand model sequential sim — relative ranking, not absolute cash"
+  ]
+}

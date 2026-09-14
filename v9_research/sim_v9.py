@@ -755,8 +755,8 @@ def mass_search(train, test, dm):
     return results
 
 
-def policy_v9_core(st, obs, dm, streak_need=2, gap=0.80, min_sales_up=3, down_block_ratio=0.90) -> Decision:
-    """Production stock_corridor_v9 (matches pricing_v9.go)."""
+def policy_v9_core(st, obs, dm, streak_need=2, gap=1.00, min_sales_up=3, down_block_ratio=0.90) -> Decision:
+    """Production stock_corridor_v9 (matches pricing_v9.go). gap=1.0 = p10 safety; buy-stop via empty streak."""
     share = obs["share"] or 12
     lo, hi, soft, over, dump = step_band(share, 0.18, 0.25)
     step = obs["step"] or 100_000
@@ -806,7 +806,7 @@ def ablation(train, test, dm, base_params):
         ("B_inv_no_down_under", "inv_no_down_under", {}),
         ("C_inv_empty3", "empty_streak", {"streak_need": 3, "gap": 0.85}),
         ("D_inv_p10guard", "inv_p10_guard", {"streak_need": 2, "gap": 0.80}),
-        ("E_v9_core", "v9_core", base_params if base_params else {"streak_need": 2, "gap": 0.80, "min_sales_up": 3, "down_block_ratio": 0.90}),
+        ("E_v9_core", "v9_core", base_params if base_params else {"streak_need": 2, "gap": 1.00, "min_sales_up": 3, "down_block_ratio": 0.90}),
         ("F_hold", "hold", {}),
     ]
     train_by, test_by = split_by_item(train), split_by_item(test)
@@ -933,7 +933,7 @@ def main():
 
     best = results[0]
     print("\n[8] Ablation")
-    base_params = {"streak_need": 2, "gap": 0.80, "min_sales_up": 3, "down_block_ratio": 0.90}
+    base_params = {"streak_need": 2, "gap": 1.00, "min_sales_up": 3, "down_block_ratio": 0.90}
     for r in results:
         if r["name"] == "v9_core":
             base_params = r["params"]

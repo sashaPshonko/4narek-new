@@ -177,12 +177,32 @@ func TestV9EmptyCatchupStreak1Hold(t *testing.T) {
 	}
 }
 
-func TestV9EmptyCatchupNoGap(t *testing.T) {
-	in := v9Base(0, 0, 0, 1_700_000, 100_000, 100, 2_000_000, true) // 0.85
+func TestV9EmptyCatchupBelowP10OK(t *testing.T) {
+	// ratio 0.85 — раньше стоп на 0.80; теперь safety только p10
+	in := v9Base(0, 0, 0, 1_700_000, 100_000, 100, 2_000_000, true)
+	in.EmptyStreak = 1
+	d := v9Decide(in)
+	if d.Action != "corridor_price_up_v9_empty_catchup" {
+		t.Fatalf("ratio 0.85 must catchup toward p10: %+v", d)
+	}
+}
+
+func TestV9EmptyCatchupAtP10Hold(t *testing.T) {
+	in := v9Base(0, 0, 0, 2_000_000, 100_000, 100, 2_000_000, true) // ratio 1.0
 	in.EmptyStreak = 2
 	d := v9Decide(in)
 	if isV9Up(d.Action) {
-		t.Fatalf("ratio>=0.80 must not catchup: %+v", d)
+		t.Fatalf("at p10 safety must HOLD: %+v", d)
+	}
+}
+
+func TestV9EmptyCatchupStopsWhenBuys(t *testing.T) {
+	// buys>0 → empty streak resets inside decide → no catchup
+	in := v9Base(0, 0, 1, 1_500_000, 100_000, 100, 2_000_000, true)
+	in.EmptyStreak = 5
+	d := v9Decide(in)
+	if isV9Up(d.Action) {
+		t.Fatalf("buys>0 must not catchup: %+v", d)
 	}
 }
 

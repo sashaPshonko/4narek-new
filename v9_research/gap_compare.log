@@ -1,0 +1,28 @@
+loading…
+cycles=52341
+
+gap   | fold0 | fold1 | fold2 | mean_profit | mean_p/h | under | over | ups
+-----------------------------------------------------------------------------------------------
+ 0.75 | 13359.1 | 10995.9 | 13161.2 |    12505.4 |    5.65 | 0.229 | 0.463 |  262
+       stress empty→ 2.3M (76.7%) in 380m | over dump→ 1.0M (83.3%)
+ 0.80 | 13359.1 | 10995.9 | 13163.1 |    12506.0 |    5.65 | 0.229 | 0.463 |  263
+       stress empty→ 2.4M (80.0%) in 400m | over dump→ 1.0M (83.3%)
+ 0.85 | 13359.1 | 11005.2 | 13169.5 |    12511.3 |    5.65 | 0.222 | 0.464 |  266
+       stress empty→ 2.6M (86.7%) in 440m | over dump→ 1.0M (83.3%)
+ 0.90 | 13359.1 | 10984.8 | 13148.1 |    12497.3 |    5.65 | 0.221 | 0.464 |  270
+       stress empty→ 2.7M (90.0%) in 460m | over dump→ 1.0M (83.3%)
+ 0.95 | 13359.1 | 10968.6 | 13145.1 |    12490.9 |    5.64 | 0.220 | 0.464 |  275
+       stress empty→ 2.9M (96.7%) in 500m | over dump→ 1.0M (83.3%)
+ 1.00 | 13359.1 | 10968.6 | 13145.1 |    12490.9 |    5.64 | 0.220 | 0.464 |  275
+       stress empty→ 3.0M (100.0%) in 520m | over dump→ 1.0M (83.3%)
+
+=== RANK ===
+  1. gap=0.85  profit=12511.3M (+0.04% vs 0.80)  p/h=5.65  under=0.222  empty_end=86.7%
+  2. gap=0.8  profit=12506.0M (+0.00% vs 0.80)  p/h=5.65  under=0.229  empty_end=80.0%
+  3. gap=0.75  profit=12505.4M (-0.00% vs 0.80)  p/h=5.65  under=0.229  empty_end=76.7%
+  4. gap=0.9  profit=12497.3M (-0.07% vs 0.80)  p/h=5.65  under=0.221  empty_end=90.0%
+  5. gap=1.0  profit=12490.9M (-0.12% vs 0.80)  p/h=5.64  under=0.22  empty_end=100.0%
+  6. gap=0.95  profit=12490.9M (-0.12% vs 0.80)  p/h=5.64  under=0.22  empty_end=96.7%
+
+OPTIMAL (by OOS profit, then escape height): gap=0.85
+Wrote /tmp/v9_gap_compare.json

@@ -1,0 +1,41 @@
+loading…
+cycles=52353
+
+gap   |       f0       f1       f2 | mean | Δ1.00 | under | over | can_buy | empty%
+----------------------------------------------------------------------------------------------------
+ 0.80 |  13517.6  10972.7  13073.4 | 12521.2 |        | 0.239 | 0.455 | False |  80.0%
+ 0.85 |  13517.6  10982.4  13079.9 | 12526.6 |        | 0.233 | 0.456 | False |  86.7%
+ 0.90 |  13517.6  10933.5  13080.0 | 12510.4 |        | 0.231 | 0.456 | False |  90.0%
+ 0.95 |  13517.6  10917.3  13080.0 | 12505.0 |        | 0.230 | 0.456 | False |  96.7%
+ 0.98 |  13517.6  10917.3  13080.0 | 12505.0 |        | 0.230 | 0.456 | True  | 100.0%
+ 1.00 |  13517.6  10917.3  13080.0 | 12505.0 |        | 0.230 | 0.456 | True  | 100.0%
+ 1.02 |  13517.6  10917.3  13080.0 | 12505.0 |        | 0.230 | 0.456 | True  | 100.0%
+ 1.05 |  13517.6  10917.3  13080.0 | 12505.0 |        | 0.230 | 0.456 | True  | 100.0%
+
+=== Fold wins vs gap=1.00 ===
+  gap= 0.8: mean  12521.2M (+0.130% vs 1.0)  folds beat 1.0: 1/3  lose: 1/3  empty→80.0% can_buy=False
+  gap=0.85: mean  12526.6M (+0.173% vs 1.0)  folds beat 1.0: 1/3  lose: 1/3  empty→86.7% can_buy=False
+  gap= 0.9: mean  12510.4M (+0.043% vs 1.0)  folds beat 1.0: 1/3  lose: 0/3  empty→90.0% can_buy=False
+  gap=0.95: mean  12505.0M (+0.000% vs 1.0)  folds beat 1.0: 0/3  lose: 0/3  empty→96.7% can_buy=False
+  gap=0.98: mean  12505.0M (+0.000% vs 1.0)  folds beat 1.0: 0/3  lose: 0/3  empty→100.0% can_buy=True
+  gap= 1.0: mean  12505.0M (+0.000% vs 1.0)  folds beat 1.0: 0/3  lose: 0/3  empty→100.0% can_buy=True
+  gap=1.02: mean  12505.0M (+0.000% vs 1.0)  folds beat 1.0: 0/3  lose: 0/3  empty→100.0% can_buy=True
+  gap=1.05: mean  12505.0M (+0.000% vs 1.0)  folds beat 1.0: 0/3  lose: 0/3  empty→100.0% can_buy=True
+
+=== RANK (can_buy first, then OOS profit) ===
+  1. gap=0.98  profit=12505.0M  can_buy=True  empty=100.0%  over=0.4561 under=0.2304
+  2. gap=1.0  profit=12505.0M  can_buy=True  empty=100.0%  over=0.4561 under=0.2304 ←
+  3. gap=1.02  profit=12505.0M  can_buy=True  empty=100.0%  over=0.4561 under=0.2304
+  4. gap=1.05  profit=12505.0M  can_buy=True  empty=100.0%  over=0.4561 under=0.2304
+  5. gap=0.85  profit=12526.6M  can_buy=False  empty=86.7%  over=0.4559 under=0.2328
+  6. gap=0.8  profit=12521.2M  can_buy=False  empty=80.0%  over=0.4552 under=0.2393
+  7. gap=0.9  profit=12510.4M  can_buy=False  empty=90.0%  over=0.4561 under=0.2313
+  8. gap=0.95  profit=12505.0M  can_buy=False  empty=96.7%  over=0.4561 under=0.2304
+
+=== CONCLUSION ===
+Best OOS profit alone: gap=0.85 (12526.6M)
+Gaps that restore can_buy on empty under: ['0.98', '1.0', '1.02', '1.05']
+Rank#1 with can_buy priority: gap=0.98
+gap=1.0 is NOT rank#1; gap=0.98 wins. 1.0 vs that: 12505.0 vs 12505.0 (+0.0M)
+Note: v9_core always has price+step<=mkt on catchup, so gap>1.0 ≈ gap=1.0 for empty climb.
+Wrote /tmp/v9_gap_ideal_check.json

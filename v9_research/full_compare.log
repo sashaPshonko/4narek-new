@@ -1,0 +1,35 @@
+loading panel…
+cycles=52325
+
+model          | fold0 profit | fold1 profit | fold2 profit | mean p/h | mean under
+----------------------------------------------------------------------------------------------------
+ekb            |  13259.3 |   8479.4 |  11534.5 |     5.02 | 0.003
+classic_ns     |  11723.3 |   9201.9 |  11560.1 |     4.88 | 0.057
+corridor_v1    |  10354.0 |   9956.7 |  11586.2 |     4.78 | 0.154
+corridor_v3    |  12668.8 |  10414.5 |  12321.6 |     5.34 | 0.387
+corridor_v4    |  12673.6 |  10704.0 |  12317.1 |     5.39 | 0.366
+corridor_v5    |  12673.6 |  10797.9 |  12317.1 |     5.41 | 0.369
+corridor_v6    |  12673.6 |  10797.9 |  12317.1 |     5.41 | 0.369
+v8_late        |  12673.6 |  10704.0 |  12317.1 |     5.39 | 0.366
+v9             |  13514.8 |  10970.9 |  13121.2 |     5.67 | 0.242
+hold           |  13845.6 |  10158.2 |  13660.8 |     5.64 | 0.151
+
+=== RANK by mean OOS profit ===
+   1. hold           mean_profit= 12554.9M  p/h=  5.64  under=0.151
+   2. v9             mean_profit= 12535.6M  p/h=  5.67  under=0.242 ←
+   3. corridor_v5    mean_profit= 11929.5M  p/h=  5.41  under=0.369
+   4. corridor_v6    mean_profit= 11929.5M  p/h=  5.41  under=0.369
+   5. corridor_v4    mean_profit= 11898.2M  p/h=  5.39  under=0.366
+   6. v8_late        mean_profit= 11898.2M  p/h=  5.39  under=0.366
+   7. corridor_v3    mean_profit= 11801.6M  p/h=  5.34  under=0.387
+   8. ekb            mean_profit= 11091.1M  p/h=  5.02  under=0.003
+   9. classic_ns     mean_profit= 10828.4M  p/h=  4.88  under=0.057
+  10. corridor_v1    mean_profit= 10632.3M  p/h=  4.78  under=0.154
+
+=== Per-fold winner ===
+  fold0: hold (13845.6M)  v9=13514.8M  Δ=-330.8M vs winner
+  fold1: v9 (10970.9M)  v9=10970.9M  Δ=+0.0M vs winner
+  fold2: hold (13660.8M)  v9=13121.2M  Δ=-539.6M vs winner
+
+Wrote /tmp/v9_full_compare.json
+DONE
