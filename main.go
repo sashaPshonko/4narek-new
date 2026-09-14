@@ -265,6 +265,7 @@ func runServer() {
 	goImmortal("broadcastBroker", broadcastBroker)
 	goImmortal("cacheCleanup", startCacheCleanup)
 	goImmortal("httpServer", startHTTPServer)
+	goImmortal("clanSetupDispatch", startClanSetupDispatcher)
 
 	initMLLog()
 	setupMLShutdown()
@@ -1429,7 +1430,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		if msg.Action == "presence" {
 			log.Printf("[WS incoming] presence items=%d inv=%d banned=%d faults=%d owners=%d bots=%d active=%v",
 				len(msg.Items), len(msg.Inventory), len(msg.Banned), len(msg.AuthFaults), len(msg.ClanOwners), len(msg.Bots), msg.ActiveTypes)
-		} else if msg.Action != "add" && msg.Action != "ah_lot" && msg.Action != "ah_lots" && msg.Action != "desk_chat" {
+		} else if msg.Action != "add" && msg.Action != "ah_lot" && msg.Action != "ah_lots" && msg.Action != "desk_chat" && msg.Action != "clan_needed" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
 		}
 
@@ -1470,6 +1471,16 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	mutex.Lock()
 	enchJSON := tradeEnchantsJSON(msg.Enchants)
 	switch msg.Action {
+	case "clan_needed":
+		mutex.Unlock()
+		handleClanNeededFromWS(rawMsg)
+		return
+
+	case "clan_setup_result":
+		mutex.Unlock()
+		handleClanSetupResultFromWS(rawMsg)
+		return
+
 	case "buy":
 		if strings.TrimSpace(msg.Type) == "" {
 			log.Printf("[WS] buy skip: пустой type price=%d enchants=%d", msg.Price, len(msg.Enchants))

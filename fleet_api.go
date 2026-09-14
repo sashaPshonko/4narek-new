@@ -87,6 +87,8 @@ func registerFleetHTTP(mux *http.ServeMux) {
 	mux.HandleFunc("/api/clan-owner", recoverHTTP(handleClanOwnerHTTP))
 	mux.HandleFunc("/api/banned-ip", recoverHTTP(handleBannedIPHTTP))
 	mux.HandleFunc("/api/fleet/launch", recoverHTTP(handleFleetLaunchHTTP))
+	mux.HandleFunc("/api/fleet/clan-needed", recoverHTTP(handleClanNeededHTTP))
+	mux.HandleFunc("/api/fleet/clan-setup-result", recoverHTTP(handleClanSetupResultHTTP))
 	mux.HandleFunc("/fleet/api/staff-check", recoverHTTP(handleStaffCheckHTTP))
 	mux.HandleFunc("/fleet/api/desk-chat", recoverHTTP(handleDeskChatHTTP))
 
