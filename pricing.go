@@ -16,6 +16,9 @@ const ahStorageSlotsPerBot = 5
 // Всего слотов у бота под лоты категории: инвентарь + АХ.
 const botTotalSlots = 32
 
+// stock_corridor_v8af — v8ae + empty_market_catchup (Sep 2026):
+//   Explored ∧ held=sales=buys=0 ∧ thick book ∧ our/p10 < 0.85 streak≥2 → +1 UP;
+//   не held=0→UP: без thick+gap cursor не армится; stop near 0.90 / max steps / up_cd.
 // stock_corridor_v8ae — v8ad + cold-start price discovery (Sep 2026):
 //   !PriceExplored ∧ held=sales=buys=0 ∧ thick book ∧ our/p10 < gap → +1 UP only;
 //   Explored SKU: empty_inventory_up выкл; held=0 never auto-DOWN (grant);
@@ -239,6 +242,8 @@ type ItemAdjustState struct {
 	PriceExplorationCycles   int    `json:"price_exploration_cycles"`
 	PriceOriginKind          string `json:"price_origin_kind,omitempty"`  // base_seed|manual_set|backfill|…
 	PriceOriginPrice         int    `json:"price_origin_price,omitempty"`
+	// empty_market_catchup (v8af): подряд циклов thick+gap+empty на Explored SKU.
+	EmptyMarketGapStreak int `json:"empty_market_gap_streak"`
 }
 
 func resolveNacenkaMin(cfg ItemConfig) int {
@@ -1133,6 +1138,8 @@ func actionReasonRU(action string) string {
 		return "corridor_v8ab(legacy): held=0 empty_inventory ↑ (выкл для PriceExplored; cold-start вместо этого)"
 	case "corridor_price_up_cold_start":
 		return "corridor_v8ae: !Explored ∧ s0b0 ∧ thick book ∧ our≪p10 → разведочный +1 step"
+	case "corridor_price_up_empty_market_catchup":
+		return "corridor_v8af: Explored ∧ empty ∧ thick book ∧ our/p10<0.85 streak≥2 → +1 catchup"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
 		return "corridor_v8p: недобор + цена << paid + sales≥1 → recover (v8t: выкл)"
 	case "corridor_hold_demand_disabled":
@@ -1883,9 +1890,11 @@ func adjustPrice(item string) AdjustReport {
 	if totalHeld > 0 {
 		state.EmptyInventoryClimbSteps = 0
 		state.EmptyInventoryAnchorPrice = 0
+		state.EmptyMarketGapStreak = 0
 	}
 	if sales > 0 {
 		markPriceExploredLocked(&state, "sell")
+		state.EmptyMarketGapStreak = 0
 	}
 	thickCold := coldStartThickBook(bookOK, p10OK, bookN, p10)
 	if !state.PriceExplored {
@@ -1894,6 +1903,14 @@ func adjustPrice(item string) AdjustReport {
 		} else if coldStartNearMarket(priceBefore, p10, thickCold) {
 			markPriceExploredLocked(&state, "near_p10")
 		}
+	}
+	// Catchup streak: только при рыночном evidence (thick+gap), не от held=0 alone.
+	if emptyMarketCatchupEvidence(
+		state.PriceExplored, totalHeld, sales, buys, priceBefore, p10, bookN, bookOK, p10OK,
+	) {
+		state.EmptyMarketGapStreak++
+	} else if state.PriceExplored {
+		state.EmptyMarketGapStreak = 0
 	}
 	if !state.PriceExplored &&
 		!strings.Contains(action, "price_up") && !strings.Contains(action, "price_down") &&
@@ -1912,8 +1929,22 @@ func adjustPrice(item string) AdjustReport {
 			priceBefore, p10, float64(priceBefore)/float64(p10), bookN,
 			state.PriceExplorationCycles, coldStartMaxCycles,
 		))
+	} else if state.PriceExplored &&
+		!strings.Contains(action, "price_up") && !strings.Contains(action, "price_down") &&
+		canEmptyMarketCatchupUp(
+			state.PriceExplored, totalHeld, sales, buys,
+			state.EmptyMarketGapStreak, state.EmptyInventoryClimbSteps,
+			priceBefore, step, p10, bookN, bookOK, p10OK, blockUpEI,
+			state.CorridorUpCooldown, state.CorridorUpStreak, state.EmptyIdleMarketDownCooldown,
+		) {
+		state.EmptyInventoryClimbSteps++
+		applyUp(emptyMarketCatchupAction, fmt.Sprintf(
+			"empty_market_catchup ↑ +1: our=%d p10=%d ratio=%.2f uuid=%d streak=%d climb=%d/%d",
+			priceBefore, p10, float64(priceBefore)/float64(p10), bookN,
+			state.EmptyMarketGapStreak, state.EmptyInventoryClimbSteps, emptyMarketCatchupMaxSteps,
+		))
 	} else if state.PriceExplored && totalHeld == 0 {
-		// Explored + empty: no empty_inventory_up (legacy path retired for live).
+		// Explored + empty без thick+gap: HOLD (не empty_inventory_up).
 	}
 	// held=0: не multi-step ah_book raise (cold = +1 only; explored empty ≠ jump).
 	if totalHeld == 0 {

@@ -102,7 +102,8 @@ func TestMarkAndResetExploration(t *testing.T) {
 }
 
 func TestCapitalPolicyV8ae(t *testing.T) {
-	if capitalPolicy != "stock_corridor_v8ae" {
-		t.Fatalf("policy=%s want stock_corridor_v8ae", capitalPolicy)
+	// superseded by v8af; keep name so old test files still compile if imported — redirect.
+	if capitalPolicy != "stock_corridor_v8af" {
+		t.Fatalf("policy=%s want stock_corridor_v8af", capitalPolicy)
 	}
 }
