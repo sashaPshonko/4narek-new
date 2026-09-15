@@ -425,10 +425,17 @@ def main():
                     c.down_hard_mult = 2.0  # capped
                     pool.append(c)
     pool.extend(sample_chrom(rng, i) for i in range(n_random))
+    # ekb_like needs on_ah/inv split we don't counterfactual cleanly → force corridor
+    for c in pool:
+        if c.style == "ekb_like":
+            c.style = "corridor"
     # mutate from seeds
     seeds = [chrom_v9(), chrom_r131()]
     for i in range(n_mut):
-        pool.append(mutate(rng.choice(seeds), rng, 10_000 + i))
+        m = mutate(rng.choice(seeds), rng, 10_000 + i)
+        if m.style == "ekb_like":
+            m.style = "corridor"
+        pool.append(m)
     # dedupe by name
     seen = set()
     uniq = []
@@ -548,6 +555,8 @@ def main():
         )
     # Prefer chroms that survive more folds; then robust min lift; then mean
     summary.sort(key=lambda x: (-x["n_folds"], -x["min_oos_x_v9"], -x["mean_oos_x_v9"]))
+    # Drop ekb_like (on_ah/inv not counterfactual → UP-only artifact)
+    summary = [s for s in summary if s.get("chrom", {}).get("style") != "ekb_like"]
 
     # algorithm in plain language
     def chrom_to_rules(ch: dict) -> List[str]:
@@ -561,9 +570,41 @@ def main():
             f"style={ch['style']} step×{ch['step_mult']}",
         ]
 
-    # headline: best multi-fold if possible
-    multi = [s for s in summary if s["n_folds"] >= min(2, n_folds_done)]
-    best = (multi[0] if multi else None) or (summary[0] if summary else None)
+    # late-half gate: fit first half of calendar, eval second — kills fold-overfit
+    days_all = sorted({r["ts"][:10] for r in rows})
+    cut = max(4, len(days_all) // 2)
+    late_fit = set(days_all[:cut])
+    late_eval = set(days_all[cut:])
+    dm_late = make_dm(filter_days(rows, late_fit), nac)
+    by_late = S.split_by_item(filter_days(rows, late_eval))
+    v9_late = eval_chrom(chrom_v9(), dm_late, by_late)
+    for s in summary:
+        ch = Chrom(**{k: v for k, v in s["chrom"].items() if k in Chrom.__dataclass_fields__})
+        m = eval_chrom(ch, dm_late, by_late)
+        s["late_x_v9"] = round(m["profit_24h_mean_m"] / max(v9_late["profit_24h_mean_m"], 1e-6), 3)
+        s["late_under"] = round(m["under"], 3)
+        s["late_24h_m"] = round(m["profit_24h_mean_m"], 2)
+
+    robust = [
+        s
+        for s in summary
+        if s["n_folds"] >= min(2, n_folds_done)
+        and s["min_oos_x_v9"] >= 1.0
+        and s.get("late_x_v9", 0) >= 1.02
+    ]
+    robust.sort(key=lambda x: (-x["late_x_v9"], -x["min_oos_x_v9"], -x["mean_oos_x_v9"]))
+    best = robust[0] if robust else None
+    if best is None:
+        # no robust beat — report honest null + best multi-fold for inspection
+        multi = [s for s in summary if s["n_folds"] >= min(2, n_folds_done)]
+        best = {
+            "name": "NO_ROBUST_WINNER",
+            "note": "no chrom with multi-fold ≥1.0x and late≥1.02x vs v9",
+            "v9_late_24h_m": round(v9_late["profit_24h_mean_m"], 2),
+            "v9_late_under": round(v9_late["under"], 3),
+            "best_multi_fold": multi[0] if multi else None,
+            "best_late": max(summary, key=lambda s: s.get("late_x_v9", 0)) if summary else None,
+        }
     elapsed = time.time() - t0
     out = {
         "meta": {
@@ -577,24 +618,43 @@ def main():
             "demand": "bucket E[sales] × under_haircut",
             "constraint": "reject if under > v9_under+0.06 or deep_under high",
             "goal": "max constrained OOS mean 24h profit vs v9",
+            "robust_gate": "multi-fold min_x>=1.0 AND late_half x>=1.02; ekb_like excluded",
+            "v9_late_24h_m": round(v9_late["profit_24h_mean_m"], 2),
+            "v9_late_under": round(v9_late["under"], 3),
         },
         "fold_reports": fold_reports,
         "leaderboard": summary[:30],
+        "robust": robust[:10],
         "best": best,
-        "best_rules": chrom_to_rules(best["chrom"]) if best else [],
+        "best_rules": chrom_to_rules(best["chrom"]) if best and best.get("chrom") else [],
         "v9_baseline_note": "same sim/haircut/constraint path",
     }
     with open(OUT, "w") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
-    print(f"\nWrote {OUT} in {elapsed:.0f}s")
-    if best:
+    print(f"\nWrote {OUT} in {elapsed:.0f}s", flush=True)
+    if best and best.get("name") == "NO_ROBUST_WINNER":
+        print("NO ROBUST WINNER vs v9 (multi-fold + late≥1.02). Keep v9.", flush=True)
+        bm = best.get("best_multi_fold")
+        bl = best.get("best_late")
+        if bm:
+            print(
+                f"  inspect multi: {bm['name']} min_x={bm['min_oos_x_v9']} late={bm.get('late_x_v9')}",
+                flush=True,
+            )
+        if bl:
+            print(
+                f"  inspect late: {bl['name']} late={bl.get('late_x_v9')} folds={bl['n_folds']}",
+                flush=True,
+            )
+    elif best:
         print(
             f"BEST {best['name']} mean_x={best['mean_oos_x_v9']} "
-            f"min_x={best['min_oos_x_v9']} under={best['mean_under']}"
+            f"min_x={best['min_oos_x_v9']} late={best.get('late_x_v9')} under={best['mean_under']}",
+            flush=True,
         )
         for line in out["best_rules"]:
-            print("  •", line)
-    print("DONE")
+            print("  •", line, flush=True)
+    print("DONE", flush=True)
 
 
 if __name__ == "__main__":

@@ -38,5 +38,10 @@ PYTHONUNBUFFERED=1 PRICING_DB=/root/4narek-new/ml_data/pricing.db \
 
 1. **Val &lt;3 дней** → survivors=0 (fixed WF).
 2. **Leaderboard по одному fold** → r513 «×2» (fold1, book 43%) — late half проигрывает v9.
-3. **`ekb_like` + logged `on_ah`/`inv`** → вечный UP (исторический тонкий сток). В sim теперь `on_ah=st.held`, `inv=0`.
-4. Cross-check обязателен: `super_crosscheck.json` / multi-fold + late half.
+3. **`ekb_like`** → UP-only (logged on_ah или inv=0). Исключён из поиска.
+4. **Robust gate:** multi-fold min≥1.0 **и** late-half ≥1.02. Без этого — overfit.
+5. Cross-check: `super_crosscheck.json`.
+
+## Вердикт 2026-09-15
+
+На AH-p10 + under-haircut **устойчивого алгоритма лучше v9 не найдено**. Prod остаётся на v9.
