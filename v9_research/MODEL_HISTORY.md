@@ -192,3 +192,13 @@ can_buy на empty under: **0.98 / 1.0 / 1.02 / 1.05** (выше 1.0 ≈ 1.0 и�
 | p10+nac | +1% / over↑ | 107% | 90% |
 
 **p10 — норм как предохранитель.** В коде: `v9CatchupGapRatio = 1.0`.
+
+### 2026-09-15 — SUPER search (AH-p10 sim + under constraint)
+Скрипт: `search_super.py`. Пул 1275, Sep+ book era, WF 2 folds, haircut under.
+
+**Не внедрять из raw leaderboard:** `r513` fold1 ×2.19 (book_ok 0.43) → late half **0.94× v9**.
+
+**Артефакт:** `ekb_like` читал logged `on_ah`/`inv` → вечный UP (+7% fake). Fix: sim подставляет `on_ah=st.held`.
+
+**Честный cross-check (до fix):** multi-fold «no-down» ekb-кластер late +5.7% under≈0 — но после fix пересчёт обязателен. Prod Go не трогали.
+

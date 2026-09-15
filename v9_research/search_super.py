@@ -158,6 +158,9 @@ def simulate_super(rows_by_item, ch: Chrom, dm: S.DemandModel) -> Dict[str, Any]
                 hour = 12
             obs = dict(obs)
             obs["night"] = 0 <= hour < 6
+            # Counterfactual stock: do NOT reuse logged on_ah/inv (ekb_like cheat)
+            obs["on_ah"] = st.held
+            obs["inv"] = 0
             mkt = obs.get("mkt") or obs.get("p10")
             if obs.get("mkt_source") == "ah_p10":
                 book_ok += 1
