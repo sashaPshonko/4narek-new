@@ -369,11 +369,14 @@ def filter_days(rows, dayset):
     return [r for r in rows if r["ts"][:10] in dayset]
 
 
-def eval_chrom(ch, rows_fit, rows_eval, nac):
+def make_dm(rows_fit, nac) -> S.DemandModel:
     dm = S.DemandModel()
     dm.fit(rows_fit, nac)
-    by = S.split_by_item(rows_eval)
-    return simulate_super(by, ch, dm)
+    return dm
+
+
+def eval_chrom(ch, dm: S.DemandModel, rows_eval_by):
+    return simulate_super(rows_eval_by, ch, dm)
 
 
 def main():
@@ -439,23 +442,27 @@ def main():
 
     for fd in folds:
         fit_rows = filter_days(rows, fd["train_fit"])
-        val_rows = filter_days(rows, fd["val"])
+        val_rows = filter_days(rows, fd["val"]) or fit_rows
         oos_rows = filter_days(rows, fd["oos"])
         if len(fit_rows) < 50 or len(oos_rows) < 30:
             print(f"  skip fold{fd['fold']} thin")
             continue
 
-        v9 = eval_chrom(chrom_v9(), fit_rows, oos_rows, nac)
+        dm = make_dm(fit_rows, nac)
+        by_val = S.split_by_item(val_rows)
+        by_oos = S.split_by_item(oos_rows)
+        v9_val = eval_chrom(chrom_v9(), dm, by_val)
+        v9 = eval_chrom(chrom_v9(), dm, by_oos)
         print(
             f"\nfold{fd['fold']} v9 OOS 24h={v9['profit_24h_mean_m']:.1f}M "
             f"under={v9['under']:.3f} book={v9['book_ok_frac']:.2f}"
         )
 
-        # train select on val
+        # train select on val (v9_val cached once)
         scored = []
         for i, ch in enumerate(pool):
-            m_val = eval_chrom(ch, fit_rows, val_rows if val_rows else fit_rows, nac)
-            sc = constrained_score(m_val, eval_chrom(chrom_v9(), fit_rows, val_rows if val_rows else fit_rows, nac))
+            m_val = eval_chrom(ch, dm, by_val)
+            sc = constrained_score(m_val, v9_val)
             if sc is None:
                 continue
             scored.append((sc, ch, m_val))
@@ -468,7 +475,7 @@ def main():
         oos_ranked = []
         v9_oos = v9
         for sc, ch, _ in finalists:
-            m = eval_chrom(ch, fit_rows, oos_rows, nac)
+            m = eval_chrom(ch, dm, by_oos)
             sc2 = constrained_score(m, v9_oos)
             if sc2 is None:
                 continue
