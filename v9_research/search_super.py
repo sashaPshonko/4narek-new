@@ -246,9 +246,9 @@ def simulate_super(rows_by_item, ch: Chrom, dm: S.DemandModel) -> Dict[str, Any]
     }
 
 
-def constrained_score(m: dict, v9: dict, under_slack: float = 0.06) -> Optional[float]:
+def constrained_score(m: dict, v9: dict, under_slack: float = 0.06, min_days: int = 2) -> Optional[float]:
     """Higher better. None = reject."""
-    if m["n_days"] < 3:
+    if m["n_days"] < min_days:
         return None
     if m["under"] > v9["under"] + under_slack:
         return None
@@ -332,34 +332,33 @@ def chrom_r131() -> Chrom:
 
 
 def walk_forward_folds(rows: List[dict], n_folds: int = 3) -> List[dict]:
-    """Expanding WF on calendar days present in panel."""
+    """Expanding WF: fit → val(≥3d) → oos(≥3d), OOS windows from the end."""
     days = sorted({r["ts"][:10] for r in rows})
-    if len(days) < 8:
-        n_folds = max(1, len(days) // 4)
+    n = len(days)
+    val_len = 3
+    oos_len = max(3, n // (n_folds + 2))
     folds = []
-    # leave last ~30-40% for progressive OOS chunks
     for i in range(n_folds):
-        # train grows, oos is a slice near the end
-        oos_len = max(2, len(days) // (n_folds + 1))
-        oos_end = len(days) - i * max(1, oos_len // 2)
-        oos_start = max(4, oos_end - oos_len)
-        if oos_start >= oos_end:
+        oos_end = n - i * max(1, oos_len - 1)
+        oos_start = oos_end - oos_len
+        val_end = oos_start
+        val_start = val_end - val_len
+        if val_start < 4 or oos_start >= oos_end or val_start >= val_end:
             continue
-        train_days = set(days[:oos_start])
-        # val = last 20% of train
-        tr_list = days[:oos_start]
-        val_cut = max(2, int(len(tr_list) * 0.8))
-        val_days = set(tr_list[val_cut:])
-        train_fit = set(tr_list[:val_cut])
+        train_fit = set(days[:val_start])
+        val_days = set(days[val_start:val_end])
         oos_days = set(days[oos_start:oos_end])
+        if len(train_fit) < 4 or len(val_days) < 3 or len(oos_days) < 3:
+            continue
         folds.append(
             {
                 "fold": i,
                 "train_fit": train_fit,
                 "val": val_days,
                 "oos": oos_days,
-                "train_fit_range": (min(train_fit), max(train_fit)) if train_fit else None,
-                "oos_range": (min(oos_days), max(oos_days)) if oos_days else None,
+                "train_fit_range": (min(train_fit), max(train_fit)),
+                "val_range": (min(val_days), max(val_days)),
+                "oos_range": (min(oos_days), max(oos_days)),
             }
         )
     return folds
@@ -384,23 +383,27 @@ def main():
     n_mut = int(sys.argv[2]) if len(sys.argv) > 2 else 400
     rng = random.Random(SEED)
     t0 = time.time()
-    print(f"=== SUPER SEARCH db={DB} random={n_random} mut={n_mut} ===")
+    print(f"=== SUPER SEARCH db={DB} random={n_random} mut={n_mut} ===", flush=True)
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
 
     # Sep+ panel (book era)
     rows = S.load_panel(con, FOCUS, t0=BOOK_T0, t1="2026-09-17")
-    print(f"raw cycles={len(rows)}")
-    print("attaching real AH p10…")
+    print(f"raw cycles={len(rows)}", flush=True)
+    print("attaching real AH p10…", flush=True)
     rows = attach_real_ah_p10(con, rows)
     ok = sum(1 for r in rows if r.get("mkt_source") == "ah_p10")
-    print(f"cycles={len(rows)} ah_p10={ok} ({100*ok/max(len(rows),1):.1f}%) fallback={len(rows)-ok}")
+    print(f"cycles={len(rows)} ah_p10={ok} ({100*ok/max(len(rows),1):.1f}%) fallback={len(rows)-ok}", flush=True)
     nac = S.avg_nacenka(con, FOCUS)
 
     folds = walk_forward_folds(rows, n_folds=3)
-    print("folds:")
+    print("folds:", flush=True)
     for fd in folds:
-        print(f"  fold{fd['fold']} fit={fd['train_fit_range']} val_n={len(fd['val'])} oos={fd['oos_range']}")
+        print(
+            f"  fold{fd['fold']} fit={fd['train_fit_range']} "
+            f"val={fd.get('val_range')} oos={fd['oos_range']}",
+            flush=True,
+        )
 
     # pool
     pool: List[Chrom] = [chrom_v9(), chrom_hold(), chrom_r131()]
