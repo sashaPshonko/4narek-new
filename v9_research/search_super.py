@@ -517,15 +517,17 @@ def main():
                     "book_ok_frac": round(v9["book_ok_frac"], 3),
                 },
                 "top5": oos_ranked[:5],
+                "top20": oos_ranked[:20],
                 "n_oos_ok": len(oos_ranked),
             }
         )
 
-    # aggregate by name
+    # aggregate by name across folds (prefer multi-fold survivors)
     by_name: Dict[str, List[dict]] = defaultdict(list)
     for fr in fold_reports:
-        for row in fr.get("top5") or []:
+        for row in fr.get("top20") or fr.get("top5") or []:
             by_name[row["name"]].append(row)
+    n_folds_done = len(fold_reports)
     summary = []
     for name, rs in by_name.items():
         xs = [r["oos_x_v9"] for r in rs]
@@ -541,7 +543,8 @@ def main():
                 "chrom": rs[0]["chrom"],
             }
         )
-    summary.sort(key=lambda x: (-x["min_oos_x_v9"], -x["mean_oos_x_v9"]))
+    # Prefer chroms that survive more folds; then robust min lift; then mean
+    summary.sort(key=lambda x: (-x["n_folds"], -x["min_oos_x_v9"], -x["mean_oos_x_v9"]))
 
     # algorithm in plain language
     def chrom_to_rules(ch: dict) -> List[str]:
@@ -555,7 +558,9 @@ def main():
             f"style={ch['style']} step×{ch['step_mult']}",
         ]
 
-    best = summary[0] if summary else None
+    # headline: best multi-fold if possible
+    multi = [s for s in summary if s["n_folds"] >= min(2, n_folds_done)]
+    best = (multi[0] if multi else None) or (summary[0] if summary else None)
     elapsed = time.time() - t0
     out = {
         "meta": {
