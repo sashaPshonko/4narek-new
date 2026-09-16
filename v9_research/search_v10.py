@@ -78,7 +78,7 @@ class Chrom:
 
 
 def chrom_v9() -> Chrom:
-    return Chrom(name="v9_baseline", catchup_gap=1.0, style="corridor")
+    return Chrom(name="v9_baseline", catchup_gap=1.0, style="corridor", down_block_ratio=0.95)
 
 
 def chrom_hold() -> Chrom:

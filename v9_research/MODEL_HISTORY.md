@@ -209,6 +209,7 @@ can_buy на empty under: **0.98 / 1.0 / 1.02 / 1.05** (выше 1.0 ≈ 1.0 и�
 Robust gate: all folds ∧ min≥1.02 ∧ late≥1.02. Результаты → `hyp_eval_results.json`.
 
 **Сигнал (dominates, не strict-robust):** `H1_under_veto_095` — fold0 **+12%**, fold1 0%, late **+16%**, under 0.76→0.63.  
-Prod константа: `v9DownBlockRatio = 0.90` → кандидат **0.95**. Не внедряли без full_compare + ОК.
+**Внедрено в prod код 2026-09-16:** `v9DownBlockRatio = 0.95` (рестарт Go с панели).  
+Параллельно: `search_free.py` — свободный поиск (nac×, multi-step ×1..5).
 
 

@@ -1143,7 +1143,7 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_v9_empty_catchup":
 		return "corridor_v9: empty∧no buys streak≥2 ∧ ratio<p10 ∧ price+step≤p10 → +1 (buy-stop + p10 safety)"
 	case "corridor_price_down_v9_soft", "corridor_price_down_v9_over", "corridor_price_down_v9_dump":
-		return "corridor_v9: excess held ∧ ratio≥0.90 → ↓"
+		return "corridor_v9: excess held ∧ ratio≥0.95 → ↓"
 	case "corridor_price_up_v4_demand":
 		return "corridor_v4: understock ∧ sales≥3 (ночь≥4) ∧ sales>buys → +1"
 	case "corridor_price_down_v4_soft", "corridor_price_down_v4_over", "corridor_price_down_v4_dump":
@@ -1167,7 +1167,7 @@ func actionReasonRU(action string) string {
 	case "corridor_hold_v9_low_stock_down_veto":
 		return "corridor_v9: held≤hi → DOWN запрещён"
 	case "corridor_hold_v9_underprice_down_veto":
-		return "corridor_v9: ratio<0.90 → DOWN запрещён"
+		return "corridor_v9: ratio<0.95 → DOWN запрещён"
 	case "corridor_hold_v9_demand_above_market":
 		return "corridor_v9: demand был, но ratio≥1.05"
 	case "corridor_hold_v9_catchup_no_gap", "corridor_hold_v9_catchup_cap":

@@ -49,22 +49,28 @@ func TestV9DownOverDumpBlockedWhenHeldAtHi(t *testing.T) {
 }
 
 func TestV9DownUnderpriceVeto(t *testing.T) {
-	// held=50 dump; ratio 1.8/2.1 ≈ 0.857 < 0.90
+	// held=50 dump; ratio 1.8/2.1 ≈ 0.857 < 0.95
 	in := v9Base(50, 0, 0, 1_800_000, 100_000, 100, 2_100_000, true)
 	d := v9Decide(in)
 	if isV9Down(d.Action) {
-		t.Fatalf("ratio<0.90 must block DOWN: %+v", d)
+		t.Fatalf("ratio<0.95 must block DOWN: %+v", d)
 	}
 	if d.Reason != "underprice_down_veto" {
 		t.Fatalf("reason=%s want underprice_down_veto", d.Reason)
 	}
 }
 
-func TestV9DownRatioBoundary090(t *testing.T) {
-	in := v9Base(50, 0, 0, 1_800_000, 100_000, 100, 2_000_000, true) // exactly 0.90
+func TestV9DownRatioBoundary095(t *testing.T) {
+	// exactly 0.95 → allow; 0.90 → still block (stricter than old 0.90 gate)
+	in := v9Base(50, 0, 0, 1_900_000, 100_000, 100, 2_000_000, true) // 0.95
 	d := v9Decide(in)
 	if !isV9Down(d.Action) {
-		t.Fatalf("ratio==0.90 must allow DOWN: %+v", d)
+		t.Fatalf("ratio==0.95 must allow DOWN: %+v", d)
+	}
+	in = v9Base(50, 0, 0, 1_800_000, 100_000, 100, 2_000_000, true) // 0.90
+	d = v9Decide(in)
+	if isV9Down(d.Action) {
+		t.Fatalf("ratio==0.90 must block DOWN under 0.95 veto: %+v", d)
 	}
 }
 

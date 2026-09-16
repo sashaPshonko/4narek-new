@@ -14,7 +14,7 @@ const (
 	capitalPolicyV8af = "stock_corridor_v8af"
 	capitalPolicyV9   = "stock_corridor_v9"
 
-	v9DownBlockRatio = 0.90 // ratio < this → DOWN запрещён
+	v9DownBlockRatio = 0.95 // ratio < this → DOWN запрещён (H1 2026-09-16)
 	// Empty catchup: главный стоп — появились покупки (empty streak сбрасывается при buys>0).
 	// p10 — предохранитель на «боты/лоты сломаны», не цель «рано остановиться».
 	v9CatchupGapRatio = 1.00 // safety: our/p10 < 1 ∧ price+step ≤ p10
