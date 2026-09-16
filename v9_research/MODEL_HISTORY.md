@@ -212,4 +212,11 @@ Robust gate: all folds ∧ min≥1.02 ∧ late≥1.02. Результаты → 
 **Внедрено в prod код 2026-09-16:** `v9DownBlockRatio = 0.95` (рестарт Go с панели).  
 Параллельно: `search_free.py` — свободный поиск (nac×, multi-step ×1..5).
 
+### 2026-09-16 — FREE SUPER (после H1)
+Пул 998 на fidelity sim. Raw «robust» лидеры все с **nac×1.5** (+profit от маржи) — не внедрять.
+
+**Policy-only (nac принудительно 1.0), late half:**  
+`market_follow` + `mf_pull≈1` + multi-step up ×2–5 → **~+45%** vs v9_h1, under≈0.01–0.02.  
+Кандидат следующего шага (не в prod): тянуть цену к p10 крупными шагами, не крутить nac.
+
 

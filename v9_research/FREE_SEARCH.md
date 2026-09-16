@@ -20,3 +20,10 @@ PYTHONUNBUFFERED=1 PRICING_DB=/root/4narek-new/ml_data/pricing.db \
 ```
 
 Результаты: `free_search_results.json`. Prod не трогать без dominates/robust + явного ОК.
+
+## Результат 2026-09-16
+
+Raw best: `f291` nac×1.5 late×2.33 — **артефакт маржи**, не алгоритм.
+
+После `nac=1` (честно): **market_follow mf_pull=1 + up×2..5** ≈ **+45%** late vs v9_h1, under очень низкий.  
+Следующий осмысленный эксперимент в Go — не nac, а «прыжок к p10».
