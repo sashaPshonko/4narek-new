@@ -110,21 +110,32 @@ def main():
             and late_x >= 1.02
             and late_ok
         )
+        # soft-robust: never worse on folds, clear late lift
+        row["dominates"] = (
+            all(oks)
+            and (min(xs) if xs else 0) >= 0.99
+            and late_x >= 1.05
+            and late_ok
+            and m["under"] <= v9_late["under"] + 0.01
+        )
         results.append(row)
         print(
             f"{ch.name:24} min_x={row['min_x']} late={row['late_x']} "
-            f"folds_ok={row['n_folds_ok']} robust={row['robust']} "
+            f"folds_ok={row['n_folds_ok']} robust={row['robust']} dom={row['dominates']} "
             f"under_late={row['late_under']}",
             flush=True,
         )
 
     robust = [r for r in results if r["robust"]]
     robust.sort(key=lambda r: (-r["late_x"], -r["min_x"]))
+    dominates = [r for r in results if r.get("dominates") and r["name"] != "v9"]
+    dominates.sort(key=lambda r: (-r["late_x"], -r["min_x"]))
     # also rank by late among constraint-ok
-    candidates = [r for r in results if r["late_ok"] and r["n_folds_ok"] >= len(folds)]
+    candidates = [r for r in results if r["late_ok"] and r["n_folds_ok"] >= len(folds) and r["name"] != "v9"]
     candidates.sort(key=lambda r: (-r["late_x"], -r["min_x"]))
 
     elapsed = time.time() - t0
+    best = robust[0] if robust else (dominates[0] if dominates else None)
     out = {
         "meta": {
             "db": DB,
@@ -133,6 +144,7 @@ def main():
             "ah_p10_frac": round(ah / max(len(rows), 1), 3),
             "sim": "sim_fidelity BookDemand + pure CF when price moves",
             "robust_gate": "all folds ok ∧ min_x≥1.02 ∧ late≥1.02 ∧ under constraint",
+            "dominates_gate": "folds ok ∧ min≥0.99 ∧ late≥1.05 ∧ under≤v9+0.01",
             "v9_late_24h_m": round(v9_late["profit_24h_mean_m"], 2),
             "v9_late_under": round(v9_late["under"], 3),
         },
@@ -142,22 +154,23 @@ def main():
         ],
         "results": results,
         "robust_winners": robust,
-        "best": robust[0] if robust else None,
+        "dominates": dominates,
+        "best": best,
         "best_note": (
             None
-            if robust
-            else "NO_ROBUST_WINNER — keep v9; inspect candidates for directional signal"
+            if best
+            else "NO_WINNER — keep v9"
         ),
         "near_misses": candidates[:5],
     }
     with open(OUT, "w") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print(f"\nWrote {OUT} in {elapsed:.0f}s", flush=True)
-    if robust:
-        b = robust[0]
-        print(f"BEST ROBUST {b['name']} late={b['late_x']} min={b['min_x']}", flush=True)
+    if best:
+        tag = "ROBUST" if best.get("robust") else "DOMINATES"
+        print(f"BEST {tag} {best['name']} late={best['late_x']} min={best['min_x']}", flush=True)
     else:
-        print("NO ROBUST WINNER", flush=True)
+        print("NO WINNER", flush=True)
         if candidates:
             print(f"near: {candidates[0]['name']} late={candidates[0]['late_x']} min={candidates[0]['min_x']}", flush=True)
     print("DONE", flush=True)

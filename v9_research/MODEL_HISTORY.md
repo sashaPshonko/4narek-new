@@ -208,4 +208,7 @@ can_buy на empty under: **0.98 / 1.0 / 1.02 / 1.05** (выше 1.0 ≈ 1.0 и�
 Код: `sim_fidelity.py` (AH p10+depth demand, pure CF при сдвиге цены, sales≤held, on_ah/inv split) + `hyp_eval.py` (H1–H5 vs v9).  
 Robust gate: all folds ∧ min≥1.02 ∧ late≥1.02. Результаты → `hyp_eval_results.json`.
 
+**Сигнал (dominates, не strict-robust):** `H1_under_veto_095` — fold0 **+12%**, fold1 0%, late **+16%**, under 0.76→0.63.  
+Prod константа: `v9DownBlockRatio = 0.90` → кандидат **0.95**. Не внедряли без full_compare + ОК.
+
 
