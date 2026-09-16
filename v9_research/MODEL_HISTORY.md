@@ -219,4 +219,17 @@ Robust gate: all folds ∧ min≥1.02 ∧ late≥1.02. Результаты → 
 `market_follow` + `mf_pull≈1` + multi-step up ×2–5 → **~+45%** vs v9_h1, under≈0.01–0.02.  
 Кандидат следующего шага (не в prod): тянуть цену к p10 крупными шагами, не крутить nac.
 
+### 2026-09-17 — OPEN hyp (nac + non-step jumps allowed)
+Код: `hyp_eval_open.py`. Baseline `v9_h1`. Священные коровы сняты: nac× и прыжки к рынку (не только ±price_step) в пуле.  
+Метрики: `late_x` (raw) и `margin_adj_x = late/(nac_mult)/v9` (насколько не только маржа).
+
+**nac=1 (чистый алгоритм):** `market_follow` `mf_pull=1` → late **×1.34**, under 0.156→**0.011**, dominates folds (min≈1.01; strict robust 1.02 — нет).  
+Размер up_mult 1…5 почти не важен — важен **прыжок к p10**, не множитель step.
+
+**nac×1.5 + MF:** late **×2.21**, margin_adj **×1.47** — и маржа, и алгоритм (не чистый артефакт ×1.5).  
+**Только step_mult / catchup multi-step:** ~0…+5%, under почти как v9 — слабо.
+
+**Вердикт research:** следующий кандидат в Go — **market follow к AH p10** (gap-jump). Nac↑ — отдельное продуктовое решение (sim говорит да, но меняет экономику лота).  
+До prod: `full_compare_all` на MF chrom + явное «залей».
+
 
