@@ -294,7 +294,7 @@ func adjustPriceClassic(
 		Notes:          strings.Join(notes, " · "),
 		ProfitNow:      profitNow,
 		MinBuyHistory:  minPrice,
-		BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
+		BotsCategory:   botsForGoTypeLocked(cfg.Type),
 		CycleMinutes:   cfg.AnalysisTime.Minutes(),
 		GoodStreak:     0,
 		DecisionAt:     now,

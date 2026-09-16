@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/gorilla/websocket"
+)
 
 func TestItemConfigActiveIn(t *testing.T) {
 	bootsType := map[string]struct{}{"netherite_boots-1.21": {}}
@@ -28,9 +32,35 @@ func TestItemConfigActiveIn(t *testing.T) {
 	if !itemConfigActiveIn(armorOnly, cfgBoots) {
 		t.Fatal("legacy netherite_armor active → piece catalog row")
 	}
+	cfgMergedBoots := ItemConfig{Name: "netherite_boots", Type: netheriteArmorGoType}
+	if !itemConfigActiveIn(armorOnly, cfgMergedBoots) {
+		t.Fatal("netherite_armor active → merged armor catalog row")
+	}
 
 	pozor := ItemConfig{Name: "netherite_helmet", Type: "позорная-броня-1.21"}
 	if itemConfigActiveIn(bootsType, pozor) {
 		t.Fatal("pozor type separate from piece types")
+	}
+}
+
+func TestBotsForGoTypeArmorMerged(t *testing.T) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	old := clientBotsPerType
+	clientBotsPerType = make(map[*websocket.Conn]map[string]int)
+	defer func() { clientBotsPerType = old }()
+
+	clientBotsPerType[nil] = map[string]int{
+		netheriteArmorGoType:     3,
+		"netherite_leggings-1.21": 2,
+	}
+	if got := botsForGoTypeLocked(netheriteArmorGoType); got != 5 {
+		t.Fatalf("merged armor bots: got %d want 5", got)
+	}
+	if got := botsForGoTypeLocked("netherite_leggings-1.21"); got != 5 {
+		t.Fatalf("piece+merged bots: got %d want 5", got)
+	}
+	if got := botsForGoTypeLocked("netherite_sword-1.21"); got != 0 {
+		t.Fatalf("sword bots: got %d want 0", got)
 	}
 }

@@ -728,7 +728,7 @@ func minInt(a, b int) int {
 
 // categoryAhCapacityLocked — ёмкость хранилища АХ по типу (боты × 5 слотов). Только под mutex.Lock.
 func categoryAhCapacityLocked(minecraftType string) int {
-	bots := aggregateBotsPerTypeLocked()[minecraftType]
+	bots := botsForGoTypeLocked(minecraftType)
 	if bots <= 0 {
 		return 0
 	}
@@ -1079,7 +1079,7 @@ func countItemsInCategoryLocked(minecraftType string) int {
 // (32 × боты_в_категории) / число_предметов_в_категории.
 // Только под mutex.Lock.
 func itemSlotShareLocked(minecraftType string) int {
-	bots := aggregateBotsPerTypeLocked()[minecraftType]
+	bots := botsForGoTypeLocked(minecraftType)
 	nItems := countItemsInCategoryLocked(minecraftType)
 	if bots <= 0 || nItems <= 0 {
 		return 0
@@ -1570,7 +1570,7 @@ func adjustPrice(item string) AdjustReport {
 	zeroStreak := zeroSalesExcessStreakNow(sales, totalHeld, targetHi, state.ZeroSalesExcessStreak)
 	cDownCandidate := postGrantCDownCandidate(totalHeld, targetHi, sales, buys, zeroStreak)
 	nightMSK := isNightMSK(now)
-	botsInCat := aggregateBotsPerTypeLocked()[cfg.Type]
+	botsInCat := botsForGoTypeLocked(cfg.Type)
 	minSalesForUp := demandMinSalesForUp(botsInCat, nightMSK)
 
 	if buys < sales {
@@ -2358,7 +2358,7 @@ func adjustPrice(item string) AdjustReport {
 		CheapFrac:      0,
 		CheapN:         0,
 		MinBuyHistory:  minPrice,
-		BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
+		BotsCategory:   botsForGoTypeLocked(cfg.Type),
 		CycleMinutes:   cfg.AnalysisTime.Minutes(),
 		GoodStreak:     state.CorridorUpStreak,
 		DumpBlockedCD:  false,
@@ -2404,7 +2404,7 @@ func adjustPrice(item string) AdjustReport {
 				// recover: недобор без sales>buys — заниженная цена + sales≥1
 				return !nightMSK && under && sales >= 1 && !overCap && cdOK && streakOK
 			}(),
-			BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
+			BotsCategory:   botsForGoTypeLocked(cfg.Type),
 			PlayersOnline:  onlineForCap,
 		}
 	}

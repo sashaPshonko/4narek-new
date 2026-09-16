@@ -371,7 +371,7 @@ func adjustPriceV9(
 		Notes:          strings.Join(notes, " · "),
 		ProfitNow:      profitNow,
 		MinBuyHistory:  minPrice,
-		BotsCategory:   aggregateBotsPerTypeLocked()[cfg.Type],
+		BotsCategory:   botsForGoTypeLocked(cfg.Type),
 		CycleMinutes:   cfg.AnalysisTime.Minutes(),
 		GoodStreak:     state.CorridorUpStreak,
 		DecisionAt:     now,

@@ -152,7 +152,7 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
-    "type": "netherite_leggings-1.21",
+    "type": "netherite_armor-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",
@@ -173,7 +173,7 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_chestplate",
-    "type": "netherite_chestplate-1.21",
+    "type": "netherite_armor-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",
@@ -194,7 +194,7 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
-    "type": "netherite_boots-1.21",
+    "type": "netherite_armor-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",
@@ -215,7 +215,7 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
-    "type": "netherite_boots-1.21",
+    "type": "netherite_armor-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",
@@ -240,7 +240,7 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
-    "type": "netherite_helmet-1.21",
+    "type": "netherite_armor-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",
@@ -261,7 +261,7 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
-    "type": "netherite_helmet-1.21",
+    "type": "netherite_armor-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",

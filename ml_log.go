@@ -720,7 +720,7 @@ func queueMLDecisionLocked(
 		Action:               action,
 		CycleDuration:        cycle,
 		DecisionAt:           decAt,
-		BotsAtDecision:       aggregateBotsPerTypeLocked()[cfg.Type],
+		BotsAtDecision:       botsForGoTypeLocked(cfg.Type),
 		OnlineAtDecision:     online,
 		OnlineMaxAtDecision:  onlineMax,
 		PriceBefore:          priceBefore,
