@@ -204,4 +204,8 @@ can_buy на empty under: **0.98 / 1.0 / 1.02 / 1.05** (выше 1.0 ≈ 1.0 и�
 
 **Вердикт:** на текущем SUPER-sim **нет** устойчивого победителя над v9 → prod не трогаем. Дальше: лучше demand/inventory counterfactual, не «ещё random».
 
+### 2026-09-16 — fidelity sim + hyp eval
+Код: `sim_fidelity.py` (AH p10+depth demand, pure CF при сдвиге цены, sales≤held, on_ah/inv split) + `hyp_eval.py` (H1–H5 vs v9).  
+Robust gate: all folds ∧ min≥1.02 ∧ late≥1.02. Результаты → `hyp_eval_results.json`.
+
 
