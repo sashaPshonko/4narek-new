@@ -28,6 +28,32 @@ var (
 	funauthHistoryBindHint = regexp.MustCompile(`(?i)(/bind\s+|был привязан|/2fa\s+|подтверждение входа|привязан)`)
 )
 
+// funauthRetryNextAccount — ошибка сессии/слоя TG: этот акк пропускаем, пробуем следующий.
+func funauthRetryNextAccount(errStr string) bool {
+	s := strings.ToLower(strings.TrimSpace(errStr))
+	if s == "" {
+		return false
+	}
+	needles := []string{
+		"connection_layer_invalid",
+		"auth_key_unregistered",
+		"auth_key_invalid",
+		"auth_key_duplicated",
+		"session_revoked",
+		"session_expired",
+		"user_deactivated",
+		"user_deactivated_ban",
+		"not authorized",
+		"account_offline",
+	}
+	for _, n := range needles {
+		if strings.Contains(s, n) {
+			return true
+		}
+	}
+	return false
+}
+
 type funauthBindResult struct {
 	OK      bool   `json:"ok"`
 	Nick    string `json:"nick"`
@@ -235,7 +261,12 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		result, retry := b.runOnAccount(ctx, acc, job)
 		cancel()
 		if retry {
-			log.Printf("[funauth] account %s full, trying next", phone)
+			why := "full"
+			if funauthRetryNextAccount(result.Error) {
+				why = "dead"
+				b.pool.markDead(acc.meta.ID, result.Error)
+			}
+			log.Printf("[funauth] account %s %s (%s), trying next", phone, why, result.Error)
 			continue
 		}
 		if result.OK {
@@ -470,14 +501,22 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 
 	if err := funauthEnsureChannel(ctx, sender); err != nil {
 		log.Printf("[funauth] join @%s: %v", funauthChannel, err)
+		errStr := err.Error()
+		if funauthRetryNextAccount(errStr) {
+			return funauthBindResult{
+				OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: errStr,
+			}, true
+		}
 	}
 
 	if !acc.meta.Started {
 		if _, err := sender.Resolve(funauthBotUser).Text(ctx, "/start"); err != nil {
+			errStr := err.Error()
+			retry := funauthRetryNextAccount(errStr)
 			return funauthBindResult{
 				OK: false, Nick: job.nick, TgPhone: acc.meta.Phone,
-				Error: err.Error(),
-			}, false
+				Error: errStr,
+			}, retry
 		}
 		b.pool.markStarted(acc.meta.ID)
 		time.Sleep(800 * time.Millisecond)
@@ -495,7 +534,7 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 		}
 		return funauthBindResult{
 			OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: errStr,
-		}, false
+		}, funauthRetryNextAccount(errStr)
 	}
 
 	if funauthBindFull.MatchString(bindReply) {
@@ -524,7 +563,7 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 		}
 		return funauthBindResult{
 			OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: errStr,
-		}, false
+		}, funauthRetryNextAccount(errStr)
 	}
 
 	return funauthBindResult{

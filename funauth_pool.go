@@ -368,6 +368,53 @@ func (p *funauthPool) markFull(id string) {
 	log.Printf("[funauth] TG %s → full (FunAuthBot: много аккаунтов)", a.meta.Phone)
 }
 
+// markDead — сессия MTProto дохлая (CONNECTION_LAYER_INVALID и т.п.):
+// убираем из ready, рвём клиент, чистим nick→tg чтобы биндер брал следующий акк.
+func (p *funauthPool) markDead(id, reason string) {
+	if p == nil || strings.TrimSpace(id) == "" {
+		return
+	}
+	p.mu.Lock()
+	a := p.accounts[id]
+	if a == nil {
+		p.mu.Unlock()
+		return
+	}
+	phone := a.meta.Phone
+	a.ready = false
+	a.api = nil
+	cancel := a.cancel
+	a.cancel = nil
+	cleared := 0
+	for nick, aid := range p.nicks {
+		if aid == id {
+			delete(p.nicks, nick)
+			cleared++
+		}
+	}
+	snapshot := make(map[string]string, len(p.nicks))
+	for k, v := range p.nicks {
+		snapshot[k] = v
+	}
+	p.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if cleared > 0 {
+		raw, err := json.MarshalIndent(snapshot, "", "  ")
+		if err == nil {
+			if err := os.WriteFile(p.nicksPath(), raw, 0o600); err != nil {
+				log.Printf("[funauth] save nicks after dead: %v", err)
+			}
+		}
+	}
+	reason = strings.TrimSpace(reason)
+	if len(reason) > 120 {
+		reason = reason[:120]
+	}
+	log.Printf("[funauth] TG %s → dead (%s), clearedNicks=%d", phone, reason, cleared)
+}
+
 func (p *funauthPool) accountByID(id string) *funauthAccount {
 	p.mu.Lock()
 	defer p.mu.Unlock()
