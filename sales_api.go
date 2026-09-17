@@ -205,10 +205,15 @@ func salesAPI(w http.ResponseWriter, r *http.Request) {
 func salesJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	b, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("[sales] json encode: %v", err)
+		b, _ = json.Marshal(map[string]any{"ok": false, "error": "encode failed"})
+		code = http.StatusInternalServerError
+	}
 	w.WriteHeader(code)
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	_ = enc.Encode(v)
+	_, _ = w.Write(b)
+	_, _ = w.Write([]byte{'\n'})
 }
 
 func salesJSONErr(w http.ResponseWriter, code int, msg string) {
@@ -512,7 +517,9 @@ WHERE ts >= ? AND event_type = 'buy' AND price > 0`, salesTSBound(since))
 		a.Samples++
 		a.MarkupAbs += float64(fair - paid)
 		a.PlanAbs += float64(plan)
-		a.MarkupPct += float64(fair-paid) * 100 / float64(paid)
+		if paid > 0 {
+			a.MarkupPct += float64(fair-paid) * 100 / float64(paid)
+		}
 		if fair-plan > 0 {
 			a.PlanPct += float64(plan) * 100 / float64(fair-plan)
 		}
@@ -590,7 +597,7 @@ func buildSalesItemViewLocked(id string, cfg ItemConfig, now time.Time, agg *tra
 	}
 	v.Profit = v.SellSum - v.BuySum
 
-	if price > 0 && nac > 0 {
+	if price > nac && nac > 0 {
 		v.NacenkaPct = float64(nac) * 100 / float64(price-nac)
 	}
 	if v.Buys > 0 {
@@ -937,12 +944,14 @@ WHERE ts >= ? AND event_type = 'buy' AND price > 0`
 			ts = time.Time{}
 		}
 		s := markupSample{
-			ts:      ts.Local(),
-			paid:    paid,
-			fair:    fair,
-			plan:    nac,
-			dur:     dur,
-			factPct: float64(fair-paid) * 100 / float64(paid),
+			ts:   ts.Local(),
+			paid: paid,
+			fair: fair,
+			plan: nac,
+			dur:  dur,
+		}
+		if paid > 0 {
+			s.factPct = float64(fair-paid) * 100 / float64(paid)
 		}
 		if fair-nac > 0 {
 			s.planPct = float64(nac) * 100 / float64(fair-nac)
