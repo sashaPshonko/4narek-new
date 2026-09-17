@@ -256,14 +256,41 @@ def main():
 
     history = []
     best_ever = None
-    fd0, dm0, by0 = fold_pack[0] if fold_pack else (None, dm_late, by_late)
-    v9_0 = simulate_ultra(by0, v9, dm0)
+    # Precompute v9 on each selection fold
+    fold_refs = []
+    for fd, dm, by in fold_pack:
+        fold_refs.append((fd, dm, by, simulate_ultra(by, v9, dm)))
+    if not fold_refs:
+        fold_refs = [(None, dm_late, by_late, v9_late)]
+
+    def multi_fold_score(prog: P.Program, rng: random.Random) -> Tuple[float, float, float, float, P.Program, Dict]:
+        """Inner-opt on fold0; score = min adj across folds (anti-overfit)."""
+        fd0, dm0, by0, v9_0 = fold_refs[0]
+        opt, _, m0 = inner_optimize(prog, by0, dm0, v9_0, rng, trials=6)
+        raws, adjs, unders = [], [], []
+        for _, dm, by, vref in fold_refs:
+            m = simulate_ppsl(by, opt, dm)
+            raw, adj, under = score_vs(m, vref)
+            raws.append(raw)
+            adjs.append(adj)
+            unders.append(under)
+        # also late
+        ml = simulate_ppsl(by_late, opt, dm_late)
+        rl, al, ul = score_vs(ml, v9_late)
+        raws.append(rl)
+        adjs.append(al)
+        unders.append(ul)
+        min_adj = min(adjs)
+        mean_raw = sum(raws) / len(raws)
+        mean_under = sum(unders) / len(unders)
+        cx = P.complexity(opt)
+        fit = 0.60 * min_adj + 0.25 * mean_raw - 0.02 * max(0, cx - 8) - 0.25 * max(0.0, mean_under - v9_late["under"])
+        return fit, mean_raw, min_adj, mean_under, opt, ml
 
     for gen in range(gens):
         scored = []
         for i, prog in enumerate(pop):
-            opt, fit, m = inner_optimize(prog, by0, dm0, v9_0, rng, trials=6)
-            raw, adj, under = score_vs(m, v9_0)
+            fit, raw, adj, under, opt, m = multi_fold_score(prog, rng)
             scored.append((fit, raw, adj, under, opt, m))
             if (i + 1) % 20 == 0:
                 print(f"  gen{gen} … {i+1}/{len(pop)}", flush=True)
@@ -271,25 +298,23 @@ def main():
         elites = scored[:elite_n]
         top = elites[0]
         print(
-            f"gen{gen} best fit={top[0]:.3f} raw×={top[1]:.3f} adj×={top[2]:.3f} under={top[3]:.3f} "
+            f"gen{gen} best fit={top[0]:.3f} mean_raw×={top[1]:.3f} min_adj×={top[2]:.3f} under={top[3]:.3f} "
             f"cx={P.complexity(top[4])} | {top[4].pretty()[:100]}",
             flush=True,
         )
-        history.append({"gen": gen, "fit": top[0], "raw": top[1], "adj": top[2], "pretty": top[4].pretty()})
+        history.append({"gen": gen, "fit": top[0], "raw": top[1], "min_adj": top[2], "pretty": top[4].pretty()})
         if best_ever is None or top[0] > best_ever[0]:
             best_ever = top
 
-        # next pop
         nxt = [e[4] for e in elites]
         while len(nxt) < pop_n:
-            if rng.random() < 0.4:
+            if rng.random() < 0.35:
                 nxt.append(P.sample_program(rng, max_depth=3))
+            elif rng.random() < 0.5:
+                nxt.append(P.mutate_consts(rng.choice(elites)[4], rng, sigma=0.25))
             else:
-                parent = rng.choice(elites)[4]
-                nxt.append(P.mutate_consts(parent, rng, sigma=0.25))
-                # structure mutate: replace with random sibling sometimes
-                if rng.random() < 0.3:
-                    nxt[-1] = P.sample_program(rng, max_depth=2)
+                # structure refresh from elite seed family
+                nxt.append(P.sample_program(rng, max_depth=2))
         pop = nxt
 
     # Final OOS on elites across fold1 + late; then ONE peek at holdout
