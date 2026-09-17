@@ -120,6 +120,45 @@ def attach_ah_market(con: sqlite3.Connection, rows: List[dict], window_min: int 
     return out
 
 
+def attach_seller_n(con: sqlite3.Connection, rows: List[dict], window_min: int = 10) -> List[dict]:
+    """Attach unique seller count in the same AH window as attach_ah_market."""
+    if not rows:
+        return rows
+    items = sorted({r["item_id"] for r in rows})
+    t_hi = max(r["ts"] for r in rows)
+    bins: Dict[str, Dict[str, set]] = {it: defaultdict(set) for it in items}
+    for it in items:
+        for ts, seller in con.execute(
+            """SELECT ts, COALESCE(seller, '') FROM ah_book_lots
+               WHERE item_id=? AND price>0 AND ts>=? AND ts<=?""",
+            (it, BOOK_T0, t_hi),
+        ):
+            if seller:
+                bins[it][ts[:16]].add(seller)
+
+    def sellers_at(it: str, ts: str) -> int:
+        try:
+            end = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except Exception:
+            return 0
+        s: set = set()
+        for dmin in range(window_min):
+            t = end - timedelta(minutes=dmin)
+            s |= bins[it].get(t.strftime("%Y-%m-%dT%H:%M"), set())
+        return len(s)
+
+    cache: Dict[Tuple[str, str], int] = {}
+    out = []
+    for r in rows:
+        key = (r["item_id"], r["ts"][:16])
+        if key not in cache:
+            cache[key] = sellers_at(r["item_id"], r["ts"])
+        rr = dict(r)
+        rr["seller_n"] = cache[key]
+        out.append(rr)
+    return out
+
+
 @dataclass
 class BookDemand:
     """Demand with AH ratio + book depth + held + TOD."""
