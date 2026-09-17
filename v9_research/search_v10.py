@@ -73,6 +73,9 @@ class Chrom:
     allow_down_empty: bool = False
     allow_blind_empty_up: bool = False
     soft_down_when_over_mkt: bool = False  # ratio>1.1 and held>0 → soft down
+    # dynamic nac (ultra search): fixed | inv_scale | gap_scale
+    nac_dyn: str = "fixed"
+    nac_amp: float = 1.0            # swing strength for dyn modes (1.0–1.5)
     # SKU-agnostic random spice
     seed_tag: int = 0
 
