@@ -261,3 +261,7 @@ Update: fair = max(1, (5×bots)/nItems); ↓ if onAH≥fair, ↑ if onAH<fair (n
 Update: ↑ blocked when fair > maxReachable (other ids hold AH slots).
 
 Update: UP without p10 ratio gate / p10 cap; still block ↑ if fair unreachable or AH full.
+
+### 2026-09-26 — relist5: buy-surge ↓ off
+
+На каждый buy больше не режем цену (старый коридор soft/hi). Relist типы — только цикл fair+sales<5.

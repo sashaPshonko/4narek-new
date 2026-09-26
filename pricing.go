@@ -1347,9 +1347,10 @@ type BuySurgeEvent struct {
 	Step        int
 }
 
-// maybeBuySurgePriceDownLocked — на каждый buy: счётчик +=1;
-// если сток уже ≥ верхней цели коридора и счётчик ≥ hi → −step, счётчик = 0.
-// Не зависит от NormalSales. Только под mutex.Lock.
+// maybeBuySurgePriceDownLocked — legacy: на каждый buy счётчик +=1;
+// при перезапасе по старому коридору → −step. Для relist (АХ×5) выкл —
+// цену двигает только цикл relist5. Absorb (FLEET_ABSORB_TYPES) — как раньше.
+// Только под mutex.Lock.
 func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	ev := BuySurgeEvent{Item: item}
 	cfg, ok := itemsConfig[item]
@@ -1357,6 +1358,9 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 		return ev
 	}
 	if !itemConfigActiveLocked(cfg) {
+		return ev
+	}
+	if isTypeRelistEnabled(cfg.Type) {
 		return ev
 	}
 	if _, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime); blockDown {
