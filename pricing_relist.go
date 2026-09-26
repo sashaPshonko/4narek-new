@@ -9,9 +9,10 @@ import (
 
 // Relist AH-only (buy + перевыстав, 5 слотов на бота). Без inventory-коридора.
 //
+//   fair = max(1, share)  где share = (5×боты)/nItems категории
 //   weak := sales < relistSalesNorm (5)
-//   onAH ≥ 1 && weak → ↓ 1 step (если ratio ≥ 0.95 или нет p10)
-//   onAH == 0 && weak && ratio < 0.90 → ↑ 1 step, не выше p10
+//   onAH ≥ fair && weak → ↓ 1 step (если ratio ≥ 0.95 или нет p10)
+//   onAH <  fair && weak && ratio < 0.90 → ↑ 1 step, не выше p10
 //   АХ категории полон / некуда выставить этот id → ↑ запрещён
 //
 // Норма 5 — стартовая; собираем capital_cycles и крутим.
@@ -21,6 +22,13 @@ const (
 	relistDownUnderpriceMax = 0.95
 	relistEmptyUpMaxRatio   = 0.90
 )
+
+func relistFairStock(share int) int {
+	if share < 1 {
+		return 1
+	}
+	return share
+}
 
 func adjustPriceRelist(
 	item string,
@@ -79,20 +87,23 @@ func adjustPriceRelist(
 
 	ratio, ratioOK := v9MarketRatio(price, p10, p10OK)
 	weak := sales < relistSalesNorm
+	fair := relistFairStock(share)
+	stockHigh := onAH >= fair
+	stockLow := onAH < fair
 
 	action := "relist_hold"
 	decReason := "no_signal"
 	newPrice := price
 	notes := []string{
 		fmt.Sprintf(
-			"relist sales=%d norm=%d weak=%v onAH=%d inv=%d buys=%d p10=%d p10N=%d ratio=%s ahFull=%v noRoom=%v sumAH=%d/%d",
-			sales, relistSalesNorm, weak, onAH, invCount, buys, p10, p10N,
+			"relist sales=%d norm=%d weak=%v onAH=%d fair=%d (share=%d) low=%v high=%v inv=%d buys=%d p10=%d p10N=%d ratio=%s ahFull=%v noRoom=%v sumAH=%d/%d",
+			sales, relistSalesNorm, weak, onAH, fair, share, stockLow, stockHigh, invCount, buys, p10, p10N,
 			v9RatioStr(price, p10, p10OK), ahFull, noRoom, sumAH, cap,
 		),
 	}
 
-	// DOWN: лот висит, продаж меньше нормы
-	if !blockDown && weak && onAH >= 1 && step > 0 {
+	// DOWN: на АХ не меньше fair-доли, продаж меньше нормы
+	if !blockDown && weak && stockHigh && step > 0 {
 		if ratioOK && ratio < relistDownUnderpriceMax {
 			action = "relist_hold_underprice_down_veto"
 			decReason = "underprice_down_veto"
@@ -106,7 +117,7 @@ func adjustPriceRelist(
 				action = "relist_price_down_stuck"
 				decReason = "stuck_weak_sales"
 				newPrice = cand
-				notes = append(notes, fmt.Sprintf("↓ onAH=%d sales=%d<%d", onAH, sales, relistSalesNorm))
+				notes = append(notes, fmt.Sprintf("↓ onAH=%d≥fair=%d sales=%d<%d", onAH, fair, sales, relistSalesNorm))
 			} else {
 				action = "relist_hold_floor"
 				decReason = "floor"
@@ -114,9 +125,9 @@ func adjustPriceRelist(
 		}
 	}
 
-	// UP: пусто, слабо, недооценены (только если ещё hold)
+	// UP: меньше fair-доли, слабо, недооценены (только если ещё hold)
 	if action == "relist_hold" || strings.HasPrefix(action, "relist_hold_") {
-		if weak && onAH == 0 && step > 0 {
+		if weak && stockLow && step > 0 {
 			if blockUp {
 				action = "relist_hold_empty_ah_full"
 				decReason = "ah_full_or_no_room"
@@ -136,9 +147,9 @@ func adjustPriceRelist(
 				}
 				if cand > price {
 					action = "relist_price_up_empty"
-					decReason = "empty_weak_underprice"
+					decReason = "low_stock_weak_underprice"
 					newPrice = cand
-					notes = append(notes, fmt.Sprintf("↑ empty sales=%d<%d → p10=%d", sales, relistSalesNorm, p10))
+					notes = append(notes, fmt.Sprintf("↑ onAH=%d<fair=%d sales=%d<%d → p10=%d", onAH, fair, sales, relistSalesNorm, p10))
 				} else {
 					action = "relist_hold_empty_cap"
 					decReason = "empty_already_at_p10"
@@ -205,8 +216,8 @@ func adjustPriceRelist(
 	} else if strings.Contains(action, "price_down") {
 		dir = "DOWN"
 	}
-	log.Printf("[RELIST] %s: %s reason=%s | цена %d→%d | onAH=%d sales=%d/%d | %s",
-		item, dir, decReason, priceBefore, newPrice, onAH, sales, relistSalesNorm, action)
+	log.Printf("[RELIST] %s: %s reason=%s | цена %d→%d | onAH=%d fair=%d sales=%d/%d | %s",
+		item, dir, decReason, priceBefore, newPrice, onAH, fair, sales, relistSalesNorm, action)
 
 	queueMLDecisionLocked(
 		item, cfg, action,
@@ -224,14 +235,14 @@ func adjustPriceRelist(
 		Dump:           0,
 		Fill:           stockLoad,
 		Skim:           0,
-		Threshold:      float64(relistSalesNorm),
+		Threshold:      float64(fair),
 		Sales:          sales,
 		Buys:           buys,
 		TrySells:       trySells,
 		OnAH:           onAH,
 		Inv:            invCount,
-		Held:           onAH, // коридорный held не используем; в лог — факт АХ
-		Share:          share,
+		Held:           onAH,
+		Share:          fair, // в лог — fair-доля АХ, не 32-share
 		Free:           free,
 		Need:           need,
 		NormalSales:    relistSalesNorm,

@@ -1178,9 +1178,9 @@ func actionReasonRU(action string) string {
 	case "corridor_hold_v9_catchup_no_gap", "corridor_hold_v9_catchup_cap":
 		return "corridor_v9: empty catchup без gap / выше market"
 	case "relist_price_down_stuck":
-		return "relist5: onAH≥1 ∧ sales<5 → −1 (зависший лот)"
+		return "relist5: onAH≥fair(5×bots/nItems) ∧ sales<5 → −1"
 	case "relist_price_up_empty":
-		return "relist5: onAH=0 ∧ sales<5 ∧ our/p10<0.90 → +1 к p10"
+		return "relist5: onAH<fair ∧ sales<5 ∧ our/p10<0.90 → +1 к p10"
 	case "relist_hold", "relist_hold_floor", "relist_hold_empty_cap":
 		return "relist5: нет сигнала / пол / уже у p10"
 	case "relist_hold_underprice_down_veto":

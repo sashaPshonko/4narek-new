@@ -255,3 +255,5 @@ Robust gate: all folds ∧ min≥1.02 ∧ late≥1.02. Результаты → 
 - `onAH==0 && weak && our/p10 < 0.90` → ↑1 ≤ p10
 - АХ полон / нет слота → ↑ off
 Policy tag в capital_cycles: `…+relist5`. Цель — собрать логи и подкрутить норму/пороги.
+
+Update: fair = max(1, (5×bots)/nItems); ↓ if onAH≥fair, ↑ if onAH<fair (not bare onAH≥1).

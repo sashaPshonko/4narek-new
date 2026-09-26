@@ -8,29 +8,23 @@ func TestRelistWeakNormIs5(t *testing.T) {
 	}
 }
 
-func TestRelistDecideStuckDown(t *testing.T) {
-	// Mirror core branching without full adjustPriceRelist mutex/book.
-	onAH, sales := 2, 3 // weak
-	weak := sales < relistSalesNorm
-	if !weak || onAH < 1 {
-		t.Fatal("setup")
-	}
-	// with ratio OK at market → would DOWN
-	ratio := 1.0
-	if ratio < relistDownUnderpriceMax {
-		t.Fatal("should allow down")
+func TestRelistFairStock(t *testing.T) {
+	if relistFairStock(0) != 1 || relistFairStock(3) != 3 {
+		t.Fatalf("fair 0→1, 3→3")
 	}
 }
 
-func TestRelistDecideEmptyUpGate(t *testing.T) {
-	onAH, sales := 0, 2
+func TestRelistDynamicStockGates(t *testing.T) {
+	fair := relistFairStock(3)
+	sales := 4
 	weak := sales < relistSalesNorm
-	ratio := 0.85
-	if !(weak && onAH == 0 && ratio < relistEmptyUpMaxRatio) {
-		t.Fatal("should qualify for empty up")
+	if !weak {
+		t.Fatal("sales 4 should be weak vs norm 5")
 	}
-	ratio = 0.95
-	if weak && onAH == 0 && ratio < relistEmptyUpMaxRatio {
-		t.Fatal("should NOT up when not underpriced")
+	if !(3 >= fair) {
+		t.Fatal("onAH=3 should be high vs fair=3")
+	}
+	if !(1 < fair) {
+		t.Fatal("onAH=1 should be low vs fair=3")
 	}
 }
