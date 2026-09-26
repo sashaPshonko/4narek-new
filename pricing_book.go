@@ -7,26 +7,44 @@ import (
 	"time"
 )
 
-// book2 — sell + nacenka только от актуальной книги (~10 мин окно).
+// book2 — max-profit якорь только от живой книги (~10 мин).
 //
-// Никакой истории покупок/недель: вайп, x2 за час, старт после простоя —
-// первый толстый скан книги сразу ставит sell/nac под рынок.
+// Эмпирика FIFO×hourly p10 (с 2026-09-03): buy-gate, максимизирующий Σ(sell−buy):
 //
-//	sell   ≈ 1.00 × p10          (якорь витрины)
-//	buyMax ≈ book p5, clamp [0.75, 0.88]×p10   (дешёвый хвост asks)
-//	fallback buyMax = 0.85×p10 если p5 битый
+//	sword  → buy≤0.90×p10
+//	armor  → buy≤1.00×p10 (на практике sell чуть выше книги)
+//	pick   → buy≤0.95×p10
+//
+// sell якорим к книге (меч/кирка p10; броня p75 wins ≈1.05–1.10 → 1.05×p10),
+// чтобы nac = sell−buyMax > 0 и не залипать выше рынка.
+//
+//	sell   = sellMult(cat) × p10
+//	buyMax = buyMult(cat) × p10
 //	nacenka = sell − buyMax
 //
-// Толстая книга (≥ ahBookMinLotsInWindow); иначе HOLD (неугадываем рынок).
+// Без истории сделок и без p5-clamp. Thin book → HOLD.
 
-const (
-	bookSellMult = 1.00
+type bookCatMult struct {
+	Sell float64
+	Buy  float64
+}
 
-	// Profit-scan мечи: buy-gate пик ~0.85–0.90×p10; clamp вокруг live p5.
-	bookBuyFallbackMult = 0.85
-	bookBuyFloorMult    = 0.75
-	bookBuyCeilMult     = 0.88
-)
+// bookProfitMultByType — buyMult = argmax net profit по категории; sellMult ≥ buyMult.
+var bookProfitMultByType = map[string]bookCatMult{
+	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.90},
+	"netherite_armor-1.21":   {Sell: 1.05, Buy: 1.00}, // BEST buy-gate 1.00; sell>buy
+	"netherite_pickaxe-1.21": {Sell: 1.00, Buy: 0.95},
+	"позорная-броня-1.21":    {Sell: 1.20, Buy: 1.00},
+}
+
+var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.90}
+
+func bookMultForType(goType string) bookCatMult {
+	if m, ok := bookProfitMultByType[goType]; ok {
+		return m
+	}
+	return bookProfitMultDefault
+}
 
 func bookSnapWithMarker(target, step, priceBefore int) int {
 	if target <= 0 {
@@ -48,38 +66,20 @@ func bookSnapWithMarker(target, step, priceBefore int) int {
 	return target
 }
 
-// bookBuyMaxFromLiveBook — потолок закупа из p5 живой книги vs p10.
-func bookBuyMaxFromLiveBook(p10, p5 int) (buyMax int, src string) {
-	if p10 <= 0 {
-		return 0, "no_p10"
-	}
-	lo := int(float64(p10)*bookBuyFloorMult + 0.5)
-	hi := int(float64(p10)*bookBuyCeilMult + 0.5)
-	fb := int(float64(p10)*bookBuyFallbackMult + 0.5)
-
-	if p5 > 0 {
-		buyMax = p5
-		src = "book_p5"
-	} else {
-		buyMax = fb
-		src = "fallback"
-	}
-	if buyMax < lo {
-		buyMax = lo
-		src += "+floor"
-	}
-	if buyMax > hi {
-		buyMax = hi
-		src += "+ceil"
-	}
-	return buyMax, src
-}
-
-func bookTargetsFromLiveBook(p10, p5, step, priceBefore, priceFloor, nacenkaMin int) (sell, nac int, buySrc string) {
+func bookTargetsFromLiveBook(p10, step, priceBefore, priceFloor, nacenkaMin int, goType string) (sell, nac int, src string) {
 	if p10 <= 0 {
 		return priceBefore, nacenkaMin, "no_p10"
 	}
-	rawSell := int(float64(p10)*bookSellMult + 0.5)
+	m := bookMultForType(goType)
+	if m.Buy <= 0 || m.Sell <= 0 {
+		m = bookProfitMultDefault
+	}
+	if m.Buy >= m.Sell {
+		// защита: всегда оставляем щель под nacenkaMin / 1 step
+		m.Buy = m.Sell * 0.90
+	}
+
+	rawSell := int(float64(p10)*m.Sell + 0.5)
 	sell = bookSnapWithMarker(rawSell, step, priceBefore)
 	if priceFloor > 0 && sell < priceFloor {
 		sell = bookSnapWithMarker(priceFloor, step, priceBefore)
@@ -87,11 +87,19 @@ func bookTargetsFromLiveBook(p10, p5, step, priceBefore, priceFloor, nacenkaMin 
 			sell = priceFloor
 		}
 	}
-	rawBuy, buySrc := bookBuyMaxFromLiveBook(p10, p5)
+
+	rawBuy := int(float64(p10)*m.Buy + 0.5)
 	buyMax := bookSnapWithMarker(rawBuy, step, priceBefore)
 	if buyMax <= 0 {
 		buyMax = rawBuy
 	}
+	if buyMax >= sell && step > 0 {
+		buyMax = sell - step
+	}
+	if buyMax < 0 {
+		buyMax = 0
+	}
+
 	nac = sell - buyMax
 	if nac < nacenkaMin {
 		nac = nacenkaMin
@@ -108,7 +116,8 @@ func bookTargetsFromLiveBook(p10, p5, step, priceBefore, priceFloor, nacenkaMin 
 			nac = 0
 		}
 	}
-	return sell, nac, buySrc
+	src = fmt.Sprintf("live p10×sell%.2f/buy%.2f", m.Sell, m.Buy)
+	return sell, nac, src
 }
 
 func setRuntimeNacenkaLocked(item string, nac int) {
@@ -153,10 +162,11 @@ func adjustPriceBook(
 
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
 	nacMin := resolveNacenkaMin(cfg)
+	mult := bookMultForType(cfg.Type)
 
 	bookSince := now.Add(-ahBookRaiseWindow)
 	mutex.Unlock()
-	p5, p10, p10N, p10OK := ahBookP5P10Since(item, bookSince)
+	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
 	if p10N < ahBookMinLotsInWindow || p10 <= 0 {
 		p10OK = false
 	}
@@ -169,15 +179,13 @@ func adjustPriceBook(
 	buySrc := ""
 	notes := []string{
 		fmt.Sprintf(
-			"book2 live-only sell×%.2f buy=p5 clamp[%.2f,%.2f] fb×%.2f p5=%d p10=%d n=%d ok=%v onAH=%d sales=%d buys=%d price=%d nac=%d floor=%d",
-			bookSellMult, bookBuyFloorMult, bookBuyCeilMult, bookBuyFallbackMult,
-			p5, p10, p10N, p10OK, onAH, sales, buys, price, nacenka, priceFloor,
+			"book2 maxprofit live p10 sell×%.2f buy×%.2f p10=%d n=%d ok=%v type=%s onAH=%d sales=%d buys=%d price=%d nac=%d floor=%d",
+			mult.Sell, mult.Buy, p10, p10N, p10OK, cfg.Type, onAH, sales, buys, price, nacenka, priceFloor,
 		),
 	}
 
 	if p10OK {
-		// Старые/недельные цены игнорируем: жёсткий snap к текущей книге.
-		sellT, nacT, src := bookTargetsFromLiveBook(p10, p5, step, priceBefore, priceFloor, nacMin)
+		sellT, nacT, src := bookTargetsFromLiveBook(p10, step, priceBefore, priceFloor, nacMin, cfg.Type)
 		buySrc = src
 		newNac = nacT
 		newPrice = sellT
@@ -193,8 +201,8 @@ func adjustPriceBook(
 			decReason = "at_target"
 		}
 		notes = append(notes, fmt.Sprintf(
-			"target sell=%d nac=%d buyMax=%d (p5=%d p10=%d src=%s)",
-			sellT, nacT, sellT-nacT, p5, p10, buySrc,
+			"target sell=%d nac=%d buyMax=%d (p10=%d %s)",
+			sellT, nacT, sellT-nacT, p10, buySrc,
 		))
 	} else {
 		notes = append(notes, "thin/absent book → hold (ждём актуальный скан)")
@@ -261,8 +269,8 @@ func adjustPriceBook(
 	} else if nacChanged {
 		dir = "NAC"
 	}
-	log.Printf("[BOOK2] %s: %s reason=%s | цена %d→%d nac %d→%d | p5=%d p10=%d n=%d buySrc=%s | %s",
-		item, dir, decReason, priceBefore, newPrice, nacenkaBefore, newNac, p5, p10, p10N, buySrc, action)
+	log.Printf("[BOOK2] %s: %s reason=%s | цена %d→%d nac %d→%d | p10=%d n=%d %s | %s",
+		item, dir, decReason, priceBefore, newPrice, nacenkaBefore, newNac, p10, p10N, buySrc, action)
 
 	queueMLDecisionLocked(
 		item, cfg, action,

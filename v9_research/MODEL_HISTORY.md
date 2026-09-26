@@ -292,3 +292,17 @@ sell якорим к книге. Full WF OOS N/A. Rollback: bookBuyFallbackMult=
 История покупок убрана: вайп / x2 за час / старт после недели простоя требуют только
 актуальную книгу (~10м). sell=1.00×p10; buyMax=live book p5, clamp [0.75, 0.88]×p10;
 fallback 0.85×p10. Первый толстый скан сразу переписывает устаревшие цены. Thin book → HOLD.
+
+### 2026-09-27 — book2 max-profit mults (per category)
+
+Убраны p5-clamp и «универсальные 0.75–0.88» (не argmax прибыли).
+
+Live p10 × category mults по Σ(sell−buy) FIFO (с 03.09):
+| type | sell×p10 | buy×p10 | BEST_NET buy-gate |
+| sword | 1.00 | 0.90 | 0.90 |
+| armor | 1.05 | 1.00 | 1.00 |
+| pick | 1.00 | 0.95 | 0.95 |
+| позорная | 1.20 | 1.00 | 1.00 |
+| default | 1.00 | 0.90 | — |
+
+Формула универсальна; множители — по категории. OOS corridor WF N/A.
