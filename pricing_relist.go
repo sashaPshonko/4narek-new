@@ -12,13 +12,15 @@ import (
 //   fair = max(1, share)  где share = (5×боты)/nItems категории
 //   weak := sales < relistSalesNorm (5)
 //   onAH ≥ fair && weak → ↓ 1 step (если ratio ≥ 0.95 или нет p10)
-//   onAH <  fair && weak → ↑ 1 step (без потолка p10; ↑ off если fair недостижим / АХ полон)
+//   onAH <  fair && weak → ↑ 1 step (пустое наличие ок; потолок — не выше книги p10)
+//   ↑ off если fair недостижим / АХ полон / уже ≥ p10 (когда книга толстая)
 //
 // Норма 5 — стартовая; собираем capital_cycles и крутим.
 
 const (
 	relistSalesNorm         = 5
-	relistDownUnderpriceMax = 0.95 // ↓ veto если сильно дешевле рынка; ↑ без p10-лимита
+	relistDownUnderpriceMax = 0.95 // ↓ veto если сильно дешевле рынка
+	relistUpBookMax         = 1.0  // ↑ veto / clip к p10, если книга есть
 )
 
 func relistFairStock(share int) int {
@@ -129,8 +131,8 @@ func adjustPriceRelist(
 		}
 	}
 
-	// UP: меньше fair-доли и слабо по продажам.
-	// Без p10-потолка: новая система не market-follow, а stock+sales.
+	// UP: меньше fair-доли и слабо по продажам (в т.ч. onAH=0 — можно расти к норме).
+	// Лимит по книге: при живом p10 не выше рынка (clip к p10 / hold если уже ≥).
 	if action == "relist_hold" || strings.HasPrefix(action, "relist_hold_") {
 		if weak && stockLow && step > 0 {
 			if fairUnreachable {
@@ -141,12 +143,25 @@ func adjustPriceRelist(
 				action = "relist_hold_empty_ah_full"
 				decReason = "ah_full_or_no_room"
 				notes = append(notes, "↑ skip ah full / no room")
+			} else if ratioOK && ratio >= relistUpBookMax {
+				action = "relist_hold_book_up_cap"
+				decReason = "book_up_cap"
+				notes = append(notes, fmt.Sprintf("↑ skip ratio=%.3f ≥ %.2f (p10=%d)", ratio, relistUpBookMax, p10))
 			} else {
 				cand := price + step
-				action = "relist_price_up_empty"
-				decReason = "low_stock_weak_sales"
-				newPrice = cand
-				notes = append(notes, fmt.Sprintf("↑ onAH=%d<fair=%d sales=%d<%d (+1 step, no p10 cap)", onAH, fair, sales, relistSalesNorm))
+				if ratioOK && p10 > 0 && cand > p10 {
+					cand = p10
+				}
+				if cand > price {
+					action = "relist_price_up_empty"
+					decReason = "low_stock_weak_sales"
+					newPrice = cand
+					notes = append(notes, fmt.Sprintf("↑ onAH=%d<fair=%d sales=%d<%d (+step, bookCap p10=%d)", onAH, fair, sales, relistSalesNorm, p10))
+				} else {
+					action = "relist_hold_book_up_cap"
+					decReason = "book_up_cap"
+					notes = append(notes, fmt.Sprintf("↑ skip already at p10=%d", p10))
+				}
 			}
 		}
 	}

@@ -265,3 +265,7 @@ Update: UP without p10 ratio gate / p10 cap; still block ↑ if fair unreachable
 ### 2026-09-26 — relist5: buy-surge ↓ off
 
 На каждый buy больше не режем цену (старый коридор soft/hi). Relist типы — только цикл fair+sales<5.
+
+### 2026-09-27 — relist5: ↑ book cap (p10)
+
+Пустой onAH по-прежнему может ↑. Живая книга: не выше p10 (hold / clip).
