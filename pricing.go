@@ -1191,6 +1191,14 @@ func actionReasonRU(action string) string {
 		return "relist5: ↑ не делаем (АХ полон / нет места)"
 	case "relist_hold_fair_unreachable":
 		return "relist5: ↑ запрещён — fair недостижим (слоты заняты другими id)"
+	case "book_price_up":
+		return "book1: sell → p10×1.00 (книга)"
+	case "book_price_down":
+		return "book1: sell ← p10×1.00 (книга)"
+	case "book_nacenka_set":
+		return "book1: nacenka = sell−0.80×p10"
+	case "book_hold", "book_hold_at_target":
+		return "book1: hold (нет книги / уже у цели)"
 	case "corridor_price_up_empty_market_catchup":
 		return "corridor_v8af: Explored ∧ empty ∧ thick book ∧ our/p10<0.85 streak≥2 → +1 catchup"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
@@ -1579,7 +1587,7 @@ func adjustPrice(item string) AdjustReport {
 
 	if isPricingPolicyV9() {
 		if isTypeRelistEnabled(cfg.Type) {
-			return adjustPriceRelist(
+			return adjustPriceBook(
 				item, cfg, now, lastUpdate,
 				sales, buys, trySells, profitNow,
 				state,

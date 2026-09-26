@@ -269,3 +269,8 @@ Update: UP without p10 ratio gate / p10 cap; still block ↑ if fair unreachable
 ### 2026-09-27 — relist5: ↑ book cap (p10)
 
 Пустой onAH по-прежнему может ↑. Живая книга: не выше p10 (hold / clip).
+
+### 2026-09-27 — book1 (relist types): sell+nacenka from AH p10
+
+Empirics: buy≤0.80×p10, sell≈1.00×p10 → nacenka≈0.20×p10. Thick book snap; thin → hold.
+Full WF OOS N/A (book-driven, not inventory corridor). Rollback: wire adjustPriceRelist.
