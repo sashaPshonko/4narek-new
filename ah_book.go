@@ -517,11 +517,10 @@ AND NOT EXISTS (
 	return minPrice, n, true
 }
 
-// ahBookP10Since — 10-й процентиль цен SKU в окне (витрины тоже).
-// Для set_min: сырой min = дампы, медиана = витрины.
-func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {
+// ahBookPricesSince — цены лотов SKU в окне, отсортированные по возрастанию.
+func ahBookPricesSince(itemID string, since time.Time) (ps []int, n int) {
 	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
-		return 0, 0, false
+		return nil, 0
 	}
 	mlDBMu.Lock()
 	rows, err := mlDB.Query(
@@ -530,29 +529,76 @@ func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {
 	)
 	if err != nil {
 		mlDBMu.Unlock()
-		log.Printf("[ah_book] p10 since: %v", err)
-		return 0, 0, false
+		log.Printf("[ah_book] prices since: %v", err)
+		return nil, 0
 	}
-	var ps []int
 	for rows.Next() {
 		var p int
 		if err := rows.Scan(&p); err != nil {
 			continue
 		}
-		ps = append(ps, p)
+		if p > 0 {
+			ps = append(ps, p)
+		}
 	}
 	_ = rows.Close()
 	mlDBMu.Unlock()
 	n = len(ps)
+	if n == 0 {
+		return nil, 0
+	}
+	sort.Ints(ps)
+	return ps, n
+}
+
+// ahBookPercentileSorted — q∈[0,1] по уже отсортированному срезу.
+func ahBookPercentileSorted(sorted []int, q float64) int {
+	n := len(sorted)
+	if n == 0 {
+		return 0
+	}
+	if q <= 0 {
+		return sorted[0]
+	}
+	if q >= 1 {
+		return sorted[n-1]
+	}
+	k := q * float64(n-1)
+	f := int(k)
+	c := f + 1
+	if c >= n {
+		return sorted[n-1]
+	}
+	w := k - float64(f)
+	return int(float64(sorted[f])*(1-w) + float64(sorted[c])*w + 0.5)
+}
+
+// ahBookP10Since — 10-й процентиль цен SKU в окне (витрины тоже).
+// Для set_min: сырой min = дампы, медиана = витрины.
+func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {
+	ps, n := ahBookPricesSince(itemID, since)
 	if n < ahBookMinLotsInWindow {
 		return 0, n, false
 	}
-	sort.Ints(ps)
-	p10 = ps[n/10]
+	p10 = ps[n/10] // совместимость с прежним индексом ≈ p10
 	if p10 <= 0 {
 		return p10, n, false
 	}
 	return p10, n, true
+}
+
+// ahBookP5P10Since — p5 и p10 одной живой выборки (book2 buy/sell).
+func ahBookP5P10Since(itemID string, since time.Time) (p5, p10, n int, ok bool) {
+	ps, n := ahBookPricesSince(itemID, since)
+	if n < ahBookMinLotsInWindow {
+		return 0, 0, n, false
+	}
+	p5 = ahBookPercentileSorted(ps, 0.05)
+	p10 = ps[n/10]
+	if p10 <= 0 {
+		return p5, p10, n, false
+	}
+	return p5, p10, n, true
 }
 
 // ahBookMinOfLastN — min(price) среди последних n лотов SKU (по ts), без забаненных витрин.

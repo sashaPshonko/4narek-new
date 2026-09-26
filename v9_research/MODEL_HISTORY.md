@@ -286,3 +286,9 @@ sell/p10 p75≈1.00. Статичная nac ~0.22×p10 резала вход —
 Политика: sell=1.00×p10; buyMax=p90(покупок ниже gate, 7д), clamp [0.75, 0.88]×p10;
 fallback 0.85×p10. nac=sell−buyMax. «95 buy / 90 sell» сырой — sell p90≈1.09 передерживает;
 sell якорим к книге. Full WF OOS N/A. Rollback: bookBuyFallbackMult=0.80 или adjustPriceRelist.
+
+### 2026-09-27 — book2 live-only (no 7d hist)
+
+История покупок убрана: вайп / x2 за час / старт после недели простоя требуют только
+актуальную книгу (~10м). sell=1.00×p10; buyMax=live book p5, clamp [0.75, 0.88]×p10;
+fallback 0.85×p10. Первый толстый скан сразу переписывает устаревшие цены. Thin book → HOLD.
