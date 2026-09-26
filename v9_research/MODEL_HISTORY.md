@@ -257,3 +257,5 @@ Robust gate: all folds ∧ min≥1.02 ∧ late≥1.02. Результаты → 
 Policy tag в capital_cycles: `…+relist5`. Цель — собрать логи и подкрутить норму/пороги.
 
 Update: fair = max(1, (5×bots)/nItems); ↓ if onAH≥fair, ↑ if onAH<fair (not bare onAH≥1).
+
+Update: ↑ blocked when fair > maxReachable (other ids hold AH slots).

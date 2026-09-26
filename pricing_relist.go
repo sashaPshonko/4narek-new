@@ -72,7 +72,8 @@ func adjustPriceRelist(
 		ahFull = true
 		blockUp = true
 	}
-	if maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts) <= onAH {
+	maxReach := maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts)
+	if maxReach <= onAH {
 		noRoom = true
 		blockUp = true
 	}
@@ -88,6 +89,11 @@ func adjustPriceRelist(
 	ratio, ratioOK := v9MarketRatio(price, p10, p10OK)
 	weak := sales < relistSalesNorm
 	fair := relistFairStock(share)
+	// Fair недостижим: свободные слоты категории съедены другими id.
+	fairUnreachable := maxReach < fair
+	if fairUnreachable {
+		blockUp = true
+	}
 	stockHigh := onAH >= fair
 	stockLow := onAH < fair
 
@@ -96,8 +102,8 @@ func adjustPriceRelist(
 	newPrice := price
 	notes := []string{
 		fmt.Sprintf(
-			"relist sales=%d norm=%d weak=%v onAH=%d fair=%d (share=%d) low=%v high=%v inv=%d buys=%d p10=%d p10N=%d ratio=%s ahFull=%v noRoom=%v sumAH=%d/%d",
-			sales, relistSalesNorm, weak, onAH, fair, share, stockLow, stockHigh, invCount, buys, p10, p10N,
+			"relist sales=%d norm=%d weak=%v onAH=%d fair=%d maxReach=%d unreachable=%v (share=%d) low=%v high=%v inv=%d buys=%d p10=%d p10N=%d ratio=%s ahFull=%v noRoom=%v sumAH=%d/%d",
+			sales, relistSalesNorm, weak, onAH, fair, maxReach, fairUnreachable, share, stockLow, stockHigh, invCount, buys, p10, p10N,
 			v9RatioStr(price, p10, p10OK), ahFull, noRoom, sumAH, cap,
 		),
 	}
@@ -125,10 +131,14 @@ func adjustPriceRelist(
 		}
 	}
 
-	// UP: меньше fair-доли, слабо, недооценены (только если ещё hold)
+	// UP: меньше fair-доли, слабо, недооценены — но только если fair физически достижим
 	if action == "relist_hold" || strings.HasPrefix(action, "relist_hold_") {
 		if weak && stockLow && step > 0 {
-			if blockUp {
+			if fairUnreachable {
+				action = "relist_hold_fair_unreachable"
+				decReason = "fair_unreachable"
+				notes = append(notes, fmt.Sprintf("↑ skip fair=%d > maxReach=%d (слоты у других id)", fair, maxReach))
+			} else if blockUp {
 				action = "relist_hold_empty_ah_full"
 				decReason = "ah_full_or_no_room"
 				notes = append(notes, "↑ skip ah full / no room")

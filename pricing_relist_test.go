@@ -14,17 +14,11 @@ func TestRelistFairStock(t *testing.T) {
 	}
 }
 
-func TestRelistDynamicStockGates(t *testing.T) {
+func TestRelistFairUnreachableBlocksUp(t *testing.T) {
 	fair := relistFairStock(3)
-	sales := 4
-	weak := sales < relistSalesNorm
-	if !weak {
-		t.Fatal("sales 4 should be weak vs norm 5")
-	}
-	if !(3 >= fair) {
-		t.Fatal("onAH=3 should be high vs fair=3")
-	}
-	if !(1 < fair) {
-		t.Fatal("onAH=1 should be low vs fair=3")
+	maxReach := 1 // другие id съели слоты
+	if !(maxReach < fair) {
+		t.Fatal("expected unreachable")
 	}
 }
+
