@@ -1075,8 +1075,9 @@ func countItemsInCategoryLocked(minecraftType string) int {
 	return n
 }
 
-// itemSlotShareLocked — доля слотов категории на один предмет:
-// (32 × боты_в_категории) / число_предметов_в_категории.
+// itemSlotShareLocked — доля слотов категории на один предмет.
+// Обычный режим: (32 × боты) / nItems.
+// Режим перевыставления (relist): (5 × боты) / nItems — цель по лотам на АХ, не по инвентарю.
 // Только под mutex.Lock.
 func itemSlotShareLocked(minecraftType string) int {
 	bots := botsForGoTypeLocked(minecraftType)
@@ -1084,7 +1085,11 @@ func itemSlotShareLocked(minecraftType string) int {
 	if bots <= 0 || nItems <= 0 {
 		return 0
 	}
-	return (botTotalSlots * bots) / nItems
+	slotsPerBot := botTotalSlots
+	if isTypeRelistEnabled(minecraftType) {
+		slotsPerBot = ahStorageSlotsPerBot
+	}
+	return (slotsPerBot * bots) / nItems
 }
 
 // hasSpaceToCoverBuyDeficit — хватает ли свободной доли предмета, чтобы докупить (sales−buys).
@@ -1356,6 +1361,9 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	_, targetHi, soft, _, _ := stockTargets(share, stockBandFor(item, cfg))
 	threshold := maxInt(4, soft)
 	held := getItemCount(item) + getInventoryCount(item)
+	if isTypeRelistEnabled(cfg.Type) {
+		held = getItemCount(item) // только АХ
+	}
 
 	now := time.Now()
 	since := now.Add(-cfg.AnalysisTime)
@@ -1495,11 +1503,16 @@ func adjustPrice(item string) AdjustReport {
 	onAH := ahCounts[item]
 	invCount := invCounts[item]
 	totalHeld := onAH + invCount
+	// Перевыставление: коридор смотрит только лоты на АХ (инвентарь — буфер до /ah sell).
+	heldForCorridor := totalHeld
+	if isTypeRelistEnabled(cfg.Type) {
+		heldForCorridor = onAH
+	}
 
 	share := itemSlotShareLocked(cfg.Type)
 	free, need := 0, 0
 	if buys < sales && share > 0 {
-		free = share - totalHeld
+		free = share - heldForCorridor
 		if free < 0 {
 			free = 0
 		}
@@ -1508,7 +1521,7 @@ func adjustPrice(item string) AdjustReport {
 
 	stockLoad := 0.0
 	if share > 0 {
-		stockLoad = float64(totalHeld) / float64(share)
+		stockLoad = float64(heldForCorridor) / float64(share)
 	}
 	underbuyOK := buys < sales && share > 0 && free >= need
 	tryRatio := 0.0
@@ -1527,7 +1540,7 @@ func adjustPrice(item string) AdjustReport {
 			sales, buys, trySells, profitNow,
 			state,
 			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
-			onAH, invCount, totalHeld, share, free, need, stockNorm,
+			onAH, invCount, heldForCorridor, share, free, need, stockNorm,
 			underbuyOK, tryRatio, stockLoad,
 			onlineForCap, onlineMaxForML,
 			ahCounts, invCounts,
@@ -1540,7 +1553,7 @@ func adjustPrice(item string) AdjustReport {
 			sales, buys, trySells, profitNow,
 			state,
 			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
-			onAH, invCount, totalHeld, share, free, need, stockNorm,
+			onAH, invCount, heldForCorridor, share, free, need, stockNorm,
 			underbuyOK, tryRatio, stockLoad,
 			onlineForCap, onlineMaxForML,
 		)
@@ -1552,9 +1565,10 @@ func adjustPrice(item string) AdjustReport {
 			sales, buys, trySells, profitNow,
 			state,
 			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
-			onAH, invCount, totalHeld, share, free, need, stockNorm,
+			onAH, invCount, heldForCorridor, share, free, need, stockNorm,
 			underbuyOK, tryRatio, stockLoad,
 			onlineForCap, onlineMaxForML,
+			ahCounts,
 		)
 	}
 

@@ -288,3 +288,17 @@ func TestCapitalPolicyV9(t *testing.T) {
 		t.Fatalf("active=%s want %s (rollback: capitalPolicyV4 / classic)", capitalPolicy, capitalPolicyV9)
 	}
 }
+
+func TestV9BlockUpStopsDemand(t *testing.T) {
+	in := v9Base(5, 5, 0, 2_000_000, 100_000, 100, 2_000_000, true) // under lo=18
+	in.Held = 5
+	d := v9Decide(in)
+	if !isV9Up(d.Action) {
+		t.Fatalf("expected demand UP without BlockUp: %+v", d)
+	}
+	in.BlockUp = true
+	d = v9Decide(in)
+	if isV9Up(d.Action) {
+		t.Fatalf("BlockUp must stop UP: %+v", d)
+	}
+}

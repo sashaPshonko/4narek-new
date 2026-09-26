@@ -233,3 +233,16 @@ Robust gate: all folds ∧ min≥1.02 ∧ late≥1.02. Результаты → 
 До prod: `full_compare_all` на MF chrom + явное «залей».
 
 
+
+### 2026-09-26 — v9 AH-relist share (buy+перевыстав, без набивки инвентаря)
+
+**Контекст:** боты только покупают и бесконечно перевыставляют (5 слотов АХ/бот). Старый share `(32×bots)/nItems` давал chronic understock → demand/catchup ↑ раздувал sell и buy-потолок.
+
+**Prod patch (`pricing.go` / `pricing_v9.go`):**
+1. Relist-типы: share = `(5×bots)/nItems` (`ahStorageSlotsPerBot`)
+2. Коридор `held` = **onAH** (инв не считается стоком)
+3. ↑ veto если категория АХ полна или `maxReachable≤onAH`
+
+**Боты (`4narek-old`):** enoughItems после перевыстава **не** сбрасывается; off только при свободном слоте 0–4 или «У Вас купили». Shift-ротация выкл.
+
+**Compare:** полный OOS на старых capital_cycles (held=inv+AH, share×32) **не** apples-to-apples с AH-only. Unit: `TestV9BlockUpStopsDemand` + existing v9 suite PASS. Live A/B после рестарта Go с панели.

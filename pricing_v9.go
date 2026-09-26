@@ -226,11 +226,34 @@ func adjustPriceV9(
 	underbuyOK bool,
 	tryRatio, stockLoad float64,
 	onlineForCap, onlineMaxForML int,
+	ahCounts map[string]int,
 ) AdjustReport {
 	band := stockBandFor(item, cfg)
-	targetLo, targetHi, targetSoft, targetOver, _ := stockTargets(share, band)
+	targetLo, targetHi, _, _, _ := stockTargets(share, band)
 	night := isNightMSK(now)
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
+
+	// Relist: не поднимать sell, если этому id некуда выставиться (АХ категории забит /
+	// другие id съели слоты). Иначе demand/catchup UP при полном АХ раздувает buy-потолок.
+	if isTypeRelistEnabled(cfg.Type) {
+		cap := categoryAhCapacityLocked(cfg.Type)
+		sumAH := 0
+		for name, c := range ahCounts {
+			if c <= 0 {
+				continue
+			}
+			other, ok := itemsConfig[name]
+			if !ok || other.Type != cfg.Type {
+				continue
+			}
+			sumAH += c
+		}
+		if cap > 0 && sumAH >= cap {
+			blockUp = true
+		} else if maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts) <= onAH {
+			blockUp = true
+		}
+	}
 
 	bookSince := now.Add(-ahBookRaiseWindow)
 	mutex.Unlock()
@@ -263,9 +286,12 @@ func adjustPriceV9(
 	newPrice := dec.NewPrice
 	action := dec.Action
 	notes := []string{
-		fmt.Sprintf("v9 reason=%s held=%d lo=%d hi=%d sales=%d buys=%d p10=%d p10N=%d ratio=%s empty_streak=%d up_cd=%d",
-			dec.Reason, totalHeld, targetLo, targetHi, sales, buys, p10, p10N,
-			v9RatioStr(priceBefore, p10, p10OK), dec.EmptyStreak, dec.UpCooldown),
+		fmt.Sprintf("v9 reason=%s held=%d(onAH=%d inv=%d) lo=%d hi=%d sales=%d buys=%d p10=%d p10N=%d ratio=%s empty_streak=%d up_cd=%d relist=%v",
+			dec.Reason, totalHeld, onAH, invCount, targetLo, targetHi, sales, buys, p10, p10N,
+			v9RatioStr(priceBefore, p10, p10OK), dec.EmptyStreak, dec.UpCooldown, isTypeRelistEnabled(cfg.Type)),
+	}
+	if blockUp && isTypeRelistEnabled(cfg.Type) {
+		notes = append(notes, "ah_cap/no_room → ↑ gated")
 	}
 
 	if blockDown && strings.Contains(action, "price_down") {
@@ -377,8 +403,6 @@ func adjustPriceV9(
 		DecisionAt:     now,
 		CycleDuration:  cfg.AnalysisTime,
 	}
-	_ = targetSoft
-	_ = targetOver
 
 	shadowSnap := mlAdjustSnapshot{}
 	if mlShadowEnabled() {
