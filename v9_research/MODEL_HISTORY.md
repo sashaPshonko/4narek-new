@@ -274,3 +274,15 @@ Update: UP without p10 ratio gate / p10 cap; still block ↑ if fair unreachable
 
 Empirics: buy≤0.80×p10, sell≈1.00×p10 → nacenka≈0.20×p10. Thick book snap; thin → hold.
 Full WF OOS N/A (book-driven, not inventory corridor). Rollback: wire adjustPriceRelist.
+
+### 2026-09-27 — book2 (relist): hist p90 buys + profit clamp
+
+Цель: max total profit, не «магические 20%».
+
+Данные (FIFO×hourly p10, мечи, с 03.09): buy-gate scan — пик net profit при buy≤0.85–0.90×p10
+(0.80→926M, 0.85→962M, 0.90→981M; выше 0.95 bad_loss растёт). Win buy/p10 p90≈0.83, p95≈0.90;
+sell/p10 p75≈1.00. Статичная nac ~0.22×p10 резала вход — смотрим buys с price < ref−nac.
+
+Политика: sell=1.00×p10; buyMax=p90(покупок ниже gate, 7д), clamp [0.75, 0.88]×p10;
+fallback 0.85×p10. nac=sell−buyMax. «95 buy / 90 sell» сырой — sell p90≈1.09 передерживает;
+sell якорим к книге. Full WF OOS N/A. Rollback: bookBuyFallbackMult=0.80 или adjustPriceRelist.
