@@ -246,3 +246,12 @@ Robust gate: all folds ∧ min≥1.02 ∧ late≥1.02. Результаты → 
 **Боты (`4narek-old`):** enoughItems после перевыстава **не** сбрасывается; off только при свободном слоте 0–4 или «У Вас купили». Shift-ротация выкл.
 
 **Compare:** полный OOS на старых capital_cycles (held=inv+AH, share×32) **не** apples-to-apples с AH-only. Unit: `TestV9BlockUpStopsDemand` + existing v9 suite PASS. Live A/B после рестарта Go с панели.
+
+### 2026-09-26 — relist5 (норма sales=5, без коридора)
+
+Для relist-типов вместо v9-corridor:
+- `weak = sales < 5` за analysis window
+- `onAH≥1 && weak` → ↓1 (veto если our/p10 < 0.95)
+- `onAH==0 && weak && our/p10 < 0.90` → ↑1 ≤ p10
+- АХ полон / нет слота → ↑ off
+Policy tag в capital_cycles: `…+relist5`. Цель — собрать логи и подкрутить норму/пороги.

@@ -1177,6 +1177,16 @@ func actionReasonRU(action string) string {
 		return "corridor_v9: demand был, но ratio≥1.05"
 	case "corridor_hold_v9_catchup_no_gap", "corridor_hold_v9_catchup_cap":
 		return "corridor_v9: empty catchup без gap / выше market"
+	case "relist_price_down_stuck":
+		return "relist5: onAH≥1 ∧ sales<5 → −1 (зависший лот)"
+	case "relist_price_up_empty":
+		return "relist5: onAH=0 ∧ sales<5 ∧ our/p10<0.90 → +1 к p10"
+	case "relist_hold", "relist_hold_floor", "relist_hold_empty_cap":
+		return "relist5: нет сигнала / пол / уже у p10"
+	case "relist_hold_underprice_down_veto":
+		return "relist5: ↓ запрещён — уже underprice (ratio<0.95)"
+	case "relist_hold_empty_no_p10", "relist_hold_empty_not_under", "relist_hold_empty_ah_full":
+		return "relist5: пусто, но ↑ не делаем (нет p10 / не under / АХ полон)"
 	case "corridor_price_up_empty_market_catchup":
 		return "corridor_v8af: Explored ∧ empty ∧ thick book ∧ our/p10<0.85 streak≥2 → +1 catchup"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
@@ -1560,6 +1570,18 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	if isPricingPolicyV9() {
+		if isTypeRelistEnabled(cfg.Type) {
+			return adjustPriceRelist(
+				item, cfg, now, lastUpdate,
+				sales, buys, trySells, profitNow,
+				state,
+				priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
+				onAH, invCount, heldForCorridor, share, free, need, stockNorm,
+				underbuyOK, tryRatio, stockLoad,
+				onlineForCap, onlineMaxForML,
+				ahCounts,
+			)
+		}
 		return adjustPriceV9(
 			item, cfg, now, lastUpdate,
 			sales, buys, trySells, profitNow,
