@@ -259,3 +259,5 @@ Policy tag в capital_cycles: `…+relist5`. Цель — собрать лог�
 Update: fair = max(1, (5×bots)/nItems); ↓ if onAH≥fair, ↑ if onAH<fair (not bare onAH≥1).
 
 Update: ↑ blocked when fair > maxReachable (other ids hold AH slots).
+
+Update: UP without p10 ratio gate / p10 cap; still block ↑ if fair unreachable or AH full.

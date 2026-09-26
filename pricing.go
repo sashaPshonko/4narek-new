@@ -1180,13 +1180,13 @@ func actionReasonRU(action string) string {
 	case "relist_price_down_stuck":
 		return "relist5: onAH≥fair(5×bots/nItems) ∧ sales<5 → −1"
 	case "relist_price_up_empty":
-		return "relist5: onAH<fair ∧ sales<5 ∧ our/p10<0.90 → +1 к p10"
+		return "relist5: onAH<fair ∧ sales<5 → +1 (без p10-потолка)"
 	case "relist_hold", "relist_hold_floor", "relist_hold_empty_cap":
-		return "relist5: нет сигнала / пол / уже у p10"
+		return "relist5: нет сигнала / пол"
 	case "relist_hold_underprice_down_veto":
 		return "relist5: ↓ запрещён — уже underprice (ratio<0.95)"
 	case "relist_hold_empty_no_p10", "relist_hold_empty_not_under", "relist_hold_empty_ah_full":
-		return "relist5: мало на АХ, но ↑ не делаем (нет p10 / не under / АХ полон)"
+		return "relist5: ↑ не делаем (АХ полон / нет места)"
 	case "relist_hold_fair_unreachable":
 		return "relist5: ↑ запрещён — fair недостижим (слоты заняты другими id)"
 	case "corridor_price_up_empty_market_catchup":
