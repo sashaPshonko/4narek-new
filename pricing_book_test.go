@@ -73,3 +73,17 @@ func TestColdStartIgnoresStale(t *testing.T) {
 		t.Fatalf("sell=%d still near stale", sell)
 	}
 }
+
+func TestBookTargetsIgnoresLegacyFloor(t *testing.T) {
+	// sword7 кейс: p10=1M, legacy floor=minBuy+runtimeNac=3M — sell должен остаться ~p10
+	p10 := 1_000_000
+	legacyFloor := 3_000_000
+	sell, nac, _ := bookTargetsFromLiveBook(p10, 100_000, 2_400_000, legacyFloor, 0, "netherite_sword-1.21")
+	if sell > 1_100_000 {
+		t.Fatalf("sell=%d lifted by legacy floor=%d (want ~p10)", sell, legacyFloor)
+	}
+	buyMax := sell - nac
+	if buyMax < 850_000 || buyMax > 950_000 {
+		t.Fatalf("buyMax=%d nac=%d want ~0.90×p10", buyMax, nac)
+	}
+}

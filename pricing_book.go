@@ -66,7 +66,11 @@ func bookSnapWithMarker(target, step, priceBefore int) int {
 	return target
 }
 
-func bookTargetsFromLiveBook(p10, step, priceBefore, priceFloor, nacenkaMin int, goType string) (sell, nac int, src string) {
+// bookTargetsFromLiveBook — sell/buy только от живой p10×mult.
+// priceFloor аргумент оставлен для совместимости вызовов, но намеренно
+// игнорируется: legacy sellPriceFloor(minBuy+runtimeNac) иначе ratchet'ит
+// sell вверх (sword7: 2.1→1.8→2.4→3.0 при p10=1M).
+func bookTargetsFromLiveBook(p10, step, priceBefore, _priceFloor, nacenkaMin int, goType string) (sell, nac int, src string) {
 	if p10 <= 0 {
 		return priceBefore, nacenkaMin, "no_p10"
 	}
@@ -81,12 +85,6 @@ func bookTargetsFromLiveBook(p10, step, priceBefore, priceFloor, nacenkaMin int,
 
 	rawSell := int(float64(p10)*m.Sell + 0.5)
 	sell = bookSnapWithMarker(rawSell, step, priceBefore)
-	if priceFloor > 0 && sell < priceFloor {
-		sell = bookSnapWithMarker(priceFloor, step, priceBefore)
-		if sell < priceFloor {
-			sell = priceFloor
-		}
-	}
 
 	rawBuy := int(float64(p10)*m.Buy + 0.5)
 	buyMax := bookSnapWithMarker(rawBuy, step, priceBefore)
@@ -156,12 +154,14 @@ func adjustPriceBook(
 		step = 1
 	}
 	price := priceBefore
-	if price < priceFloor && priceFloor > 0 {
-		price = priceFloor
-	}
+	// book2: не поднимаем к legacy priceFloor (minBuy+runtime nac) — см. bookTargetsFromLiveBook.
 
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
-	nacMin := resolveNacenkaMin(cfg)
+	// только статический NacenkaMin из конфига; runtime Nacenka после snap раздувает floor
+	nacMin := cfg.NacenkaMin
+	if nacMin < 0 {
+		nacMin = 0
+	}
 	mult := bookMultForType(cfg.Type)
 
 	bookSince := now.Add(-ahBookRaiseWindow)
@@ -225,13 +225,7 @@ func adjustPriceBook(
 		notes = append(notes, "manual → ↑ запрещён")
 	}
 
-	if newPrice < priceFloor && priceFloor > 0 {
-		newPrice = priceFloor
-		if newPrice > priceBefore {
-			action = "corridor_price_up_floor"
-			notes = append(notes, fmt.Sprintf("пол %d", priceFloor))
-		}
-	}
+	// намеренно без clamp к priceFloor — иначе book2 не может сесть к p10 ниже minBuy+nac
 
 	setRuntimeNacenkaLocked(item, newNac)
 
