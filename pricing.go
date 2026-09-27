@@ -911,9 +911,11 @@ func applyMarketFloors(floors map[string]int, windowStartMs, windowEndMs, window
 }
 
 func sellPriceFloor(minBuy, nacenka int) int {
-	// base_price не пол: только старт, если цены ещё нет.
-	// Пол = дешёвая покупка из истории + наценка (без истории — только наценка).
-	return minBuy + nacenka
+	// Retired 27.09.2026: sell якорится к живой книге (book2), не к minBuy+nac.
+	// Раньше floor = minBuy+nacenka ratchet'ил sell вверх (sword7 1.8→3.0 при p10=1M).
+	_ = minBuy
+	_ = nacenka
+	return 0
 }
 
 // ahBookRaiseTarget — селл = самый дешёвый ask из выборки + наша наценка + шаг.

@@ -1853,9 +1853,8 @@ func addPriceToHistory(item string, price int) {
 		item, price, len(hist.Records))
 }
 
-// getMinPriceFromHistory — цена закупа для sell-floor:
-// N-я самая дешёвая среди последних покупок (N = priceHistoryFloorRank).
-// Записи старше priceHistoryMaxAge игнорируются — floor остаётся актуальным.
+// getMinPriceFromHistory — дешёвая покупка из истории (метрика/логи).
+// С 27.09.2026 больше не участвует в sell-floor (sellPriceFloor → 0, якорь = книга).
 func getMinPriceFromHistory(item string) int {
 	hist := priceHistory[item]
 	if hist == nil || len(hist.Records) == 0 {
