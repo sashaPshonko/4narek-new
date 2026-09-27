@@ -87,3 +87,18 @@ func TestBookTargetsIgnoresLegacyFloor(t *testing.T) {
 		t.Fatalf("buyMax=%d nac=%d want ~0.90×p10", buyMax, nac)
 	}
 }
+
+func TestBook2ClampStep(t *testing.T) {
+	step := 100_000
+	// обычный: ±2 step
+	if got := book2ClampStep(1_000_000, 1_500_000, step); got != 1_200_000 {
+		t.Fatalf("cap up got=%d", got)
+	}
+	if got := book2ClampStep(1_200_000, 1_000_000, step); got != 1_000_000 {
+		t.Fatalf("cap down got=%d want 1.0M (2 steps)", got)
+	}
+	// deep ≥25%: без cap (cold 2.7→0.9)
+	if got := book2ClampStep(2_700_000, 900_000, step); got != 900_000 {
+		t.Fatalf("deep down got=%d", got)
+	}
+}
