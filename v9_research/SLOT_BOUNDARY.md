@@ -9,4 +9,4 @@
 
 Если кандидатов мало (ночь) — смягчаем K до `fullCap`, не душимобъем.
 
-`nac = max(json softMin, minMarg)` на все SKU alike. Без банов предметов.
+`nac = max(300k, json softMin, minMarg)` на все SKU. Без банов предметов.

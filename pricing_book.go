@@ -25,6 +25,7 @@ const (
 	book2CandFloor       = 100_000 // лот в пул порога, если щель ≥ этого
 	book2FillSupplyMult  = 2       // над порогом ≥ mult×ёмкость лотов
 	book2MinMarginKFloor = 10      // минимум K даже на мелкой категории
+	book2NacFloorAbs     = 300_000 // жёсткий пол nac (как в конфиге мечей)
 )
 
 type bookCatMult struct {
@@ -159,10 +160,12 @@ func book2EnsureMinMarginLocked(goType string, since time.Time, now time.Time, a
 	mutex.Lock()
 
 	minMarg, nCands, ok := book2MinMarginFromCands(cands, k)
+	if ok && minMarg < book2NacFloorAbs {
+		minMarg = book2NacFloorAbs
+	}
 	// Если кандидатов мало (ночь / тонкая книга) — K съедает почти всё:
 	// не поднимаем порог выше soft floor, иначе слоты не набрать.
 	if ok && nCands > 0 && nCands < fullCap*book2FillSupplyMult {
-		// смягчить: порог = слабейшая из имеющихся «достаточных» сделок
 		softK := nCands
 		if softK > fullCap && fullCap > 0 {
 			softK = fullCap
@@ -170,9 +173,14 @@ func book2EnsureMinMarginLocked(goType string, since time.Time, now time.Time, a
 		if softK < 1 {
 			softK = 1
 		}
-		if softM, _, softOK := book2MinMarginFromCands(cands, softK); softOK && softM < minMarg {
-			minMarg = softM
-			k = softK
+		if softM, _, softOK := book2MinMarginFromCands(cands, softK); softOK {
+			if softM < book2NacFloorAbs {
+				softM = book2NacFloorAbs
+			}
+			if softM < minMarg {
+				minMarg = softM
+				k = softK
+			}
 		}
 	}
 	out := book2GlobalFloor{
@@ -362,8 +370,8 @@ func adjustPriceBook(
 	if softMin <= 0 {
 		softMin = baseNac
 	}
-	if softMin <= 0 {
-		softMin = 200_000
+	if softMin < book2NacFloorAbs {
+		softMin = book2NacFloorAbs
 	}
 	mult := bookMultForType(cfg.Type)
 
