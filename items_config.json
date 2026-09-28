@@ -35,7 +35,7 @@
         "lvl": 7
       }
     ],
-    "nacenka": 300000,
+    "nacenka": 400000,
     "num": 5
   },
   "sword7-1.21": {
@@ -66,7 +66,7 @@
         "lvl": 7
       }
     ],
-    "nacenka": 300000,
+    "nacenka": 400000,
     "num": 1
   },
   "megasword-1.21": {
@@ -142,7 +142,7 @@
         "lvl": 3
       }
     ],
-    "nacenka": 300000,
+    "nacenka": 400000,
     "num": 7
   },
   "штаны-1.21": {
@@ -315,7 +315,7 @@
         "lvl": 7
       }
     ],
-    "nacenka": 300000,
+    "nacenka": 400000,
     "num": 4
   },
   "sword-bare-1.21": {
@@ -351,7 +351,7 @@
         "lvl": 5
       }
     ],
-    "nacenka": 300000,
+    "nacenka": 400000,
     "num": 1
   },
   "sword-sharp6-1.21": {
@@ -374,8 +374,101 @@
         "lvl": 6
       }
     ],
-    "nacenka": 300000,
+    "nacenka": 400000,
     "num": 1
+  },
+  "sword-sharp5-loot5-1.21": {
+    "base_price": 450017,
+    "normal_sales": 5,
+    "normal_count": 3,
+    "price_step": 50000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:looting",
+        "lvl": 5
+      }
+    ],
+    "max_effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:looting",
+        "lvl": 5
+      }
+    ],
+    "nacenka": 400000,
+    "num": 2
+  },
+  "sword-sharp6-loot5-1.21": {
+    "base_price": 600018,
+    "normal_sales": 5,
+    "normal_count": 3,
+    "price_step": 50000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 6
+      },
+      {
+        "name": "minecraft:looting",
+        "lvl": 5
+      }
+    ],
+    "max_effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 6
+      },
+      {
+        "name": "minecraft:looting",
+        "lvl": 5
+      }
+    ],
+    "nacenka": 400000,
+    "num": 2
+  },
+  "sword-sharp7-loot4-1.21": {
+    "base_price": 700019,
+    "normal_sales": 5,
+    "normal_count": 3,
+    "price_step": 50000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:looting",
+        "lvl": 4
+      }
+    ],
+    "max_effects": [
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:looting",
+        "lvl": 4
+      }
+    ],
+    "nacenka": 400000,
+    "num": 3
   },
   "кирка-бульд-маг-1.21": {
     "base_price": 1000018,

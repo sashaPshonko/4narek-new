@@ -12,7 +12,7 @@ import (
 // (фарм 10:06 p10_10=1.5 n=41 vs p10_30=1.2 → sell +40%).
 // Эмпирика FIFO×hourly p10 (с 2026-09-03): buy-gate max Σ(sell−buy).
 //
-//	sword  → buy≤0.85×p10
+//	sword  → buy≤0.80×p10
 //	armor  → buy≤1.00×p10 (на практике sell чуть выше книги)
 //	pick   → buy≤0.95×p10
 //
@@ -35,17 +35,19 @@ type bookCatMult struct {
 }
 
 // bookProfitMultByType — buyMult = argmax net profit по категории; sellMult ≥ buyMult.
-// 2026-09-29: sword/default buy 0.90→0.85 — BEST_NET был 0.90 (+2% Σ), но факт
-// unit-margin ~100–165k vs старые nac=300k; 0.85 держит Σ около пика (962 vs 981M)
-// и поднимает щель ~15% sell без обвала объёма как floor 300k (−60% tot).
+// 2026-09-29: slot-selectivity — 5 AH-слотов × много SKU. Книга даёт ≥120 лотов/ч
+// ≤0.80×p10 при потребности ~50 fills/h → можно ужесточить 0.85→0.80 без голода.
+// Пол nac 400k на мечах (кроме bare): на p10~1.2M это buy≈0.67 — зонд границы.
+// Дешёвые SKU (sharp5 p10~0.3M): пол 400k > % щели → почти не покупаем, категория
+// остаётся для книги (не роняем nac «чтобы купить»).
 var bookProfitMultByType = map[string]bookCatMult{
-	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.85},
+	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.80},
 	"netherite_armor-1.21":   {Sell: 1.05, Buy: 1.00}, // BEST buy-gate 1.00; sell>buy
 	"netherite_pickaxe-1.21": {Sell: 1.00, Buy: 0.95},
 	"позорная-броня-1.21":    {Sell: 1.20, Buy: 1.00},
 }
 
-var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.85}
+var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.80}
 
 func bookMultForType(goType string) bookCatMult {
 	if m, ok := bookProfitMultByType[goType]; ok {
@@ -309,8 +311,8 @@ func adjustPriceBook(
 			}
 		}
 	} else if newPrice > 0 {
-		// нет p10 — не покупаем у 90%+ от sell (stale mega/яд3)
-		buyCap := newPrice * 85 / 100
+		// нет p10 — не покупаем у 80%+ от sell (stale mega/яд3); как sword buyMult
+		buyCap := newPrice * 80 / 100
 		if step > 0 && buyCap >= newPrice {
 			buyCap = newPrice - step
 		}
@@ -322,7 +324,7 @@ func adjustPriceBook(
 			wantNac = nacMin
 		}
 		if wantNac > newNac {
-			notes = append(notes, fmt.Sprintf("thin book buy-cap 85%% → nac %d→%d (buyMax=%d)", newNac, wantNac, newPrice-wantNac))
+			notes = append(notes, fmt.Sprintf("thin book buy-cap 80%% → nac %d→%d (buyMax=%d)", newNac, wantNac, newPrice-wantNac))
 			newNac = wantNac
 			decReason = "no_book_buy_cap"
 		} else {

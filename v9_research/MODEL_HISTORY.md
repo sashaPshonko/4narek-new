@@ -331,3 +331,10 @@ sell по-прежнему ~p10, buyMax = sell−nac (≥300k на мечах). 
 Отдельные id `sword-sharp5-1.21` / `sword-sharp6-1.21` (max_effects ровно 5/6).
 Тот же `netherite_sword-1.21`, book2 mults без изменений. Протокол:
 `v9_research/SHARP56_EXPERIMENT.md` + `sharp56_experiment.py`.
+
+### 2026-09-29 — slot boundary: buy 0.80 + nac 400k + loot SKUs
+
+5 слотов × много категорий → селективность. Sword buy **0.85→0.80**,
+пол nac мечей **300→400k** (bare нет). SKU: sharp5/6+loot5, sharp7+loot4.
+Книга: ~120 лотов/ч ≤0.80×p10 vs ~50 fills/h; край голода ~0.70.
+Протокол: `v9_research/SLOT_BOUNDARY.md`.
