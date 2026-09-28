@@ -318,6 +318,19 @@
     "nacenka": 300000,
     "num": 4
   },
+  "sword-bare-1.21": {
+    "base_price": 80019,
+    "normal_sales": 5,
+    "normal_count": 3,
+    "price_step": 10000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [],
+    "exact_effects": true,
+    "nacenka": 30000,
+    "num": 0
+  },
   "кирка-бульд-маг-1.21": {
     "base_price": 1000018,
     "normal_sales": 5,

@@ -36,6 +36,7 @@ type CatalogItemOut struct {
 	Effects          []ItemEffect `json:"effects"`
 	ForbiddenEffects []ItemEffect `json:"forbidden_effects,omitempty"`
 	MaxEffects       []ItemEffect `json:"max_effects,omitempty"`
+	ExactEffects     bool         `json:"exact_effects,omitempty"`
 	LoreMatch        string       `json:"lore_match,omitempty"`
 }
 
@@ -114,6 +115,7 @@ type ItemConfig struct {
 	Effects          []ItemEffect
 	ForbiddenEffects []ItemEffect
 	MaxEffects       []ItemEffect
+	ExactEffects     bool
 	LoreMatch        string
 }
 
@@ -308,6 +310,7 @@ func buildCatalogOut() []CatalogItemOut {
 			Effects:          cfg.Effects,
 			ForbiddenEffects: cfg.ForbiddenEffects,
 			MaxEffects:       cfg.MaxEffects,
+			ExactEffects:     cfg.ExactEffects,
 			LoreMatch:        cfg.LoreMatch,
 		})
 	}

@@ -30,6 +30,7 @@ type itemConfigJSON struct {
 	Effects           []itemEffectJSON `json:"effects"`
 	ForbiddenEffects  []itemEffectJSON `json:"forbidden_effects,omitempty"`
 	MaxEffects        []itemEffectJSON `json:"max_effects,omitempty"`
+	ExactEffects      bool             `json:"exact_effects,omitempty"`
 	LoreMatch         string           `json:"lore_match,omitempty"`
 }
 
@@ -86,6 +87,7 @@ func loadItemsConfig() error {
 			Effects:          effects,
 			ForbiddenEffects: forbidden,
 			MaxEffects:       maxEffects,
+			ExactEffects:     entry.ExactEffects,
 			LoreMatch:        entry.LoreMatch,
 		}
 	}
