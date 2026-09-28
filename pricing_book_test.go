@@ -13,10 +13,10 @@ func TestBookTargetsSwordMaxProfit(t *testing.T) {
 		t.Fatalf("sell=%d want ~p10", sell)
 	}
 	ratio := float64(buyMax) / float64(p10)
-	if ratio < 0.75 || ratio > 0.85 {
-		t.Fatalf("buyMax/p10=%.3f want ~0.80 (buyMax=%d nac=%d src=%s)", ratio, buyMax, nac, src)
+	if ratio < 0.80 || ratio > 0.90 {
+		t.Fatalf("buyMax/p10=%.3f want ~0.85 (buyMax=%d nac=%d src=%s)", ratio, buyMax, nac, src)
 	}
-	if !strings.Contains(src, "0.80") {
+	if !strings.Contains(src, "0.85") {
 		t.Fatalf("src=%s", src)
 	}
 }
@@ -49,7 +49,7 @@ func TestBookTargetsPickMaxProfit(t *testing.T) {
 
 func TestBookMultForType(t *testing.T) {
 	s := bookMultForType("netherite_sword-1.21")
-	if s.Buy != 0.80 || s.Sell != 1.00 {
+	if s.Buy != 0.85 || s.Sell != 1.00 {
 		t.Fatalf("sword %+v", s)
 	}
 	d := bookMultForType("unknown-type")
@@ -83,8 +83,8 @@ func TestBookTargetsIgnoresLegacyFloor(t *testing.T) {
 		t.Fatalf("sell=%d lifted by legacy floor=%d (want ~p10)", sell, legacyFloor)
 	}
 	buyMax := sell - nac
-	if buyMax < 750_000 || buyMax > 850_000 {
-		t.Fatalf("buyMax=%d nac=%d want ~0.80×p10", buyMax, nac)
+	if buyMax < 800_000 || buyMax > 900_000 {
+		t.Fatalf("buyMax=%d nac=%d want ~0.85×p10", buyMax, nac)
 	}
 }
 
@@ -94,7 +94,7 @@ func TestBuyMaxCappedByP10EvenIfSellHigh(t *testing.T) {
 	sellHigh := 5_500_007
 	_, nac, _ := bookTargetsFromLiveBook(p10, 100_000, sellHigh, 0, 400_000, "netherite_sword-1.21")
 	// targets from live book returns sell~p10; simulate post-manual nac from p10×0.90
-	rawBuy := int(float64(p10)*0.80 + 0.5)
+	rawBuy := int(float64(p10)*0.85 + 0.5)
 	buyMax := bookSnapWithMarker(rawBuy, 100_000, sellHigh)
 	if buyMax >= sellHigh {
 		buyMax = sellHigh - 100_000
@@ -105,8 +105,8 @@ func TestBuyMaxCappedByP10EvenIfSellHigh(t *testing.T) {
 	}
 	_ = nac
 	gotBuy := sellHigh - wantNac
-	if gotBuy > int(float64(p10)*0.85) {
-		t.Fatalf("buyMax=%d too high for p10=%d (want ≤0.80×p10)", gotBuy, p10)
+	if gotBuy > int(float64(p10)*0.88) {
+		t.Fatalf("buyMax=%d too high for p10=%d (want ≤0.85×p10)", gotBuy, p10)
 	}
 }
 

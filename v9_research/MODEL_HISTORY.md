@@ -338,3 +338,9 @@ sell по-прежнему ~p10, buyMax = sell−nac (≥300k на мечах). 
 пол nac мечей **300→400k** (bare нет). SKU: sharp5/6+loot5, sharp7+loot4.
 Книга: ~120 лотов/ч ≤0.80×p10 vs ~50 fills/h; край голода ~0.70.
 Протокол: `v9_research/SLOT_BOUNDARY.md`.
+
+### 2026-09-29 — rollback slot boundary (АХ опустел)
+
+Факт ~20:20–20:37Z: buys **142/3h → 13** после cut; sword7 eff buy≈0.68 из‑за
+пола 400k. Откат: buy **0.85**, nac пол **300k** (megasword остаётся 400k как было).
+Loot/sharp SKUs остаются. Границу жать осторожнее — сначала только mult или только пол.

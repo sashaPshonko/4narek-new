@@ -1,39 +1,23 @@
 # Slot selectivity / margin boundary (5 AH slots × many SKUs)
 
-**Start:** 2026-09-28T20:20Z approx  
-**Levers:** sword book2 buy **0.85→0.80**; config nac floor **300→400k** (bare unchanged).  
-**New SKUs:** `sword-sharp5-loot5`, `sword-sharp6-loot5`, `sword-sharp7-loot4`.
+**Status:** ROLLED BACK 2026-09-28T20:37Z — АХ опустел.
 
-## Why
+**Failed levers:** sword buy 0.85→0.80 + nac floor 300→400k.  
+**Kept:** loot/sharp SKUs (`sword-sharp5-loot5`, `sharp6-loot5`, `sharp7-loot4`, plain sharp5/6).
 
-With 5 slots/bot, extra SKUs don’t dilute p10 — they compete for slots.  
-Book supply (6h med lots/h under gate, all swords):
+## What happened
 
-| buy ≤ | lots/h |
-|------|--------|
-| 0.70×p10 | ~58 |
-| 0.75 | ~82 |
-| 0.80 | ~120 |
-| 0.85 | ~240 |
+| window | buys (swords) |
+|--------|----------------|
+| 3h before cut | 142 |
+| ~17m after cut | 13 |
 
-Need ~50 fills/h if hold~0.4h and 20 slots. **Граница голода ~0.70**.  
-300k floor on p10=1.2M already ≈ buy 0.75. **400k ≈ buy 0.67** — зонд у края.  
-На mega (p10~3M) % от 0.80 даёт nac 600k > пола — там ужесточение именно mult.
+На sword7 (p10~1.26M) пол 400k → buyMax≈0.68×p10. Книга: under 0.68 ~166 uuid/h vs under old~0.76 ~291 — мало для заполнения слотов + top-2 buy zone.
 
-Дешёвые sharp5 (p10~0.3M): пол 400k > щели → почти не берём. Категории **не трогаем** (книга копится).
+## Current policy (after rollback)
 
-## Watch 24–48h
+- buy **0.85×p10**
+- nac floor **300k** (megasword 400k as before)
+- sell **1.00×p10**
 
-```bash
-python3 v9_research/sharp56_experiment.py   # + новые id в IDS при желании
-# вручную: free slots / try-sell, med buy/p10, Σ
-```
-
-| сигнал | ок | откат |
-|--------|----|-------|
-| AH часто полный | да | — |
-| AH часто пустой / idle | пережали | buy 0.80→0.85 или nac 400→300 |
-| med buy/p10 упал, sales≈ | граница найдена | зафиксировать |
-| sales ≪ baseline −30% | плохо | откат |
-
-Откат: `Buy: 0.85`, nac 300k в `items_config` на мечах.
+Next probe (if any): **one knob only** — either buy 0.82 **or** nac 350k, not both. Watch buys/h and free slots 2h before next step.
