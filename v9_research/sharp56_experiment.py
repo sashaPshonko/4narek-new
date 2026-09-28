@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 DB = sys.argv[1] if len(sys.argv) > 1 else "/root/4narek-new/ml_data/pricing.db"
 IDS = ("sword-sharp5-1.21", "sword-sharp6-1.21", "sword7-1.21")
-SINCE = sys.argv[2] if len(sys.argv) > 2 else "2026-09-29T00:00:00Z"
+SINCE = sys.argv[2] if len(sys.argv) > 2 else "2026-09-28T20:00:00Z"
 
 
 def pct(xs: list[float], p: float):

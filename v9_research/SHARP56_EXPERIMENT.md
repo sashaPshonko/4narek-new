@@ -1,6 +1,6 @@
 # Experiment: sword sharpness 5 / 6 as separate SKUs
 
-**Start:** 2026-09-29 (deploy of `sword-sharp5-1.21`, `sword-sharp6-1.21`)  
+**Start:** 2026-09-28T20:00Z (deploy `0b7dba30`)  
 **Horizon:** 24–48h, then decide keep / tune / kill  
 **Do not change** global book2 sword mults (buy 0.85 / sell 1.00) during phase 1.
 
