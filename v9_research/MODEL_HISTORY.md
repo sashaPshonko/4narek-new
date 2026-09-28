@@ -325,3 +325,9 @@ Sword/default Buy **0.85**; armor/pick без изменений. Anti-overpay (
 `items_config`) заполняет слоты лучшей щелью. book2: `nacMin = max(NacenkaMin, Nacenka)`;
 sell по-прежнему ~p10, buyMax = sell−nac (≥300k на мечах). Buy mult 0.85 остаётся
 (на mega/высоких p10 щель может быть >300k).
+
+### 2026-09-29 — experiment sharp5 / sharp6 SKUs
+
+Отдельные id `sword-sharp5-1.21` / `sword-sharp6-1.21` (max_effects ровно 5/6).
+Тот же `netherite_sword-1.21`, book2 mults без изменений. Протокол:
+`v9_research/SHARP56_EXPERIMENT.md` + `sharp56_experiment.py`.
