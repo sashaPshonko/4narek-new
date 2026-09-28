@@ -35,9 +35,9 @@ type bookCatMult struct {
 }
 
 // bookProfitMultByType — buyMult = argmax net profit по категории; sellMult ≥ buyMult.
-// 2026-09-29: 0.80+nac400k опустошил АХ. Откат 0.85/300 был заплаткой.
-// Opt (page-snapshot + slot-capped book, 12h healthy→CUT): sword buy 0.88,
-// nac пол 250k (mega 400k). Узкий гейт режет объём на time-unsorted AH.
+// 2026-09-29: 0.80+nac400k опустошил АХ. При забитом АХ пол nac не режем —
+// 250k только разжижает щель без лишнего объёма. Opt: buy 0.88, nac пол 300k
+// (mega 400k). Шире buy ловит underprice на time-unsorted AH.
 var bookProfitMultByType = map[string]bookCatMult{
 	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.88},
 	"netherite_armor-1.21":   {Sell: 1.05, Buy: 1.00}, // BEST buy-gate 1.00; sell>buy
