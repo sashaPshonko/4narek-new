@@ -156,3 +156,71 @@ func TestBook2ClampStep(t *testing.T) {
 		t.Fatalf("deep down got=%d", got)
 	}
 }
+
+func mkCands(margins ...int) []book2MarginCand {
+	out := make([]book2MarginCand, len(margins))
+	for i, m := range margins {
+		out[i] = book2MarginCand{Margin: m}
+	}
+	return out
+}
+
+// День: fat SKU поднимает свой пол, volume остаётся ~300k; global OFF
+// (общий порог слишком высокий для объёмного яруса).
+func TestBook2PlanPerSKUWhenVolumeCantMeetGlobal(t *testing.T) {
+	byItem := map[string][]book2MarginCand{
+		"sword7": mkCands(320_000, 310_000, 305_000, 300_000, 300_000, 300_000, 300_000, 300_000, 300_000),
+		"mega": mkCands(800_000, 700_000, 650_000, 600_000, 550_000, 500_000, 480_000, 450_000, 400_000),
+	}
+	base := map[string]int{"sword7": 300_000, "mega": 300_000}
+	p10 := map[string]int{"sword7": 1_000_000, "mega": 4_000_000}
+	plan := book2PlanFloors(byItem, base, p10, 20, 10)
+	if plan.GlobalOn {
+		t.Fatalf("expected global OFF, got on marg=%d note=%s", plan.GlobalMarg, plan.Note)
+	}
+	if plan.FloorByItem["sword7"] > 350_000 {
+		t.Fatalf("sword7 floor=%d want ~300–350k (volume)", plan.FloorByItem["sword7"])
+	}
+	if plan.FloorByItem["mega"] < 450_000 {
+		t.Fatalf("mega floor=%d want fat raise ≥450k", plan.FloorByItem["mega"])
+	}
+}
+
+// Толстая книга: volume тоже в топе щелей → global ON (общий пол поднимает всех).
+func TestBook2PlanGlobalWhenVolumeFeeds(t *testing.T) {
+	vol := make([]book2MarginCand, 50)
+	fat := make([]book2MarginCand, 30)
+	for i := 0; i < 50; i++ {
+		// volume конкурирует в топе: 520…422k
+		vol[i] = book2MarginCand{Margin: 520_000 - i*2_000}
+	}
+	for i := 0; i < 30; i++ {
+		fat[i] = book2MarginCand{Margin: 600_000 - i*2_000}
+	}
+	byItem := map[string][]book2MarginCand{"sword7": vol, "mega": fat}
+	base := map[string]int{"sword7": 300_000, "mega": 300_000}
+	p10 := map[string]int{"sword7": 900_000, "mega": 5_000_000}
+	// need=max(2×15,2×8,10)=30 → G = 30-я щель (fat+vol) ≈ ~500k+
+	plan := book2PlanFloors(byItem, base, p10, 15, 8)
+	if !plan.GlobalOn {
+		t.Fatalf("expected global ON, note=%s", plan.Note)
+	}
+	if plan.FloorByItem["sword7"] < 480_000 {
+		t.Fatalf("sword7 under global floor=%d note=%s", plan.FloorByItem["sword7"], plan.Note)
+	}
+	if plan.FloorByItem["mega"] < plan.GlobalMarg {
+		t.Fatalf("mega=%d < global=%d", plan.FloorByItem["mega"], plan.GlobalMarg)
+	}
+}
+
+func TestBook2SkuRaiseK(t *testing.T) {
+	if got := book2SkuRaiseK(0); got != 1 {
+		t.Fatalf("0 → %d", got)
+	}
+	if got := book2SkuRaiseK(9); got != 3 {
+		t.Fatalf("9 → %d want 3", got)
+	}
+	if got := book2SkuRaiseK(60); got != 12 {
+		t.Fatalf("60 → %d want 12", got)
+	}
+}
