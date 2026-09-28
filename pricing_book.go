@@ -188,10 +188,14 @@ func adjustPriceBook(
 	// book2: не поднимаем к legacy priceFloor (minBuy+runtime nac) — см. bookTargetsFromLiveBook.
 
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
-	// только статический NacenkaMin из конфига; runtime Nacenka после snap раздувает floor
+	// NacenkaMin + статичный nac из конфига: при 5 слотах/бота объём входов не bottleneck —
+	// важнее маржа на слот-оборот. Конфиг nac (обычно 300k) = пол щели; book2 может выше.
 	nacMin := cfg.NacenkaMin
 	if nacMin < 0 {
 		nacMin = 0
+	}
+	if cfg.Nacenka > nacMin {
+		nacMin = cfg.Nacenka
 	}
 	mult := bookMultForType(cfg.Type)
 
