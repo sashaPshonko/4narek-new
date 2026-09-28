@@ -110,71 +110,35 @@ func TestBuyMaxCappedByP10EvenIfSellHigh(t *testing.T) {
 	}
 }
 
-func TestBook2AllocateByMarginPrefersFat(t *testing.T) {
+func TestBook2MinMarginFromCands(t *testing.T) {
 	cands := []book2MarginCand{
-		{Item: "thin", Price: 800_000, Margin: 200_000, Sell: 1_000_000},
-		{Item: "thin", Price: 790_000, Margin: 210_000, Sell: 1_000_000},
-		{Item: "fat", Price: 2_000_000, Margin: 500_000, Sell: 2_500_000},
-		{Item: "fat", Price: 2_100_000, Margin: 400_000, Sell: 2_500_000},
-		{Item: "mid", Price: 1_000_000, Margin: 300_000, Sell: 1_300_000},
+		{Item: "thin", Margin: 200_000},
+		{Item: "thin", Margin: 210_000},
+		{Item: "fat", Margin: 500_000},
+		{Item: "fat", Margin: 400_000},
+		{Item: "mid", Margin: 300_000},
 	}
-	buyMax, slots := book2AllocateByMargin(cands, 2)
-	if slots["fat"] != 2 {
-		t.Fatalf("want both slots on fat, got %v buyMax=%v", slots, buyMax)
+	// K=2 → 2nd best = 400k
+	m, n, ok := book2MinMarginFromCands(cands, 2)
+	if !ok || n != 5 || m != 400_000 {
+		t.Fatalf("K=2 got marg=%d n=%d ok=%v", m, n, ok)
 	}
-	if _, ok := buyMax["thin"]; ok {
-		t.Fatalf("thin should get no slots: %v", buyMax)
+	// K=5 → worst of top5 = 200k
+	m, _, ok = book2MinMarginFromCands(cands, 5)
+	if !ok || m != 200_000 {
+		t.Fatalf("K=5 got %d", m)
 	}
-	if buyMax["fat"] != 2_100_000 {
-		t.Fatalf("fat buyMax=%d want 2.1M (worst of taken)", buyMax["fat"])
-	}
-}
-
-func TestBook2AllocateByMarginFillsRemainder(t *testing.T) {
-	cands := []book2MarginCand{
-		{Item: "fat", Price: 2_000_000, Margin: 500_000, Sell: 2_500_000},
-		{Item: "thin", Price: 800_000, Margin: 200_000, Sell: 1_000_000},
-		{Item: "thin", Price: 700_000, Margin: 300_000, Sell: 1_000_000},
-	}
-	buyMax, slots := book2AllocateByMargin(cands, 3)
-	if slots["fat"] != 1 || slots["thin"] != 2 {
-		t.Fatalf("slots=%v", slots)
-	}
-	if buyMax["thin"] != 800_000 {
-		t.Fatalf("thin buyMax=%d", buyMax["thin"])
+	// K > n → last
+	m, _, ok = book2MinMarginFromCands(cands, 99)
+	if !ok || m != 200_000 {
+		t.Fatalf("K=99 got %d", m)
 	}
 }
 
-func TestBook2OptBuyMaxKthCheapest(t *testing.T) {
-	// prices sorted; sell=1000, softMin=100 → eligible all with p<=900
-	ps := []int{500, 600, 700, 800, 850, 900, 950}
-	buy, q, nElig, ok := book2OptBuyMax(ps, 1000, 100, 3)
-	if !ok {
-		t.Fatal("expected ok")
-	}
-	if nElig != 6 { // 950 has margin 50 < 100
-		t.Fatalf("nElig=%d", nElig)
-	}
-	if buy != 700 { // 3rd cheapest of elig
-		t.Fatalf("buyMax=%d want 700", buy)
-	}
-	if q <= 0 || q > 1 {
-		t.Fatalf("q=%v", q)
-	}
-}
-
-func TestBook2OptBuyMaxFewerThanK(t *testing.T) {
-	ps := []int{400, 500}
-	buy, _, nElig, ok := book2OptBuyMax(ps, 1000, 300, 5)
-	if !ok || nElig != 2 || buy != 500 {
-		t.Fatalf("buy=%d nElig=%d ok=%v", buy, nElig, ok)
-	}
-}
-
-func TestBook2OptBuyMaxNone(t *testing.T) {
-	_, _, _, ok := book2OptBuyMax([]int{900, 950}, 1000, 200, 2)
+func TestBook2MinMarginEmpty(t *testing.T) {
+	_, _, ok := book2MinMarginFromCands(nil, 3)
 	if ok {
-		t.Fatal("expected no eligible")
+		t.Fatal("expected !ok")
 	}
 }
 

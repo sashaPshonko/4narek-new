@@ -11,17 +11,18 @@ import (
 // book2 — max-profit якорь от живой книги.
 // Окно 30м. sell = sellMult×p10.
 //
-// Global margin: среди свободных слотов категории предпочитаем сделки с
-// большей абсолютной щелью. НО: пока free>0 — никогда не баним SKU
-// (fill-floor = K-й дешёвый этого предмета). Ban без гарантии выкупа
-// «жирных» лотов оставляет АХ пустым. При free=0 — селективность
-// (победители / иначе best-1 этого SKU).
+// Одна минимальная абсолютная маржа на всю категорию из книги:
+//   minMarg = маржа K-й лучшей сделки (K≈free slots, при битом АХ K=3).
+//   nac = max(itemSoftMin, minMarg); buyMax = sell − nac.
+// Не баним SKU и не делим слоты по предметам — любой лот с щелью ≥ minMarg ок.
 
 const (
-	ahBook2Window  = 30 * time.Minute
-	ahBook2MinLots = 40
-	book2MaxSteps  = 2    // обычный snap ±2 step
-	book2DeepRatio = 0.25 // |target−price|/price ≥25% → без cap (cold)
+	ahBook2Window     = 30 * time.Minute
+	ahBook2MinLots    = 40
+	book2MaxSteps     = 2    // обычный snap ±2 step
+	book2DeepRatio    = 0.25 // |target−price|/price ≥25% → без cap (cold)
+	book2MinMarginKFull = 3  // когда free=0: порог = 3-я лучшая сделка в книге
+	book2CandFloor    = 100_000 // минимальная щель, чтобы лот попал в пул для порога
 )
 
 type bookCatMult struct {
@@ -29,8 +30,7 @@ type bookCatMult struct {
 	Buy  float64
 }
 
-// bookProfitMultByType — sell mults; buyMax теперь из book2OptBuyMax (книга), не фикс 0.85.
-// Buy в таблице — fallback если книга тонкая / opt не сработал.
+// bookProfitMultByType — sell mults; buy fallback если нет книги.
 var bookProfitMultByType = map[string]bookCatMult{
 	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.85},
 	"netherite_armor-1.21":   {Sell: 1.05, Buy: 1.00},
@@ -40,52 +40,7 @@ var bookProfitMultByType = map[string]bookCatMult{
 
 var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.85}
 
-// book2OptBuyMax — max-margin buy из живой книги при лимите K слотов (один SKU).
-// Для категории сообща слотов см. book2AllocateByMargin.
-func book2OptBuyMax(sortedUnique []int, sell, softMin, capK int) (buyMax int, q float64, nElig int, ok bool) {
-	if sell <= 0 || len(sortedUnique) == 0 {
-		return 0, 0, 0, false
-	}
-	if softMin < 0 {
-		softMin = 0
-	}
-	if capK < 1 {
-		capK = 1
-	}
-	elig := make([]int, 0, len(sortedUnique))
-	for _, p := range sortedUnique {
-		if p > 0 && sell-p >= softMin {
-			elig = append(elig, p)
-		}
-	}
-	nElig = len(elig)
-	if nElig == 0 {
-		return 0, 0, 0, false
-	}
-	idx := capK - 1
-	if idx >= nElig {
-		idx = nElig - 1
-	}
-	buyMax = elig[idx]
-	q = book2BookPercentile(sortedUnique, buyMax)
-	return buyMax, q, nElig, true
-}
-
-// book2BookPercentile — доля лотов книги с price ≤ buyMax.
-func book2BookPercentile(sorted []int, buyMax int) float64 {
-	if len(sorted) == 0 {
-		return 0
-	}
-	n := 0
-	for _, p := range sorted {
-		if p <= buyMax {
-			n++
-		}
-	}
-	return float64(n) / float64(len(sorted))
-}
-
-// book2MarginCand — кандидат на слот: абсолютная щель sell−price.
+// book2MarginCand — кандидат: абсолютная щель sell−price.
 type book2MarginCand struct {
 	Item   string
 	Price  int
@@ -93,14 +48,13 @@ type book2MarginCand struct {
 	Sell   int
 }
 
-// book2AllocateByMargin — глобально: top-cap сделок по абсолютной марже между SKU.
-// buyMax[item] = макс. цена среди взятых лотов этого id; нет в map / 0 → не покупаем.
-// Так слот с щелью 500k бьёт слот с 200k, даже если это разные предметы.
-func book2AllocateByMargin(cands []book2MarginCand, cap int) (buyMax map[string]int, slots map[string]int) {
-	buyMax = make(map[string]int)
-	slots = make(map[string]int)
-	if cap < 1 || len(cands) == 0 {
-		return buyMax, slots
+// book2MinMarginFromCands — маржа K-й лучшей сделки (порог «лоты не хуже top-K»).
+func book2MinMarginFromCands(cands []book2MarginCand, k int) (minMarg int, n int, ok bool) {
+	if len(cands) == 0 {
+		return 0, 0, false
+	}
+	if k < 1 {
+		k = 1
 	}
 	sorted := append([]book2MarginCand(nil), cands...)
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -109,33 +63,26 @@ func book2AllocateByMargin(cands []book2MarginCand, cap int) (buyMax map[string]
 		}
 		return sorted[i].Price < sorted[j].Price
 	})
-	if cap > len(sorted) {
-		cap = len(sorted)
+	if k > len(sorted) {
+		k = len(sorted)
 	}
-	for _, c := range sorted[:cap] {
-		slots[c.Item]++
-		if prev, ok := buyMax[c.Item]; !ok || c.Price > prev {
-			buyMax[c.Item] = c.Price
-		}
-	}
-	return buyMax, slots
+	return sorted[k-1].Margin, len(sorted), true
 }
 
-type book2GlobalAlloc struct {
-	BuyMax map[string]int
-	Slots  map[string]int
-	Cap    int // на сколько сделок режем (обычно = free slots)
-	FullCap int
-	Free   int
-	Taken  int
-	At     time.Time
-	Note   string
+type book2GlobalFloor struct {
+	MinMargin int
+	K         int
+	NCands    int
+	FullCap   int
+	Free      int
+	At        time.Time
+	Note      string
+	OK        bool
 }
 
-// book2GlobalCache — alloc по go_type (под mutex).
-var book2GlobalCache = map[string]book2GlobalAlloc{}
+var book2GlobalFloorCache = map[string]book2GlobalFloor{}
 
-const book2GlobalCacheTTL = 45 * time.Second
+const book2GlobalFloorTTL = 45 * time.Second
 
 func book2CategoryOccupancyLocked(goType string, ahCounts map[string]int) (capacity, sumAH, free int) {
 	capacity = categoryAhCapacityLocked(goType)
@@ -159,36 +106,26 @@ func book2CategoryOccupancyLocked(goType string, ahCounts map[string]int) (capac
 	return capacity, sumAH, free
 }
 
-// book2EnsureGlobalAllocLocked — кэш; SQL вне mutex.
-// Режем top по марже только на СВОБОДНЫЕ слоты (не на всю ёмкость) —
-// иначе теория «20 жирных в книге» запрещает покупки, а слоты пустые.
-func book2EnsureGlobalAllocLocked(goType string, since time.Time, now time.Time, ahCounts map[string]int) book2GlobalAlloc {
+// book2EnsureMinMarginLocked — порог маржи из книги категории; SQL вне mutex.
+func book2EnsureMinMarginLocked(goType string, since time.Time, now time.Time, ahCounts map[string]int) book2GlobalFloor {
 	fullCap, sumAH, free := book2CategoryOccupancyLocked(goType, ahCounts)
-	allocCap := free
-	if allocCap < 1 {
-		allocCap = 1 // АХ битый — одна ротация самой жирной сделки
+	k := free
+	if k < 1 {
+		k = book2MinMarginKFull
 	}
-	if prev, ok := book2GlobalCache[goType]; ok && now.Sub(prev.At) < book2GlobalCacheTTL && prev.BuyMax != nil && prev.Free == free {
+	if prev, ok := book2GlobalFloorCache[goType]; ok && now.Sub(prev.At) < book2GlobalFloorTTL && prev.Free == free && prev.OK {
 		return prev
 	}
 	type snap struct {
-		id      string
-		softMin int
-		mult    bookCatMult
+		id   string
+		mult bookCatMult
 	}
 	var items []snap
 	for id, cfg := range itemsConfig {
 		if cfg.Type != goType {
 			continue
 		}
-		soft := cfg.NacenkaMin
-		if soft <= 0 {
-			soft = nacenkaBaseLocked(id, cfg)
-		}
-		if soft <= 0 {
-			soft = 200_000
-		}
-		items = append(items, snap{id: id, softMin: soft, mult: bookMultForType(goType)})
+		items = append(items, snap{id: id, mult: bookMultForType(goType)})
 	}
 	mutex.Unlock()
 	var cands []book2MarginCand
@@ -207,48 +144,28 @@ func book2EnsureGlobalAllocLocked(goType string, since time.Time, now time.Time,
 		}
 		for _, price := range ps {
 			m := sell - price
-			if m >= it.softMin {
+			if m >= book2CandFloor {
 				cands = append(cands, book2MarginCand{Item: it.id, Price: price, Margin: m, Sell: sell})
 			}
 		}
 	}
 	mutex.Lock()
 
-	buyMax, slots := book2AllocateByMargin(cands, allocCap)
-	taken := 0
-	for _, s := range slots {
-		taken += s
-	}
-	type kv struct {
-		id string
-		n  int
-	}
-	var top []kv
-	for id, n := range slots {
-		top = append(top, kv{id, n})
-	}
-	sort.Slice(top, func(i, j int) bool { return top[i].n > top[j].n })
-	noteParts := make([]string, 0, 4)
-	for i, t := range top {
-		if i >= 4 {
-			break
-		}
-		noteParts = append(noteParts, fmt.Sprintf("%s×%d", t.id, t.n))
-	}
-	out := book2GlobalAlloc{
-		BuyMax:  buyMax,
-		Slots:   slots,
-		Cap:     allocCap,
-		FullCap: fullCap,
-		Free:    free,
-		Taken:   taken,
-		At:      now,
+	minMarg, nCands, ok := book2MinMarginFromCands(cands, k)
+	out := book2GlobalFloor{
+		MinMargin: minMarg,
+		K:         k,
+		NCands:    nCands,
+		FullCap:   fullCap,
+		Free:      free,
+		At:        now,
+		OK:        ok,
 		Note: fmt.Sprintf(
-			"globalMarg free=%d/%d sumAH=%d alloc=%d taken=%d cands=%d [%s]",
-			free, fullCap, sumAH, allocCap, taken, len(cands), strings.Join(noteParts, " "),
+			"minMarg=%d K=%d cands=%d free=%d/%d sumAH=%d",
+			minMarg, k, nCands, free, fullCap, sumAH,
 		),
 	}
-	book2GlobalCache[goType] = out
+	book2GlobalFloorCache[goType] = out
 	return out
 }
 
@@ -426,23 +343,15 @@ func adjustPriceBook(
 		softMin = 200_000
 	}
 	mult := bookMultForType(cfg.Type)
-	fillK := share
-	if fillK < 1 {
-		fillK = 1
-	}
-	if free > 0 && free < fillK {
-		fillK = free
-	}
 
 	bookSince := now.Add(-ahBook2Window)
-	gAlloc := book2EnsureGlobalAllocLocked(cfg.Type, bookSince, now, ahCounts)
+	gFloor := book2EnsureMinMarginLocked(cfg.Type, bookSince, now, ahCounts)
 
 	mutex.Unlock()
 	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
 	if p10N < ahBook2MinLots || p10 <= 0 {
 		p10OK = false
 	}
-	uniq, _ := ahBookUniquePricesSince(item, bookSince)
 	mutex.Lock()
 
 	action := "book_hold"
@@ -451,11 +360,10 @@ func adjustPriceBook(
 	newNac := nacenka
 	buySrc := ""
 	buyEff := mult.Buy
-	gSlots := gAlloc.Slots[item]
 	notes := []string{
 		fmt.Sprintf(
-			"book2 globalMarg 30m p10 sell×%.2f p10=%d n=%d ok=%v type=%s onAH=%d sales=%d buys=%d softMin=%d fillK=%d | %s | thisSlots=%d",
-			mult.Sell, p10, p10N, p10OK, cfg.Type, onAH, sales, buys, softMin, fillK, gAlloc.Note, gSlots,
+			"book2 minMarg 30m p10 sell×%.2f p10=%d n=%d ok=%v type=%s onAH=%d sales=%d buys=%d softMin=%d | %s",
+			mult.Sell, p10, p10N, p10OK, cfg.Type, onAH, sales, buys, softMin, gFloor.Note,
 		),
 	}
 
@@ -464,65 +372,13 @@ func adjustPriceBook(
 		sellT := bookSnapWithMarker(rawSell, step, priceBefore)
 		sellT = bookSnapWithMarker(book2ClampStep(priceBefore, sellT, step), step, priceBefore)
 
-		// fill-floor: per-SKU K-й дешёвый — гарантия, что можем занять слот,
-		// даже если «жирные» лоты других SKU из книги так и не купятся.
-		fillBuy, _, _, fillOK := book2OptBuyMax(uniq, sellT, softMin, fillK)
-		bestBuy, _, _, bestOK := book2OptBuyMax(uniq, sellT, softMin, 1) // лучшая сделка этого SKU
-		gBuy, hasG := gAlloc.BuyMax[item]
-
-		optBuy := 0
-		mode := ""
-		if gAlloc.Free > 0 {
-			// Пустые слоты → НИКОГДА не баним SKU. Берём max(global, fill).
-			if hasG && gBuy > 0 {
-				optBuy = gBuy
-				mode = "prefer+fill"
-			}
-			if fillOK && fillBuy > optBuy {
-				optBuy = fillBuy
-				if mode == "" {
-					mode = "fill"
-				} else {
-					mode = "prefer+fill"
-				}
-			}
-			if optBuy <= 0 && fillOK {
-				optBuy = fillBuy
-				mode = "fill"
-			}
-		} else {
-			// АХ битый → селективность: победители global, иначе только лучший лот SKU (не ban).
-			if hasG && gBuy > 0 {
-				optBuy = gBuy
-				mode = "full-prefer"
-			} else if bestOK {
-				optBuy = bestBuy
-				mode = "full-best1"
-			}
-		}
-
+		// Одна щель на категорию из книги + пол SKU. Все предметы могут покупаться.
 		nacT := softMin
-		if optBuy > 0 && optBuy < sellT {
-			buyMax := bookSnapWithMarker(optBuy, step, priceBefore)
-			if buyMax >= sellT && step > 0 {
-				buyMax = sellT - step
-			}
-			if buyMax < 0 {
-				buyMax = 0
-			}
-			nacT = sellT - buyMax
-			if nacT < softMin {
-				nacT = softMin
-			}
-			buyEff = float64(buyMax) / float64(p10)
-			buySrc = fmt.Sprintf("%s buyMax=%d (%.3f×p10) gSlots=%d free=%d", mode, buyMax, buyEff, gSlots, gAlloc.Free)
-			notes = append(notes, buySrc)
-		} else {
-			_, nacFb, src := bookTargetsFromLiveBookBuy(p10, step, priceBefore, priceFloor, softMin, cfg.Type, mult.Buy)
-			nacT = nacFb
-			buyEff = mult.Buy
-			buySrc = src + " fallback"
-			notes = append(notes, "opt empty → fallback buy×"+fmt.Sprintf("%.2f", mult.Buy))
+		if gFloor.OK && gFloor.MinMargin > nacT {
+			nacT = gFloor.MinMargin
+		}
+		if nacT >= sellT && step > 0 {
+			nacT = sellT - step
 		}
 		if nacT < softMin {
 			nacT = softMin
@@ -530,6 +386,16 @@ func adjustPriceBook(
 		if nacT < 0 {
 			nacT = 0
 		}
+		buyMax := sellT - nacT
+		if buyMax < 0 {
+			buyMax = 0
+		}
+		buyEff = 0
+		if p10 > 0 {
+			buyEff = float64(buyMax) / float64(p10)
+		}
+		buySrc = fmt.Sprintf("minMarg=%d nac=%d buyMax=%d (%.3f×p10)", nacT, nacT, buyMax, buyEff)
+		notes = append(notes, buySrc)
 
 		newNac = nacT
 		newPrice = sellT
@@ -568,31 +434,33 @@ func adjustPriceBook(
 	}
 
 	nacMin := softMin
-	if p10OK && p10 > 0 && newPrice > 0 && buyEff > 0 {
-		rawBuy := int(float64(p10)*buyEff + 0.5)
-		buyMax := bookSnapWithMarker(rawBuy, step, newPrice)
-		if buyMax <= 0 {
-			buyMax = rawBuy
-		}
-		if buyMax >= newPrice && step > 0 {
-			buyMax = newPrice - step
-		}
-		if buyMax < 0 {
-			buyMax = 0
-		}
-		wantNac := newPrice - buyMax
+	if gFloor.OK && gFloor.MinMargin > nacMin {
+		nacMin = gFloor.MinMargin
+	}
+	if p10OK && p10 > 0 && newPrice > 0 {
+		wantNac := newNac
 		if wantNac < nacMin {
 			wantNac = nacMin
+		}
+		if wantNac >= newPrice && step > 0 {
+			wantNac = newPrice - step
+		}
+		if wantNac < softMin {
+			wantNac = softMin
 		}
 		if wantNac < 0 {
 			wantNac = 0
 		}
 		if wantNac != newNac {
-			notes = append(notes, fmt.Sprintf("buy-cap → nac %d→%d (buyMax=%d)", newNac, wantNac, newPrice-wantNac))
+			notes = append(notes, fmt.Sprintf("nac clamp %d→%d (buyMax=%d)", newNac, wantNac, newPrice-wantNac))
 			newNac = wantNac
 			if !strings.Contains(action, "price_") && action != "book_nacenka_set" {
-				decReason = "buy_cap_p10"
+				decReason = "min_margin"
 			}
+		}
+		buyEff = 0
+		if p10 > 0 && newPrice > newNac {
+			buyEff = float64(newPrice-newNac) / float64(p10)
 		}
 	} else if newPrice > 0 {
 		buyCap := newPrice * 85 / 100
@@ -603,8 +471,8 @@ func adjustPriceBook(
 			buyCap = 0
 		}
 		wantNac := newPrice - buyCap
-		if wantNac < nacMin {
-			wantNac = nacMin
+		if wantNac < softMin {
+			wantNac = softMin
 		}
 		if wantNac > newNac {
 			notes = append(notes, fmt.Sprintf("thin book buy-cap 85%% → nac %d→%d (buyMax=%d)", newNac, wantNac, newPrice-wantNac))

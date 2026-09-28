@@ -381,6 +381,12 @@ Per-SKU K забивал слоты тонкой щелью. Теперь top (b
 Ban без гарантии выкупа жирных → пустой АХ. Alloc только на free slots;
 при free>0 buyMax=max(global, per-SKU fill); при free=0 — prefer / best-1, без buyMax=0.
 
+### 2026-09-29 — book2 единый minMarg из книги
+
+Вместо top-N alloc по SKU: `minMarg = K-я лучшая щель` (K=free, иначе 3).
+`nac=max(softMin, minMarg)` на все предметы. Не баним SKU — только отсекаем
+лоты тоньше порога.
+
 
 
 
