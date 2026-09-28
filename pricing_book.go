@@ -34,9 +34,7 @@ type bookCatMult struct {
 	Buy  float64
 }
 
-// bookProfitMultByType — buyMult = argmax net profit по категории; sellMult ≥ buyMult.
-// При забитом АХ global buy/nac — плато (±0.3% cherry-pick). Шире buy (0.88) не opt.
-// Селективность: nac пол 350k, buy 0.85. 0.80+400k — голод. Mega 400k.
+// bookProfitMultByType — базовые mults; buyEff крутит book2Adapt от загрузки АХ.
 var bookProfitMultByType = map[string]bookCatMult{
 	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.85},
 	"netherite_armor-1.21":   {Sell: 1.05, Buy: 1.00}, // BEST buy-gate 1.00; sell>buy
@@ -45,6 +43,133 @@ var bookProfitMultByType = map[string]bookCatMult{
 }
 
 var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.85}
+
+// book2 adapt: AH full → уже buy (селективность); пусто/голод покупок → шире.
+// Не оба рычага в край (0.80+400k умерло). EMA по go_type — без дёрганья каждый цикл.
+const (
+	book2AdaptPivot   = 0.70 // load ниже → loosen, выше → tighten
+	book2AdaptGain    = 0.22 // Δbuy ≈ gain × (load − pivot)
+	book2AdaptBuyMin  = 0.78 // жёстче FAIL-зоны не лезем одним buy
+	book2AdaptBuyMax  = 0.92
+	book2AdaptEMAAlpha = 0.35
+)
+
+// book2LoadEMA — сглаженная загрузка АХ по go_type (только под mutex).
+var book2LoadEMA = map[string]float64{}
+
+type book2AdaptIn struct {
+	BaseBuy float64
+	BaseNac int // из JSON, не runtime
+	SoftMin int // абсолютный пол (NacenkaMin или 2/3 base)
+	Load    float64
+	NoRoom  bool // этому id некуда выставить
+	Starve  bool // need>0 и есть место под докупку
+}
+
+type book2AdaptOut struct {
+	BuyEff   float64
+	NacFloor int
+	Note     string
+}
+
+// book2AdaptBuy — чистая функция: load/signals → buyEff + nac floor.
+func book2AdaptBuy(in book2AdaptIn) book2AdaptOut {
+	base := in.BaseBuy
+	if base <= 0 {
+		base = 0.85
+	}
+	load := in.Load
+	if load < 0 {
+		load = 0
+	}
+	buy := base - book2AdaptGain*(load-book2AdaptPivot)
+	if in.NoRoom {
+		buy -= 0.03
+	}
+	if in.Starve {
+		buy += 0.04
+	}
+	if buy < book2AdaptBuyMin {
+		buy = book2AdaptBuyMin
+	}
+	if buy > book2AdaptBuyMax {
+		buy = book2AdaptBuyMax
+	}
+
+	floor := in.BaseNac
+	if floor <= 0 {
+		floor = 300_000
+	}
+	soft := in.SoftMin
+	if soft <= 0 {
+		soft = floor * 2 / 3
+		if soft < 200_000 {
+			soft = 200_000
+		}
+	}
+	// При низкой загрузке можно опустить пол к soft (набрать слоты).
+	// При высокой — пол = base (не разжижаем щель ниже конфига).
+	nacFloor := floor
+	if load < 0.45 || in.Starve {
+		nacFloor = soft
+	}
+	if nacFloor < soft {
+		nacFloor = soft
+	}
+
+	return book2AdaptOut{
+		BuyEff:   buy,
+		NacFloor: nacFloor,
+		Note: fmt.Sprintf(
+			"adapt load=%.2f buyEff=%.3f (base=%.2f) nacFloor=%d noRoom=%v starve=%v",
+			load, buy, base, nacFloor, in.NoRoom, in.Starve,
+		),
+	}
+}
+
+// book2AhLoadLocked — sumAH/capacity по типу + EMA. Только под mutex.
+func book2AhLoadLocked(goType string, ahCounts map[string]int) float64 {
+	cap := categoryAhCapacityLocked(goType)
+	if cap <= 0 {
+		return 0
+	}
+	sum := 0
+	for name, c := range ahCounts {
+		if c <= 0 {
+			continue
+		}
+		other, ok := itemsConfig[name]
+		if !ok || other.Type != goType {
+			continue
+		}
+		sum += c
+	}
+	raw := float64(sum) / float64(cap)
+	prev, ok := book2LoadEMA[goType]
+	if !ok {
+		book2LoadEMA[goType] = raw
+		return raw
+	}
+	ema := (1-book2AdaptEMAAlpha)*prev + book2AdaptEMAAlpha*raw
+	book2LoadEMA[goType] = ema
+	return ema
+}
+
+// nacenkaBaseLocked — базовый nac из JSON (не runtime ratchet).
+func nacenkaBaseLocked(item string, cfg ItemConfig) int {
+	if itemsNacenkaBase != nil {
+		if b, ok := itemsNacenkaBase[item]; ok && b > 0 {
+			return b
+		}
+	}
+	if cfg.NacenkaMin > 0 {
+		return cfg.NacenkaMin
+	}
+	if cfg.Nacenka > 0 {
+		return cfg.Nacenka
+	}
+	return 300_000
+}
 
 func bookMultForType(goType string) bookCatMult {
 	if m, ok := bookProfitMultByType[goType]; ok {
@@ -73,27 +198,35 @@ func bookSnapWithMarker(target, step, priceBefore int) int {
 	return target
 }
 
-// bookTargetsFromLiveBook — sell/buy только от живой p10×mult.
-// priceFloor аргумент оставлен для совместимости вызовов, но намеренно
-// игнорируется: legacy sellPriceFloor(minBuy+runtimeNac) иначе ratchet'ит
-// sell вверх (sword7: 2.1→1.8→2.4→3.0 при p10=1M).
-func bookTargetsFromLiveBook(p10, step, priceBefore, _priceFloor, nacenkaMin int, goType string) (sell, nac int, src string) {
+// bookTargetsFromLiveBook — sell/buy только от живой p10×mult (базовый buy категории).
+func bookTargetsFromLiveBook(p10, step, priceBefore, priceFloor, nacenkaMin int, goType string) (sell, nac int, src string) {
+	m := bookMultForType(goType)
+	return bookTargetsFromLiveBookBuy(p10, step, priceBefore, priceFloor, nacenkaMin, goType, m.Buy)
+}
+
+// bookTargetsFromLiveBookBuy — как bookTargetsFromLiveBook, но buyMult задаётся снаружи (adapt).
+func bookTargetsFromLiveBookBuy(p10, step, priceBefore, _priceFloor, nacenkaMin int, goType string, buyMult float64) (sell, nac int, src string) {
 	if p10 <= 0 {
 		return priceBefore, nacenkaMin, "no_p10"
 	}
 	m := bookMultForType(goType)
-	if m.Buy <= 0 || m.Sell <= 0 {
+	if m.Sell <= 0 {
 		m = bookProfitMultDefault
 	}
-	if m.Buy >= m.Sell {
-		// защита: всегда оставляем щель под nacenkaMin / 1 step
-		m.Buy = m.Sell * 0.85
+	if buyMult <= 0 {
+		buyMult = m.Buy
+	}
+	if buyMult <= 0 {
+		buyMult = bookProfitMultDefault.Buy
+	}
+	if buyMult >= m.Sell {
+		buyMult = m.Sell * 0.85
 	}
 
 	rawSell := int(float64(p10)*m.Sell + 0.5)
 	sell = bookSnapWithMarker(rawSell, step, priceBefore)
 
-	rawBuy := int(float64(p10)*m.Buy + 0.5)
+	rawBuy := int(float64(p10)*buyMult + 0.5)
 	buyMax := bookSnapWithMarker(rawBuy, step, priceBefore)
 	if buyMax <= 0 {
 		buyMax = rawBuy
@@ -121,7 +254,7 @@ func bookTargetsFromLiveBook(p10, step, priceBefore, _priceFloor, nacenkaMin int
 			nac = 0
 		}
 	}
-	src = fmt.Sprintf("live30m p10×sell%.2f/buy%.2f", m.Sell, m.Buy)
+	src = fmt.Sprintf("live30m p10×sell%.2f/buy%.3f", m.Sell, buyMult)
 	return sell, nac, src
 }
 
@@ -187,16 +320,37 @@ func adjustPriceBook(
 	// book2: не поднимаем к legacy priceFloor (minBuy+runtime nac) — см. bookTargetsFromLiveBook.
 
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
-	// NacenkaMin + статичный nac из конфига: при 5 слотах/бота объём входов не bottleneck —
-	// важнее маржа на слот-оборот. Конфиг nac (обычно 300k) = пол щели; book2 может выше.
-	nacMin := cfg.NacenkaMin
-	if nacMin < 0 {
-		nacMin = 0
+	// Адаптив: базовый nac из JSON (itemsNacenkaBase), не runtime ratchet.
+	// Полный АХ → buyEff↓; пусто/starve → buyEff↑ и мягкий пол.
+	baseNac := nacenkaBaseLocked(item, cfg)
+	softMin := cfg.NacenkaMin
+	if softMin <= 0 {
+		softMin = baseNac * 2 / 3
+		if softMin < 200_000 {
+			softMin = 200_000
+		}
+		if softMin > baseNac {
+			softMin = baseNac
+		}
 	}
-	if cfg.Nacenka > nacMin {
-		nacMin = cfg.Nacenka
+	load := book2AhLoadLocked(cfg.Type, ahCounts)
+	noRoom := false
+	if isTypeRelistEnabled(cfg.Type) {
+		maxR := maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts)
+		noRoom = maxR <= onAH && onAH > 0
 	}
+	starve := need > 0 && underbuyOK
 	mult := bookMultForType(cfg.Type)
+	adapt := book2AdaptBuy(book2AdaptIn{
+		BaseBuy: mult.Buy,
+		BaseNac: baseNac,
+		SoftMin: softMin,
+		Load:    load,
+		NoRoom:  noRoom,
+		Starve:  starve,
+	})
+	buyEff := adapt.BuyEff
+	nacMin := adapt.NacFloor
 
 	bookSince := now.Add(-ahBook2Window)
 	mutex.Unlock()
@@ -213,20 +367,18 @@ func adjustPriceBook(
 	buySrc := ""
 	notes := []string{
 		fmt.Sprintf(
-			"book2 maxprofit 30m p10 sell×%.2f buy×%.2f p10=%d n=%d ok=%v type=%s onAH=%d sales=%d buys=%d price=%d nac=%d floor=%d",
-			mult.Sell, mult.Buy, p10, p10N, p10OK, cfg.Type, onAH, sales, buys, price, nacenka, priceFloor,
+			"book2 adapt 30m p10 sell×%.2f buyEff×%.3f(base×%.2f) p10=%d n=%d ok=%v type=%s onAH=%d sales=%d buys=%d price=%d nac=%d floor=%d | %s",
+			mult.Sell, buyEff, mult.Buy, p10, p10N, p10OK, cfg.Type, onAH, sales, buys, price, nacenka, priceFloor, adapt.Note,
 		),
 	}
 
 	if p10OK {
-		sellT, nacT, src := bookTargetsFromLiveBook(p10, step, priceBefore, priceFloor, nacMin, cfg.Type)
+		sellT, nacT, src := bookTargetsFromLiveBookBuy(p10, step, priceBefore, priceFloor, nacMin, cfg.Type, buyEff)
 		rawSell := sellT
 		sellT = bookSnapWithMarker(book2ClampStep(priceBefore, sellT, step), step, priceBefore)
 		if sellT != rawSell {
 			notes = append(notes, fmt.Sprintf("step-cap %d→%d (max ±%d×step)", rawSell, sellT, book2MaxSteps))
-			// nac пересчитать от capped sell vs buyMax из mult
-			m := bookMultForType(cfg.Type)
-			rawBuy := int(float64(p10)*m.Buy + 0.5)
+			rawBuy := int(float64(p10)*buyEff + 0.5)
 			buyMax := bookSnapWithMarker(rawBuy, step, priceBefore)
 			if buyMax >= sellT && step > 0 {
 				buyMax = sellT - step
@@ -279,10 +431,9 @@ func adjustPriceBook(
 		notes = append(notes, "manual → ↑ запрещён")
 	}
 
-	// buyMax всегда ≤ buyMult×p10 (если книга есть) и < sell.
-	// Иначе manual/stale sell (яд3 5.5M) оставляет nac маленьким → buy≈4M у потолка рынка.
+	// buyMax всегда ≤ buyEff×p10 (если книга есть) и < sell.
 	if p10OK && p10 > 0 && newPrice > 0 {
-		rawBuy := int(float64(p10)*mult.Buy + 0.5)
+		rawBuy := int(float64(p10)*buyEff + 0.5)
 		buyMax := bookSnapWithMarker(rawBuy, step, newPrice)
 		if buyMax <= 0 {
 			buyMax = rawBuy
@@ -301,7 +452,7 @@ func adjustPriceBook(
 			wantNac = 0
 		}
 		if wantNac != newNac {
-			notes = append(notes, fmt.Sprintf("buy-cap p10×%.2f → nac %d→%d (buyMax=%d)", mult.Buy, newNac, wantNac, newPrice-wantNac))
+			notes = append(notes, fmt.Sprintf("buy-cap p10×%.3f → nac %d→%d (buyMax=%d)", buyEff, newNac, wantNac, newPrice-wantNac))
 			newNac = wantNac
 			if !strings.Contains(action, "price_") && action != "book_nacenka_set" {
 				decReason = "buy_cap_p10"

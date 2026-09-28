@@ -358,3 +358,11 @@ grid buy/nac. 0.88 не opt. Узкий 0.80/400 — starve. Реальный х
 **выше nac, buy 0.85**: пол **350k** (один knob). Mega 400k. Дальше 380 только если
 2h без пустых слотов.
 
+### 2026-09-29 — book2Adapt: buyEff от AH load
+
+Тык 300/350/400 отменён. `book2AdaptBuy(load, noRoom, starve)`:
+buyEff = base − 0.22×(load−0.70), clamp [0.78, 0.92]; nac floor = JSON base
+на полной загрузке, soft (⅔) при starve. EMA по go_type. `itemsNacenkaBase` не
+ratchet'ится runtime nac. Sell по-прежнему ~p10.
+
+

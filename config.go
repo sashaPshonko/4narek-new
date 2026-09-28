@@ -46,6 +46,7 @@ func loadItemsConfig() error {
 	}
 
 	itemsConfig = make(map[string]ItemConfig, len(file))
+	itemsNacenkaBase = make(map[string]int, len(file))
 	for id, entry := range file {
 		itemType := entry.Type
 		if itemType == "" {
@@ -90,6 +91,7 @@ func loadItemsConfig() error {
 			ExactEffects:     entry.ExactEffects,
 			LoreMatch:        entry.LoreMatch,
 		}
+		itemsNacenkaBase[id] = entry.Nacenka
 	}
 
 	log.Printf("Загружено %d предметов из %s", len(itemsConfig), itemsConfigPath)

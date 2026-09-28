@@ -150,6 +150,8 @@ type RuntimePersist struct {
 }
 
 var itemsConfig map[string]ItemConfig
+// itemsNacenkaBase — nac из JSON при load; runtime setRuntimeNacenka его не трогает (для book2 adapt).
+var itemsNacenkaBase map[string]int
 
 type TradeLog struct {
 	Time    time.Time
