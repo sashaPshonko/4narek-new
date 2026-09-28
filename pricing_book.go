@@ -12,7 +12,7 @@ import (
 // (фарм 10:06 p10_10=1.5 n=41 vs p10_30=1.2 → sell +40%).
 // Эмпирика FIFO×hourly p10 (с 2026-09-03): buy-gate max Σ(sell−buy).
 //
-//	sword  → buy≤0.88×p10
+//	sword  → buy≤0.85×p10
 //	armor  → buy≤1.00×p10 (на практике sell чуть выше книги)
 //	pick   → buy≤0.95×p10
 //
@@ -35,17 +35,16 @@ type bookCatMult struct {
 }
 
 // bookProfitMultByType — buyMult = argmax net profit по категории; sellMult ≥ buyMult.
-// 2026-09-29: 0.80+nac400k опустошил АХ. При забитом АХ пол nac не режем —
-// 250k только разжижает щель без лишнего объёма. Opt: buy 0.88, nac пол 300k
-// (mega 400k). Шире buy ловит underprice на time-unsorted AH.
+// При забитом АХ global buy/nac — плато (±0.3% cherry-pick). Шире buy (0.88) не opt.
+// Селективность: nac пол 350k, buy 0.85. 0.80+400k — голод. Mega 400k.
 var bookProfitMultByType = map[string]bookCatMult{
-	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.88},
+	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.85},
 	"netherite_armor-1.21":   {Sell: 1.05, Buy: 1.00}, // BEST buy-gate 1.00; sell>buy
 	"netherite_pickaxe-1.21": {Sell: 1.00, Buy: 0.95},
 	"позорная-броня-1.21":    {Sell: 1.20, Buy: 1.00},
 }
 
-var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.88}
+var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.85}
 
 func bookMultForType(goType string) bookCatMult {
 	if m, ok := bookProfitMultByType[goType]; ok {

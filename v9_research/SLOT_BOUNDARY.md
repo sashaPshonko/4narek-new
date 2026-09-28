@@ -1,22 +1,26 @@
 # Slot selectivity / margin boundary (5 AH slots × many SKUs)
 
-**Status:** OPT live — sword buy **0.88** / nac floor **300k** (mega 400k).
+**Status:** LIVE probe — buy **0.85** / nac floor **350k** (mega 400k).
 
-**Failed (2026-09-28):** buy 0.85→0.80 + nac 300→400k — АХ опустел (142→13 buys).  
-**Rollback patch:** 0.85/300 — восстановил объём.  
-**Opt (2026-09-29):** buy **0.88**, nac пол **остаётся 300k**. Пол 250k отменили: при забитом АХ ниже пол только режет щель, объём уже на потолке.
+## What we learned
 
-**Kept:** loot/sharp SKUs (`sword-sharp5-loot5`, `sharp6-loot5`, `sharp7-loot4`, plain sharp5/6).
+Global buy×nac при **забитом АХ** — плато: cherry-pick top-N даёт **±0.3%** между
+0.85/300 и 0.88/350. Шире buy не opt (разжижает unit). Уже 0.80+400k = голод.
 
-## Why
+Реальный рычаг при полном АХ — **селективность щели** (выше пол nac), один knob,
+пока free slots ≈ 0. Не оба рычага сразу.
 
-AH time-unsorted → чуть шире buy ловит underprice на странице.  
-Пол nac при полном АХ = селективность по щели; опускать смысла нет.
+| lever | result |
+|-------|--------|
+| 0.80 + 400k | FAIL — АХ пустой |
+| 0.88 + 300/250 | не opt при полном АХ |
+| **0.85 + 350k** | probe: +unit, supply ещё ~76/h vs cap~25 |
 
-## Current policy
+## Current
 
-- buy **0.88×p10**
-- nac floor **300k** (megasword **400k**)
+- buy **0.85×p10**
+- nac **350k** (megasword **400k**, bare 30k)
 - sell **1.00×p10**
 
-Watch 2h: buys/h, free slots, unit margin.
+Watch 2h: buys/h, free slots. Если пустеет → откат nac 300k. Если всё ещё битком
+и unit ок → следующий шаг nac 380 (всё ещё без смены buy).
