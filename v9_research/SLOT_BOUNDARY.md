@@ -1,20 +1,17 @@
-# book2: global margin slots across SKUs
+# book2: global margin + fill safety
 
-**Status:** LIVE — `book2AllocateByMargin` / `book2EnsureGlobalAlloc`.
+**Status:** LIVE — prefer fat margin, **never ban while slots free**.
 
-## Проблема
+## Баг
 
-5 слотов × много SKU. Per-SKU «K-й дешёвый» забивает АХ sword7 с щелью 200k,
-пока в книге лежит mega со щелью 500k.
+Резали buyMax=0 по top-(bots×5) из книги. Жирные лоты в книге ≠ выкуп.
+Слоты пустели: запретили sword7, mega не купился.
 
-## Решение
+## Правила
 
-1. По всем SKU категории собрать лоты с `sell−price ≥ softMin`
-2. Отсортировать по **абсолютной марже** ↓
-3. Взять top `bots×5` (ёмкость АХ категории)
-4. `buyMax[sku]` = макс. цена среди взятых лотов этого sku  
-   нет в alloc → **не покупаем** (buyMax=0)
+1. Считаем `free = capacity − sumAH`
+2. Global ranking только на **free** слотов (не на всю ёмкость)
+3. **`free > 0`:** buyMax = max(global, per-SKU fill K-й дешёвый) — SKU никогда не баним
+4. **`free = 0`:** селективность — победители global, иначе best-1 этого SKU (всё ещё не полный ban)
 
-Слот всегда достаётся самой жирной щели, даже между разными предметами.
-
-Кэш alloc 2 мин на go_type. Лог: `globalMarg cap=… [megasword×12 sword7×3 …]`.
+Слот 500k предпочтительнее 200k, но пустой слот хуже любого из них.

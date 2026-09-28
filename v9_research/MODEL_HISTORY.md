@@ -376,6 +376,11 @@ Fallback buyMult если eligible=0.
 Per-SKU K забивал слоты тонкой щелью. Теперь top (bots×5) сделок по абсолютной
 марже между всеми SKU категории; SKU вне alloc → buyMax=0. Слот 500k > слот 200k.
 
+### 2026-09-29 — global margin fill-safe
+
+Ban без гарантии выкупа жирных → пустой АХ. Alloc только на free slots;
+при free>0 buyMax=max(global, per-SKU fill); при free=0 — prefer / best-1, без buyMax=0.
+
 
 
 
