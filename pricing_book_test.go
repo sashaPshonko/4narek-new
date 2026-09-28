@@ -110,6 +110,41 @@ func TestBuyMaxCappedByP10EvenIfSellHigh(t *testing.T) {
 	}
 }
 
+func TestBook2AllocateByMarginPrefersFat(t *testing.T) {
+	cands := []book2MarginCand{
+		{Item: "thin", Price: 800_000, Margin: 200_000, Sell: 1_000_000},
+		{Item: "thin", Price: 790_000, Margin: 210_000, Sell: 1_000_000},
+		{Item: "fat", Price: 2_000_000, Margin: 500_000, Sell: 2_500_000},
+		{Item: "fat", Price: 2_100_000, Margin: 400_000, Sell: 2_500_000},
+		{Item: "mid", Price: 1_000_000, Margin: 300_000, Sell: 1_300_000},
+	}
+	buyMax, slots := book2AllocateByMargin(cands, 2)
+	if slots["fat"] != 2 {
+		t.Fatalf("want both slots on fat, got %v buyMax=%v", slots, buyMax)
+	}
+	if _, ok := buyMax["thin"]; ok {
+		t.Fatalf("thin should get no slots: %v", buyMax)
+	}
+	if buyMax["fat"] != 2_100_000 {
+		t.Fatalf("fat buyMax=%d want 2.1M (worst of taken)", buyMax["fat"])
+	}
+}
+
+func TestBook2AllocateByMarginFillsRemainder(t *testing.T) {
+	cands := []book2MarginCand{
+		{Item: "fat", Price: 2_000_000, Margin: 500_000, Sell: 2_500_000},
+		{Item: "thin", Price: 800_000, Margin: 200_000, Sell: 1_000_000},
+		{Item: "thin", Price: 700_000, Margin: 300_000, Sell: 1_000_000},
+	}
+	buyMax, slots := book2AllocateByMargin(cands, 3)
+	if slots["fat"] != 1 || slots["thin"] != 2 {
+		t.Fatalf("slots=%v", slots)
+	}
+	if buyMax["thin"] != 800_000 {
+		t.Fatalf("thin buyMax=%d", buyMax["thin"])
+	}
+}
+
 func TestBook2OptBuyMaxKthCheapest(t *testing.T) {
 	// prices sorted; sell=1000, softMin=100 → eligible all with p<=900
 	ps := []int{500, 600, 700, 800, 850, 900, 950}

@@ -1,20 +1,20 @@
-# book2 buyMax from live book (K-th cheapest)
+# book2: global margin slots across SKUs
 
-**Status:** LIVE — `book2OptBuyMax`, не фикс 0.85 и не load-тык.
+**Status:** LIVE — `book2AllocateByMargin` / `book2EnsureGlobalAlloc`.
 
-## Идея
+## Проблема
 
-sell ≈ p10. При фиксированном sell max Σ(sell−buy) на K слотах =
-**K самых дешёвых** лотов с щелью ≥ softMin (JSON nac).
+5 слотов × много SKU. Per-SKU «K-й дешёвый» забивает АХ sword7 с щелью 200k,
+пока в книге лежит mega со щелью 500k.
 
-`buyMax` = цена K-го = перцентиль книги `#{p≤buyMax}/n`.
+## Решение
 
-| | |
-|--|--|
-| K | fair `share` слотов; если `free>0` и меньше share → K=free |
-| softMin | `nacenka` из JSON (baseline) |
-| fallback | category buyMult если eligible пусто |
+1. По всем SKU категории собрать лоты с `sell−price ≥ softMin`
+2. Отсортировать по **абсолютной марже** ↓
+3. Взять top `bots×5` (ёмкость АХ категории)
+4. `buyMax[sku]` = макс. цена среди взятых лотов этого sku  
+   нет в alloc → **не покупаем** (buyMax=0)
 
-## Лог
+Слот всегда достаётся самой жирной щели, даже между разными предметами.
 
-`bookOpt q=… K=… elig=… buyMax=… (×p10)`
+Кэш alloc 2 мин на go_type. Лог: `globalMarg cap=… [megasword×12 sword7×3 …]`.

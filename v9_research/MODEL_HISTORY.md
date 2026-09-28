@@ -371,5 +371,11 @@ ratchet'ится runtime nac. Sell по-прежнему ~p10.
 (K≈share). Это argmax Σ(sell−buy) при cap K и фикс sell≈p10. q = доля книги ≤ buyMax.
 Fallback buyMult если eligible=0.
 
+### 2026-09-29 — book2 global margin across SKUs
+
+Per-SKU K забивал слоты тонкой щелью. Теперь top (bots×5) сделок по абсолютной
+марже между всеми SKU категории; SKU вне alloc → buyMax=0. Слот 500k > слот 200k.
+
+
 
 
