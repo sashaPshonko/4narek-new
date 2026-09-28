@@ -11,18 +11,20 @@ import (
 // book2 — max-profit якорь от живой книги.
 // Окно 30м. sell = sellMult×p10.
 //
-// Одна минимальная абсолютная маржа на всю категорию из книги:
-//   minMarg = маржа K-й лучшей сделки (K≈free slots, при битом АХ K=3).
-//   nac = max(itemSoftMin, minMarg); buyMax = sell − nac.
-// Не баним SKU и не делим слоты по предметам — любой лот с щелью ≥ minMarg ок.
+// Одна минимальная абсолютная маржа на категорию:
+//   minMarg = маржа K-й лучшей сделки в книге.
+//   K ≥ 2×(bots×5), чтобы над порогом хватало лотов набрать слоты
+//   (AH не отсортирован по цене — нужен запас).
+//   nac = max(itemSoftMin, minMarg). SKU не баним.
 
 const (
-	ahBook2Window     = 30 * time.Minute
-	ahBook2MinLots    = 40
-	book2MaxSteps     = 2    // обычный snap ±2 step
-	book2DeepRatio    = 0.25 // |target−price|/price ≥25% → без cap (cold)
-	book2MinMarginKFull = 3  // когда free=0: порог = 3-я лучшая сделка в книге
-	book2CandFloor    = 100_000 // минимальная щель, чтобы лот попал в пул для порога
+	ahBook2Window        = 30 * time.Minute
+	ahBook2MinLots       = 40
+	book2MaxSteps        = 2    // обычный snap ±2 step
+	book2DeepRatio       = 0.25 // |target−price|/price ≥25% → без cap (cold)
+	book2CandFloor       = 100_000 // лот в пул порога, если щель ≥ этого
+	book2FillSupplyMult  = 2       // над порогом ≥ mult×ёмкость лотов
+	book2MinMarginKFloor = 10      // минимум K даже на мелкой категории
 )
 
 type bookCatMult struct {
@@ -107,13 +109,18 @@ func book2CategoryOccupancyLocked(goType string, ahCounts map[string]int) (capac
 }
 
 // book2EnsureMinMarginLocked — порог маржи из книги категории; SQL вне mutex.
+// K калибруем под набор слотов: над порогом должно остаться ≥ 2×(bots×5) лотов.
 func book2EnsureMinMarginLocked(goType string, since time.Time, now time.Time, ahCounts map[string]int) book2GlobalFloor {
 	fullCap, sumAH, free := book2CategoryOccupancyLocked(goType, ahCounts)
-	k := free
-	if k < 1 {
-		k = book2MinMarginKFull
+	// Запас ×2: AH time-sorted, иначе 5 слотов/бота не набрать.
+	k := fullCap * book2FillSupplyMult
+	if free*book2FillSupplyMult > k {
+		k = free * book2FillSupplyMult
 	}
-	if prev, ok := book2GlobalFloorCache[goType]; ok && now.Sub(prev.At) < book2GlobalFloorTTL && prev.Free == free && prev.OK {
+	if k < book2MinMarginKFloor {
+		k = book2MinMarginKFloor
+	}
+	if prev, ok := book2GlobalFloorCache[goType]; ok && now.Sub(prev.At) < book2GlobalFloorTTL && prev.Free == free && prev.OK && prev.K == k {
 		return prev
 	}
 	type snap struct {
@@ -152,6 +159,22 @@ func book2EnsureMinMarginLocked(goType string, since time.Time, now time.Time, a
 	mutex.Lock()
 
 	minMarg, nCands, ok := book2MinMarginFromCands(cands, k)
+	// Если кандидатов мало (ночь / тонкая книга) — K съедает почти всё:
+	// не поднимаем порог выше soft floor, иначе слоты не набрать.
+	if ok && nCands > 0 && nCands < fullCap*book2FillSupplyMult {
+		// смягчить: порог = слабейшая из имеющихся «достаточных» сделок
+		softK := nCands
+		if softK > fullCap && fullCap > 0 {
+			softK = fullCap
+		}
+		if softK < 1 {
+			softK = 1
+		}
+		if softM, _, softOK := book2MinMarginFromCands(cands, softK); softOK && softM < minMarg {
+			minMarg = softM
+			k = softK
+		}
+	}
 	out := book2GlobalFloor{
 		MinMargin: minMarg,
 		K:         k,
@@ -161,8 +184,8 @@ func book2EnsureMinMarginLocked(goType string, since time.Time, now time.Time, a
 		At:        now,
 		OK:        ok,
 		Note: fmt.Sprintf(
-			"minMarg=%d K=%d cands=%d free=%d/%d sumAH=%d",
-			minMarg, k, nCands, free, fullCap, sumAH,
+			"minMarg=%d K=%d cands=%d free=%d/%d sumAH=%d supply≥%d",
+			minMarg, k, nCands, free, fullCap, sumAH, fullCap*book2FillSupplyMult,
 		),
 	}
 	book2GlobalFloorCache[goType] = out
