@@ -344,3 +344,19 @@ sell по-прежнему ~p10, buyMax = sell−nac (≥300k на мечах). 
 Факт ~20:20–20:37Z: buys **142/3h → 13** после cut; sword7 eff buy≈0.68 из‑за
 пола 400k. Откат: buy **0.85**, nac пол **300k** (megasword остаётся 400k как было).
 Loot/sharp SKUs остаются. Границу жать осторожнее — сначала только mult или только пол.
+
+### 2026-09-29 — book2 sword opt 0.88 / nac 250k (не rollback)
+
+Откат 0.85/300 был заплаткой. Opt по книге 12h healthy→CUT (page-snapshot 45 rows +
+slot-capped cherry-pick + FIFO gate):
+
+| policy | page Σ vs BASE | slot-cap Σ | fill risk |
+|--------|----------------|------------|-----------|
+| FAIL 0.80/400 | **−30%** | −4% | starve |
+| BASE 0.85/300 | 0 | 0 | ok |
+| **0.88/250** | **+29%** | **+1.6%** | better fill |
+| 0.85/350 | −6% | −0.6% | tighter |
+
+AH time-sorted → узкий гейт режет объём случайных underprice; при 5 слотах
+max Σ = шире buy + чуть ниже пол. Sell 1.00. Mega nac 400k без изменений.
+Loot/sharp SKUs без изменений.
