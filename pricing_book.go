@@ -254,8 +254,6 @@ func adjustPriceBook(
 			"target sell=%d nac=%d buyMax=%d (p10=%d %s)",
 			sellT, nacT, sellT-nacT, p10, buySrc,
 		))
-	} else {
-		notes = append(notes, "thin/absent book 30m → hold (ждём скан)")
 	}
 
 	if blockDown && newPrice < priceBefore {
@@ -273,6 +271,56 @@ func adjustPriceBook(
 			action = "hold_manual_set"
 		}
 		notes = append(notes, "manual → ↑ запрещён")
+	}
+
+	// buyMax всегда ≤ buyMult×p10 (если книга есть) и < sell.
+	// Иначе manual/stale sell (яд3 5.5M) оставляет nac маленьким → buy≈4M у потолка рынка.
+	if p10OK && p10 > 0 && newPrice > 0 {
+		rawBuy := int(float64(p10)*mult.Buy + 0.5)
+		buyMax := bookSnapWithMarker(rawBuy, step, newPrice)
+		if buyMax <= 0 {
+			buyMax = rawBuy
+		}
+		if buyMax >= newPrice && step > 0 {
+			buyMax = newPrice - step
+		}
+		if buyMax < 0 {
+			buyMax = 0
+		}
+		wantNac := newPrice - buyMax
+		if wantNac < nacMin {
+			wantNac = nacMin
+		}
+		if wantNac < 0 {
+			wantNac = 0
+		}
+		if wantNac != newNac {
+			notes = append(notes, fmt.Sprintf("buy-cap p10×%.2f → nac %d→%d (buyMax=%d)", mult.Buy, newNac, wantNac, newPrice-wantNac))
+			newNac = wantNac
+			if !strings.Contains(action, "price_") && action != "book_nacenka_set" {
+				decReason = "buy_cap_p10"
+			}
+		}
+	} else if newPrice > 0 {
+		// нет p10 — не покупаем у 90%+ от sell (stale mega/яд3)
+		buyCap := newPrice * 85 / 100
+		if step > 0 && buyCap >= newPrice {
+			buyCap = newPrice - step
+		}
+		if buyCap < 0 {
+			buyCap = 0
+		}
+		wantNac := newPrice - buyCap
+		if wantNac < nacMin {
+			wantNac = nacMin
+		}
+		if wantNac > newNac {
+			notes = append(notes, fmt.Sprintf("thin book buy-cap 85%% → nac %d→%d (buyMax=%d)", newNac, wantNac, newPrice-wantNac))
+			newNac = wantNac
+			decReason = "no_book_buy_cap"
+		} else {
+			notes = append(notes, "thin/absent book 30m → hold (ждём скан)")
+		}
 	}
 
 	// намеренно без clamp к priceFloor — иначе book2 не может сесть к p10 ниже minBuy+nac

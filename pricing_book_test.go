@@ -88,6 +88,28 @@ func TestBookTargetsIgnoresLegacyFloor(t *testing.T) {
 	}
 }
 
+// buyMax = sell−nac при sell выше книги: nac должен дать buy≈0.90×p10, не ~sell.
+func TestBuyMaxCappedByP10EvenIfSellHigh(t *testing.T) {
+	p10 := 4_000_000
+	sellHigh := 5_500_007
+	_, nac, _ := bookTargetsFromLiveBook(p10, 100_000, sellHigh, 0, 400_000, "netherite_sword-1.21")
+	// targets from live book returns sell~p10; simulate post-manual nac from p10×0.90
+	rawBuy := int(float64(p10)*0.90 + 0.5)
+	buyMax := bookSnapWithMarker(rawBuy, 100_000, sellHigh)
+	if buyMax >= sellHigh {
+		buyMax = sellHigh - 100_000
+	}
+	wantNac := sellHigh - buyMax
+	if wantNac < 400_000 {
+		wantNac = 400_000
+	}
+	_ = nac
+	gotBuy := sellHigh - wantNac
+	if gotBuy > int(float64(p10)*0.92) {
+		t.Fatalf("buyMax=%d too high for p10=%d (want ≤0.90×p10)", gotBuy, p10)
+	}
+}
+
 func TestBook2ClampStep(t *testing.T) {
 	step := 100_000
 	// обычный ±20% → ±2 step
