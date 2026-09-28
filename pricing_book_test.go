@@ -110,35 +110,36 @@ func TestBuyMaxCappedByP10EvenIfSellHigh(t *testing.T) {
 	}
 }
 
-func TestBook2AdaptBuyFullTightens(t *testing.T) {
-	base := book2AdaptBuy(book2AdaptIn{BaseBuy: 0.85, BaseNac: 300_000, SoftMin: 200_000, Load: 0.70})
-	full := book2AdaptBuy(book2AdaptIn{BaseBuy: 0.85, BaseNac: 300_000, SoftMin: 200_000, Load: 1.00})
-	empty := book2AdaptBuy(book2AdaptIn{BaseBuy: 0.85, BaseNac: 300_000, SoftMin: 200_000, Load: 0.30, Starve: true})
-	if full.BuyEff >= base.BuyEff {
-		t.Fatalf("full buyEff=%v should be < base %v", full.BuyEff, base.BuyEff)
+func TestBook2OptBuyMaxKthCheapest(t *testing.T) {
+	// prices sorted; sell=1000, softMin=100 → eligible all with p<=900
+	ps := []int{500, 600, 700, 800, 850, 900, 950}
+	buy, q, nElig, ok := book2OptBuyMax(ps, 1000, 100, 3)
+	if !ok {
+		t.Fatal("expected ok")
 	}
-	if empty.BuyEff <= base.BuyEff {
-		t.Fatalf("starve/empty buyEff=%v should be > base %v", empty.BuyEff, base.BuyEff)
+	if nElig != 6 { // 950 has margin 50 < 100
+		t.Fatalf("nElig=%d", nElig)
 	}
-	if full.BuyEff < book2AdaptBuyMin {
-		t.Fatalf("buyEff=%v below min", full.BuyEff)
+	if buy != 700 { // 3rd cheapest of elig
+		t.Fatalf("buyMax=%d want 700", buy)
 	}
-	if empty.NacFloor > 300_000 {
-		t.Fatalf("starve should allow soft floor, got %d", empty.NacFloor)
-	}
-	if full.NacFloor < 300_000 {
-		t.Fatalf("full should keep base nac floor, got %d", full.NacFloor)
+	if q <= 0 || q > 1 {
+		t.Fatalf("q=%v", q)
 	}
 }
 
-func TestBook2AdaptBuyClamped(t *testing.T) {
-	r := book2AdaptBuy(book2AdaptIn{BaseBuy: 0.85, BaseNac: 300_000, SoftMin: 200_000, Load: 2.0, NoRoom: true})
-	if r.BuyEff != book2AdaptBuyMin {
-		t.Fatalf("overfull+noRoom want min %.2f got %.3f", book2AdaptBuyMin, r.BuyEff)
+func TestBook2OptBuyMaxFewerThanK(t *testing.T) {
+	ps := []int{400, 500}
+	buy, _, nElig, ok := book2OptBuyMax(ps, 1000, 300, 5)
+	if !ok || nElig != 2 || buy != 500 {
+		t.Fatalf("buy=%d nElig=%d ok=%v", buy, nElig, ok)
 	}
-	r2 := book2AdaptBuy(book2AdaptIn{BaseBuy: 0.85, BaseNac: 300_000, SoftMin: 200_000, Load: 0, Starve: true})
-	if r2.BuyEff != book2AdaptBuyMax {
-		t.Fatalf("empty+starve want max %.2f got %.3f", book2AdaptBuyMax, r2.BuyEff)
+}
+
+func TestBook2OptBuyMaxNone(t *testing.T) {
+	_, _, _, ok := book2OptBuyMax([]int{900, 950}, 1000, 200, 2)
+	if ok {
+		t.Fatal("expected no eligible")
 	}
 }
 

@@ -551,6 +551,46 @@ func ahBookPricesSince(itemID string, since time.Time) (ps []int, n int) {
 	return ps, n
 }
 
+// ahBookUniquePricesSince — последняя цена каждого uuid в окне, по возрастанию.
+// Для opt buyMax (K-й дешёвый), без раздува от повторных сканов.
+func ahBookUniquePricesSince(itemID string, since time.Time) (ps []int, n int) {
+	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
+		return nil, 0
+	}
+	ts := since.UTC().Format(time.RFC3339)
+	mlDBMu.Lock()
+	rows, err := mlDB.Query(`
+SELECT b.price FROM ah_book_lots b
+INNER JOIN (
+  SELECT uuid, MAX(ts) AS mts FROM ah_book_lots
+  WHERE item_id = ? AND ts >= ? AND price > 0
+  GROUP BY uuid
+) t ON b.uuid = t.uuid AND b.ts = t.mts AND b.item_id = ?
+WHERE b.price > 0`, itemID, ts, itemID)
+	if err != nil {
+		mlDBMu.Unlock()
+		log.Printf("[ah_book] unique prices: %v", err)
+		return nil, 0
+	}
+	for rows.Next() {
+		var p int
+		if err := rows.Scan(&p); err != nil {
+			continue
+		}
+		if p > 0 {
+			ps = append(ps, p)
+		}
+	}
+	_ = rows.Close()
+	mlDBMu.Unlock()
+	n = len(ps)
+	if n == 0 {
+		return nil, 0
+	}
+	sort.Ints(ps)
+	return ps, n
+}
+
 // ahBookPercentileSorted — q∈[0,1] по уже отсортированному срезу.
 func ahBookPercentileSorted(sorted []int, q float64) int {
 	n := len(sorted)

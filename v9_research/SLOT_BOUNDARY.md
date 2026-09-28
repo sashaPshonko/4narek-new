@@ -1,25 +1,20 @@
-# Slot selectivity — adaptive book2
+# book2 buyMax from live book (K-th cheapest)
 
-**Status:** LIVE — `book2AdaptBuy` от загрузки АХ (не ручной тык).
+**Status:** LIVE — `book2OptBuyMax`, не фикс 0.85 и не load-тык.
 
 ## Идея
 
-Фиксированный buy/nac при полном АХ — плато. Нужен контур:
+sell ≈ p10. При фиксированном sell max Σ(sell−buy) на K слотах =
+**K самых дешёвых** лотов с щелью ≥ softMin (JSON nac).
 
-| сигнал | действие |
-|--------|----------|
-| AH load → 1 (биток) | buyEff ↓ (селективнее) |
-| AH load низкий / starve buys | buyEff ↑, nac floor → soft min |
-| этому id noRoom | ещё −0.03 buyEff |
+`buyMax` = цена K-го = перцентиль книги `#{p≤buyMax}/n`.
 
-EMA по `go_type`. Buy clamp **[0.78, 0.92]** — не повторяем FAIL 0.80+400 оба сразу.
-Nac floor = JSON baseline при полной загрузке; soft (⅔ base, ≥200k) только при голоде.
+| | |
+|--|--|
+| K | fair `share` слотов; если `free>0` и меньше share → K=free |
+| softMin | `nacenka` из JSON (baseline) |
+| fallback | category buyMult если eligible пусто |
 
-## База JSON
+## Лог
 
-- мечи nac **300k** (mega **400k**) — baseline, не sticky runtime floor
-- `itemsNacenkaBase` замораживается при load; runtime nac для ботов пишется отдельно
-
-## Watch
-
-Лог `[BOOK2] ... adapt load=… buyEff=…`. 2–4ч: load≈1 → buyEff~0.80–0.83; пустые слоты → buyEff растёт, buys/h не мрут.
+`bookOpt q=… K=… elig=… buyMax=… (×p10)`

@@ -365,4 +365,11 @@ buyEff = base − 0.22×(load−0.70), clamp [0.78, 0.92]; nac floor = JSON base
 на полной загрузке, soft (⅔) при starve. EMA по go_type. `itemsNacenkaBase` не
 ratchet'ится runtime nac. Sell по-прежнему ~p10.
 
+### 2026-09-29 — book2OptBuyMax: перцентиль из книги
+
+Вместо load-адапта: buyMax = K-й дешёвый unique-лот 30м с щелью ≥ softMin
+(K≈share). Это argmax Σ(sell−buy) при cap K и фикс sell≈p10. q = доля книги ≤ buyMax.
+Fallback buyMult если eligible=0.
+
+
 
