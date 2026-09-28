@@ -12,7 +12,7 @@ import (
 // (фарм 10:06 p10_10=1.5 n=41 vs p10_30=1.2 → sell +40%).
 // Эмпирика FIFO×hourly p10 (с 2026-09-03): buy-gate max Σ(sell−buy).
 //
-//	sword  → buy≤0.90×p10
+//	sword  → buy≤0.85×p10
 //	armor  → buy≤1.00×p10 (на практике sell чуть выше книги)
 //	pick   → buy≤0.95×p10
 //
@@ -35,14 +35,17 @@ type bookCatMult struct {
 }
 
 // bookProfitMultByType — buyMult = argmax net profit по категории; sellMult ≥ buyMult.
+// 2026-09-29: sword/default buy 0.90→0.85 — BEST_NET был 0.90 (+2% Σ), но факт
+// unit-margin ~100–165k vs старые nac=300k; 0.85 держит Σ около пика (962 vs 981M)
+// и поднимает щель ~15% sell без обвала объёма как floor 300k (−60% tot).
 var bookProfitMultByType = map[string]bookCatMult{
-	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.90},
+	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.85},
 	"netherite_armor-1.21":   {Sell: 1.05, Buy: 1.00}, // BEST buy-gate 1.00; sell>buy
 	"netherite_pickaxe-1.21": {Sell: 1.00, Buy: 0.95},
 	"позорная-броня-1.21":    {Sell: 1.20, Buy: 1.00},
 }
 
-var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.90}
+var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.85}
 
 func bookMultForType(goType string) bookCatMult {
 	if m, ok := bookProfitMultByType[goType]; ok {
@@ -85,7 +88,7 @@ func bookTargetsFromLiveBook(p10, step, priceBefore, _priceFloor, nacenkaMin int
 	}
 	if m.Buy >= m.Sell {
 		// защита: всегда оставляем щель под nacenkaMin / 1 step
-		m.Buy = m.Sell * 0.90
+		m.Buy = m.Sell * 0.85
 	}
 
 	rawSell := int(float64(p10)*m.Sell + 0.5)

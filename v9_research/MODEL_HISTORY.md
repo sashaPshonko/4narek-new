@@ -306,3 +306,13 @@ Live p10 × category mults по Σ(sell−buy) FIFO (с 03.09):
 | default | 1.00 | 0.90 | — |
 
 Формула универсальна; множители — по категории. OOS corridor WF N/A.
+
+### 2026-09-29 — book2 sword buy 0.90→0.85 (unit margin)
+
+BA: конфиг nac=300k «как раньше» на sword7 (sell~1.1M) режет keep до ~21% вечерних
+покупок → tot profit index **−60%**. Жёсткий пол 300k не берём.
+
+Эмпирика gate (те же FIFO): 0.90→981M BEST_NET, 0.85→962M (−2% Σ). Факт вечера
+unit ~+130–165k при 0.90; цель — щель ~15% sell (~165–200k на 1.1M) без обвала объёма.
+Sword/default Buy **0.85**; armor/pick без изменений. Anti-overpay (buy-cap p10 / 85% no_book)
+остаётся.
