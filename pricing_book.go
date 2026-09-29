@@ -33,9 +33,7 @@ const (
 	book2VolumeMinBuyRatio = 0.85
 	book2FatMinBuyRatio    = 0.70
 	// Дорогие SKU: без живой книги / sell<<книги — buyMax=0 (не копить меги вслепую).
-	// И если уже много на руках/АХ — тоже freeze (вечерний затар mega/яд3/pochti).
 	book2ExpensiveBuyFreezeRatio = 0.85
-	book2ExpensiveStockBuyFreeze = 3 // onAH+inv ≥ N → buyMax=0
 )
 
 type bookCatMult struct {
@@ -754,23 +752,6 @@ func adjustPriceBook(
 			} else {
 				notes = append(notes, "thin/absent book 30m → hold (ждём скан)")
 			}
-		}
-	}
-
-	// Дорогие: уже затар на руках/АХ — не докупать, пока не распродадут.
-	stockHeld := onAH + invCount
-	if stockHeld < 0 {
-		stockHeld = 0
-	}
-	if book2ExpensiveSKU(item, newPrice) && stockHeld >= book2ExpensiveStockBuyFreeze && newPrice > 0 {
-		fr := book2FreezeBuyNac(newPrice)
-		if fr > newNac {
-			notes = append(notes, fmt.Sprintf(
-				"expensive stock=%d (ah=%d inv=%d) ≥%d → buy freeze nac %d→%d",
-				stockHeld, onAH, invCount, book2ExpensiveStockBuyFreeze, newNac, fr,
-			))
-			newNac = fr
-			decReason = "stock_buy_freeze"
 		}
 	}
 

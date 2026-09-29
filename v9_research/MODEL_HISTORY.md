@@ -432,11 +432,10 @@ Buy-ratio/buyEdge больше не режут softMin. Если buyEdge+300k > 
 Sell-side: FunTime max << catalog → skip слот (`4narek-1.12` f9de085), без `set_max_price`.
 OOS full_compare не гонял — gate на закуп, не смена sell-якоря.
 
-### 2026-09-30 — expensive stock buy freeze + Go ignore crazy max
+### 2026-09-30 — Go ignore crazy max (без stock freeze)
 
-Если у дорогого SKU `onAH+inv ≥ 3` — `buyMax=0` (`stock_buy_freeze`), пока не распродадут.
 `set_max_price` на Go: если max < 90% текущего каталога — ignore (дубль bot-side FunTime filter).
-OOS full_compare не гонял — safety gate.
+Stock buy freeze по onAH+inv — откатили: симптом, не причина кривой цены.
 
 
 
