@@ -1174,7 +1174,8 @@ func firstCycleDelay(item string, cfg ItemConfig) time.Duration {
 		mutex.Unlock()
 		persistRuntimeState(&rt)
 		mutex.Lock()
-		return cfg.AnalysisTime
+		// book2: цены из живой книги — не ждать ещё AnalysisTime после рестарта
+		return 500 * time.Millisecond
 	}
 	return 500 * time.Millisecond
 }
