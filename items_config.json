@@ -29,12 +29,6 @@
         "lvl": 1
       }
     ],
-    "max_effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 7
-      }
-    ],
     "nacenka": 300000,
     "num": 5
   },
@@ -60,14 +54,8 @@
         "lvl": 7
       }
     ],
-    "max_effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 7
-      }
-    ],
     "nacenka": 300000,
-    "num": 1
+    "num": 3
   },
   "megasword-1.21": {
     "base_price": 4200004,
@@ -90,16 +78,6 @@
         "name": "minecraft:fire_aspect",
         "lvl": 1
       },
-      {
-        "name": "poison",
-        "lvl": 2
-      },
-      {
-        "name": "detection",
-        "lvl": 2
-      }
-    ],
-    "max_effects": [
       {
         "name": "poison",
         "lvl": 2
@@ -309,14 +287,8 @@
         "lvl": 5
       }
     ],
-    "max_effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 7
-      }
-    ],
     "nacenka": 300000,
-    "num": 4
+    "num": 6
   },
   "sword-bare-1.21": {
     "base_price": 80019,
@@ -345,12 +317,6 @@
         "lvl": 5
       }
     ],
-    "max_effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 5
-      }
-    ],
     "nacenka": 300000,
     "num": 1
   },
@@ -368,14 +334,8 @@
         "lvl": 6
       }
     ],
-    "max_effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 6
-      }
-    ],
     "nacenka": 300000,
-    "num": 1
+    "num": 2
   },
   "sword-sharp5-loot5-1.21": {
     "base_price": 300017,
@@ -386,16 +346,6 @@
     "name": "netherite_sword",
     "type": "netherite_sword-1.21",
     "effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 5
-      },
-      {
-        "name": "minecraft:looting",
-        "lvl": 5
-      }
-    ],
-    "max_effects": [
       {
         "name": "minecraft:sharpness",
         "lvl": 5
@@ -426,18 +376,8 @@
         "lvl": 5
       }
     ],
-    "max_effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 6
-      },
-      {
-        "name": "minecraft:looting",
-        "lvl": 5
-      }
-    ],
     "nacenka": 300000,
-    "num": 2
+    "num": 5
   },
   "sword-sharp7-loot4-1.21": {
     "base_price": 1000019,
@@ -457,18 +397,8 @@
         "lvl": 4
       }
     ],
-    "max_effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 7
-      },
-      {
-        "name": "minecraft:looting",
-        "lvl": 4
-      }
-    ],
     "nacenka": 300000,
-    "num": 3
+    "num": 4
   },
   "кирка-бульд-маг-1.21": {
     "base_price": 1000018,
