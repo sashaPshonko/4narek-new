@@ -1,6 +1,6 @@
 {
   "pochti-megasword-1.21": {
-    "base_price": 1800002,
+    "base_price": 3000002,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 100000,
@@ -39,7 +39,7 @@
     "num": 5
   },
   "sword7-1.21": {
-    "base_price": 600003,
+    "base_price": 1000003,
     "normal_sales": 5,
     "normal_count": 4,
     "price_step": 100000,
@@ -70,7 +70,7 @@
     "num": 1
   },
   "megasword-1.21": {
-    "base_price": 2200004,
+    "base_price": 4200004,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 100000,
@@ -113,7 +113,7 @@
     "num": 6
   },
   "megasword-яд3-1.21": {
-    "base_price": 3600007,
+    "base_price": 4000007,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 100000,
@@ -284,7 +284,7 @@
     "num": 3
   },
   "фарм-1.21": {
-    "base_price": 600013,
+    "base_price": 1300013,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 100000,
@@ -332,7 +332,7 @@
     "num": 0
   },
   "sword-sharp5-1.21": {
-    "base_price": 400015,
+    "base_price": 200015,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 50000,
@@ -355,7 +355,7 @@
     "num": 1
   },
   "sword-sharp6-1.21": {
-    "base_price": 550016,
+    "base_price": 300016,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 50000,
@@ -378,7 +378,7 @@
     "num": 1
   },
   "sword-sharp5-loot5-1.21": {
-    "base_price": 450017,
+    "base_price": 300017,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 50000,
@@ -409,7 +409,7 @@
     "num": 2
   },
   "sword-sharp6-loot5-1.21": {
-    "base_price": 600018,
+    "base_price": 1100018,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 50000,
@@ -440,7 +440,7 @@
     "num": 2
   },
   "sword-sharp7-loot4-1.21": {
-    "base_price": 700019,
+    "base_price": 1000019,
     "normal_sales": 5,
     "normal_count": 3,
     "price_step": 50000,
