@@ -213,13 +213,13 @@ func TestBook2PlanGlobalWhenVolumeFeeds(t *testing.T) {
 }
 
 func TestBook2MaxNacForP10(t *testing.T) {
-	// volume 1.2M → max nac 360k
-	if got := book2MaxNacForP10(1_200_000); got != 360_000 {
-		t.Fatalf("vol 1.2M → %d want 360k", got)
+	// volume 1.2M → max nac 15% = 180k (buy≥0.85)
+	if got := book2MaxNacForP10(1_200_000); got != 180_000 {
+		t.Fatalf("vol 1.2M → %d want 180k", got)
 	}
-	// fat 4M → max nac 1.8M (1-0.55)
-	if got := book2MaxNacForP10(4_000_000); got != 1_800_000 {
-		t.Fatalf("fat 4M → %d want 1.8M", got)
+	// fat 4M → max nac 30% = 1.2M (buy≥0.70)
+	if got := book2MaxNacForP10(4_000_000); got != 1_200_000 {
+		t.Fatalf("fat 4M → %d want 1.2M", got)
 	}
 }
 

@@ -1,18 +1,21 @@
-# book2: sell = нижняя граница продавцов
+# book2: sell p40 / buy ≥ p10 продавцов
 
 **Status:** LIVE
 
-Цены целиком из книги 30м. SKU не баним.
+Цены из книги 30м. SKU не баним.
 
-## Рыночный якорь (sell)
+## Якоря (per-seller min, без ban)
 
-**sell ≈ p10** среди *минимальных цен каждого продавца* (без ban).
-Это нижний конкурентный край AH, не lot/uuid p10 (клоны витрины).
+| | |
+|---|---|
+| **sell** | seller **p40** — конкурентный край (не дамп, не lot-клоны) |
+| **buyMax** | ≥ seller **p10** — иначе AH пустой для закупа |
 
-Нужно ≥3 sellers. Volume/fat порог: `mkt < 2.5M` = volume.
+Нужно ≥3 sellers. Volume: `sellMkt < 2.5M`.
 
 ## Buy / nac
 
-1. Пол softMin / per-SKU / global(fat only).
-2. **Потолок nac** важнее abs softMin: volume `buy ≥ 0.70×mkt`, fat `≥ 0.55×mkt`.
-3. Жёсткий 300k не душит buy, если mkt низкий (nac режется под ratio).
+1. softMin / per-SKU / global(fat only).
+2. **buyEdge важнее softMin**: nac режется, чтобы `buyMax ≥ seller-p10`.
+3. Доп. пол ratio: volume buy≥0.85×sell, fat ≥0.70×sell.
+4. Если p40 < p10+softMin — sell поднимаем до buyEdge+softMin.

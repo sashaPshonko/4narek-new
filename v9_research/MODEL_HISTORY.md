@@ -416,6 +416,11 @@ p20/min12 не срабатывал (sword7 часто 11 sellers → no_book �
 Якорь: **p10 seller-mins**, min **6** sellers. softMin 300k больше не поднимает nac
 над потолком buy≥0.70×mkt — иначе при mkt~800k buy душили.
 
+### 2026-09-29 — book2 sell p40 / buy ≥ seller p10
+
+p10-as-sell (~700k) → buyMax~0.5M → 0 fillable sellers на AH.
+Sell = **p40** seller-mins; buyMax жёстко ≥ **p10** seller-mins; volume buy≥0.85×sell.
+
 
 
 

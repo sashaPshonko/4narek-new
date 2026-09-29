@@ -663,24 +663,35 @@ func ahBookSellerMinPricesSince(itemID string, since time.Time) (ps []int, nSell
 	return ps, len(ps)
 }
 
-// ahBookMarketAnchorSince — нижняя граница рынка для book2 sell:
-// p10 среди per-seller min (без ban). Не lot/uuid p10 — тот раздут клонами.
-// Минимум sellers низкий: volume-SKU часто 8–15 живых продавцов в 30м.
+// ahBookMarketAnchorsSince — якоря из per-seller min (без ban):
+//   buyEdge  = p10 — нижний край, до него боты должны доставать buyMax;
+//   sellMkt  = p40 — конкурентный sell (не дамп p10 и не стена клонов lot-p10).
 const (
-	ahBookMarketSellerPct  = 0.10
+	ahBookMarketBuyPct     = 0.10
+	ahBookMarketSellPct    = 0.40
 	ahBookMarketMinSellers = 3
 )
 
-func ahBookMarketAnchorSince(itemID string, since time.Time) (anchor, nSellers int, ok bool) {
+func ahBookMarketAnchorsSince(itemID string, since time.Time) (sellMkt, buyEdge, nSellers int, ok bool) {
 	ps, n := ahBookSellerMinPricesSince(itemID, since)
 	if n < ahBookMarketMinSellers {
-		return 0, n, false
+		return 0, 0, n, false
 	}
-	anchor = ahBookPercentileSorted(ps, ahBookMarketSellerPct)
-	if anchor <= 0 {
-		return 0, n, false
+	buyEdge = ahBookPercentileSorted(ps, ahBookMarketBuyPct)
+	sellMkt = ahBookPercentileSorted(ps, ahBookMarketSellPct)
+	if buyEdge <= 0 || sellMkt <= 0 {
+		return 0, 0, n, false
 	}
-	return anchor, n, true
+	if sellMkt < buyEdge {
+		sellMkt = buyEdge
+	}
+	return sellMkt, buyEdge, n, true
+}
+
+// ahBookMarketAnchorSince — sell-якорь (p40 seller-mins). Для полов/volume gate.
+func ahBookMarketAnchorSince(itemID string, since time.Time) (anchor, nSellers int, ok bool) {
+	sellMkt, _, n, ok := ahBookMarketAnchorsSince(itemID, since)
+	return sellMkt, n, ok
 }
 
 // ahBookP10Since — 10-й процентиль цен SKU в окне (витрины тоже).

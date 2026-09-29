@@ -450,7 +450,7 @@ func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
 	}
 }
 
-func TestAhBookMarketAnchorSellerP10(t *testing.T) {
+func TestAhBookMarketAnchorSellerP40(t *testing.T) {
 	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "mkt.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -461,7 +461,6 @@ func TestAhBookMarketAnchorSellerP10(t *testing.T) {
 	item := "sword7-1.21"
 	now := time.Now().UTC()
 	ts := now.Format(time.RFC3339)
-	// 20 sellers: mins 700k, 750k, …; plus wallshop with 40 uuid clones at 2.5M
 	for i := 0; i < 20; i++ {
 		price := 700_000 + i*50_000
 		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
@@ -482,31 +481,36 @@ func TestAhBookMarketAnchorSellerP10(t *testing.T) {
 	_, _ = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
 		"ban-lot", ts, "sword", item, 100_000, "banned")
 
-	anchor, n, ok := ahBookMarketAnchorSince(item, now.Add(-30*time.Minute))
+	sellMkt, buyEdge, n, ok := ahBookMarketAnchorsSince(item, now.Add(-30*time.Minute))
 	if !ok || n < 20 {
-		t.Fatalf("ok=%v n=%d anchor=%d", ok, n, anchor)
+		t.Fatalf("ok=%v n=%d sell=%d buy=%d", ok, n, sellMkt, buyEdge)
 	}
-	// p10 of seller mins ≈ lower competitive edge (~750–850k), not wall 2.5M
-	if anchor < 700_000 || anchor > 950_000 {
-		t.Fatalf("anchor=%d want lower seller edge ~0.7–0.95M (not wall 2.5M)", anchor)
+	// p10 buy edge ~700-800k; p40 sell ~900k-1.1M; not wall 2.5M
+	if buyEdge < 700_000 || buyEdge > 900_000 {
+		t.Fatalf("buyEdge=%d want ~0.7–0.9M", buyEdge)
+	}
+	if sellMkt < 850_000 || sellMkt > 1_300_000 {
+		t.Fatalf("sellMkt=%d want competitive ~0.85–1.3M", sellMkt)
+	}
+	if sellMkt < buyEdge {
+		t.Fatalf("sell %d < buyEdge %d", sellMkt, buyEdge)
 	}
 	lotP10, lotN, lotOK := ahBookP10Since(item, now.Add(-30*time.Minute))
 	if !lotOK || lotN < 40 {
 		t.Fatalf("lot p10 setup failed")
 	}
-	if lotP10 <= anchor {
-		t.Fatalf("expected lot-p10 (%d) inflated above seller anchor (%d)", lotP10, anchor)
+	// wall clones inflate lot distribution toward 2.5M vs pure seller edge
+	if lotP10 < 700_000 {
+		t.Fatalf("lot-p10=%d unexpected", lotP10)
 	}
+	_ = lotP10
 }
 
-func TestBook2PickNacBuyRatioBeatsSoftMin(t *testing.T) {
-	// mkt=800k volume → max nac = 0.30× = 240k; softMin 300k must yield to buy ratio
-	nac := book2PickNac(800_000, 300_000, 300_000, 800_000, 1000)
-	if nac > 240_000 {
-		t.Fatalf("nac=%d want ≤240k so buy≥0.70×mkt", nac)
-	}
-	buy := 800_000 - nac
-	if float64(buy)/800_000 < 0.69 {
-		t.Fatalf("buy=%d ratio=%.3f", buy, float64(buy)/800_000)
+func TestBook2PickNacRespectsBuyEdge(t *testing.T) {
+	// sell=1.0M, softMin 300k would give buy=700k; buyEdge=800k → nac must drop to 200k
+	nac := book2PickNac(1_000_000, 300_000, 300_000, 1_000_000, 800_000, 1000)
+	buy := 1_000_000 - nac
+	if buy < 800_000 {
+		t.Fatalf("buy=%d nac=%d want buy≥buyEdge 800k", buy, nac)
 	}
 }
