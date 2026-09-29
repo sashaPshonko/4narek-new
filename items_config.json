@@ -261,35 +261,6 @@
     "nacenka": 300000,
     "num": 3
   },
-  "фарм-1.21": {
-    "base_price": 1300013,
-    "normal_sales": 5,
-    "normal_count": 3,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
-    "effects": [
-      {
-        "name": "minecraft:unbreaking",
-        "lvl": 4
-      },
-      {
-        "name": "minecraft:fire_aspect",
-        "lvl": 1
-      },
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 7
-      },
-      {
-        "name": "minecraft:looting",
-        "lvl": 5
-      }
-    ],
-    "nacenka": 300000,
-    "num": 6
-  },
   "sword-bare-1.21": {
     "base_price": 80019,
     "normal_sales": 5,
@@ -336,69 +307,6 @@
     ],
     "nacenka": 300000,
     "num": 2
-  },
-  "sword-sharp5-loot5-1.21": {
-    "base_price": 300017,
-    "normal_sales": 5,
-    "normal_count": 3,
-    "price_step": 50000,
-    "analysis_minutes": 10,
-    "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
-    "effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 5
-      },
-      {
-        "name": "minecraft:looting",
-        "lvl": 5
-      }
-    ],
-    "nacenka": 300000,
-    "num": 2
-  },
-  "sword-sharp6-loot5-1.21": {
-    "base_price": 1100018,
-    "normal_sales": 5,
-    "normal_count": 3,
-    "price_step": 50000,
-    "analysis_minutes": 10,
-    "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
-    "effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 6
-      },
-      {
-        "name": "minecraft:looting",
-        "lvl": 5
-      }
-    ],
-    "nacenka": 300000,
-    "num": 5
-  },
-  "sword-sharp7-loot4-1.21": {
-    "base_price": 1000019,
-    "normal_sales": 5,
-    "normal_count": 3,
-    "price_step": 50000,
-    "analysis_minutes": 10,
-    "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
-    "effects": [
-      {
-        "name": "minecraft:sharpness",
-        "lvl": 7
-      },
-      {
-        "name": "minecraft:looting",
-        "lvl": 4
-      }
-    ],
-    "nacenka": 300000,
-    "num": 4
   },
   "кирка-бульд-маг-1.21": {
     "base_price": 1000018,
