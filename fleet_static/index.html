@@ -192,7 +192,7 @@
     <h2 class="section-title">Владельцы кланов</h2>
     <div id="owners"></div>
     <h2 class="section-title">Сломанные боты</h2>
-    <p class="lede" style="margin-top:-4px;margin-bottom:10px;font-size:14px">Неверный пароль или ошибка прокси — оркестратор не рестартит, пока не починишь.</p>
+    <p class="lede" style="margin-top:-4px;margin-bottom:10px;font-size:14px">Неверный пароль — без рестартов, пока не починишь. Ошибка прокси — на панели, пока бот снова не зайдёт; оркестратор рестартит сам.</p>
     <div id="faults"></div>
     <h2 class="section-title fold-title" id="checksTitle" data-fold="checks"><span class="chev">▸</span> Проверки</h2>
     <div id="checks" class="collapsed">
@@ -455,7 +455,7 @@
 
         const kindLabel = (k) => ({
           bad_password: "пароль",
-          proxy_error: "прокси",
+          proxy_error: "прокси · рестарт",
         })[k] || k || "?";
 
         const faultsEl = $("faults");
