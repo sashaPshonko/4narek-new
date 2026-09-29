@@ -252,3 +252,9 @@ func TestBook2ExpensiveBuyFreezeHelpers(t *testing.T) {
 		t.Fatal("freeze nac = sell → buyMax 0")
 	}
 }
+
+func TestBook2ExpensiveStockConst(t *testing.T) {
+	if book2ExpensiveStockBuyFreeze < 1 {
+		t.Fatal("stock freeze threshold")
+	}
+}

@@ -1667,6 +1667,13 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			mutex.Unlock()
 			return
 		}
+		// FunTime «Максимальная цена» часто мусор (890k при каталоге 2–4M).
+		// Бот уже фильтрует; дубль на Go — не ронять весь SKU.
+		if oldPrice > 0 && msg.Price*100 < oldPrice*90 {
+			log.Printf("[CONFIG] %s: max %d << каталог %d (<90%%) — ignore (funtime noise)", msg.Type, msg.Price, oldPrice)
+			mutex.Unlock()
+			return
+		}
 		now := time.Now()
 		data.Prices[msg.Type] = msg.Price
 		data.LastManualUpdate[msg.Type] = now
