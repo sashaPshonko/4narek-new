@@ -14,9 +14,10 @@ import (
 // Гибкие полы nac (абсолютная щель):
 //  1) жёсткий пол 300k (+ JSON);
 //  2) per-SKU: поднять пол по СВОЕЙ книге (K-я щель внутри SKU);
-//  3) global: только FAT (p10≥1.5M), и только если volume-ярус
+//  3) global: только FAT (p10≥2.5M), и только если volume-ярус
 //     ещё даёт лоты над порогом — volume сам global'ом не поднимаем;
-//  4) потолок nac: volume buy≥0.70×p10, fat ≥0.55×p10.
+//  4) потолок nac: volume buy≥0.70×mkt, fat ≥0.55×mkt;
+//  5) якорь sell = p20 per-seller min (не lot-p10 — тот раздут клонами).
 // SKU не баним.
 
 const (
@@ -28,7 +29,7 @@ const (
 	book2FillSupplyMult  = 2
 	book2MinMarginKFloor = 10
 	book2NacFloorAbs     = 300_000
-	book2VolumeP10Max    = 1_500_000 // sword7/фарм — объёмный ярус
+	book2VolumeP10Max    = 2_500_000 // sword7/фарм часто ~1.2–2.0M — не путать с mega
 	// Потолок nac: buyMax/p10 не ниже этих долей (иначе AH time-sorted пустеет).
 	book2VolumeMinBuyRatio = 0.70
 	book2FatMinBuyRatio    = 0.55
@@ -331,18 +332,20 @@ func book2EnsureFloorPlanLocked(goType string, since time.Time, now time.Time, a
 	itemBase := make(map[string]int)
 	for _, it := range items {
 		itemBase[it.id] = it.base
-		ps, n := ahBookUniquePricesSince(it.id, since)
-		if n < ahBook2MinLots {
+		mkt, nSell, ok := ahBookMarketAnchorSince(it.id, since)
+		if !ok || nSell < ahBookMarketMinSellers || mkt <= 0 {
 			byItem[it.id] = nil
 			continue
 		}
-		p10 := ps[n/10]
-		if p10 <= 0 {
+		itemP10[it.id] = mkt
+		sell := int(float64(mkt)*it.mult.Sell + 0.5)
+		if sell <= 0 {
 			continue
 		}
-		itemP10[it.id] = p10
-		sell := int(float64(p10)*it.mult.Sell + 0.5)
-		if sell <= 0 {
+		// кандидаты щели — по unique uuid (больше точек), якорь sell от seller-market
+		ps, n := ahBookUniquePricesSince(it.id, since)
+		if n < ahBook2MinLots {
+			byItem[it.id] = nil
 			continue
 		}
 		var cands []book2MarginCand
@@ -546,10 +549,12 @@ func adjustPriceBook(
 	}
 
 	mutex.Unlock()
-	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
-	if p10N < ahBook2MinLots || p10 <= 0 {
-		p10OK = false
+	// Рыночный якорь: p20 per-seller min (без ban), не lot/uuid p10.
+	mkt, mktN, mktOK := ahBookMarketAnchorSince(item, bookSince)
+	if !mktOK || mkt <= 0 {
+		mktOK = false
 	}
+	p10, p10N, p10OK := mkt, mktN, mktOK
 	mutex.Lock()
 
 	action := "book_hold"
@@ -560,7 +565,7 @@ func adjustPriceBook(
 	buyEff := mult.Buy
 	notes := []string{
 		fmt.Sprintf(
-			"book2 hybrid 30m p10 sell×%.2f p10=%d n=%d ok=%v type=%s onAH=%d sales=%d buys=%d softMin=%d skuFloor=%d | %s",
+			"book2 hybrid 30m sell×%.2f mkt(p20seller)=%d sellers=%d ok=%v type=%s onAH=%d sales=%d buys=%d softMin=%d skuFloor=%d | %s",
 			mult.Sell, p10, p10N, p10OK, cfg.Type, onAH, sales, buys, softMin, skuFloor, plan.Note,
 		),
 	}

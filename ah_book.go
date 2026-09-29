@@ -613,6 +613,75 @@ func ahBookPercentileSorted(sorted []int, q float64) int {
 	return int(float64(sorted[f])*(1-w) + float64(sorted[c])*w + 0.5)
 }
 
+// ahBookSellerMinPricesSince — по одному мин. лоту на продавца в окне (без ban-витрин).
+// Убирает раздув от 50 одинаковых uuid одного флота / повторных сканов.
+func ahBookSellerMinPricesSince(itemID string, since time.Time) (ps []int, nSellers int) {
+	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
+		return nil, 0
+	}
+	mlDBMu.Lock()
+	rows, err := mlDB.Query(
+		`SELECT a.price, lower(trim(coalesce(a.seller,''))),
+			EXISTS(
+				SELECT 1 FROM ah_book_seller_bans b
+				WHERE b.seller = lower(trim(a.seller))
+			) AS banned
+		 FROM ah_book_lots a
+		 WHERE a.item_id = ? AND a.ts >= ? AND a.price > 0`,
+		itemID, since.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		mlDBMu.Unlock()
+		log.Printf("[ah_book] seller mins: %v", err)
+		return nil, 0
+	}
+	bySeller := map[string]int{}
+	for rows.Next() {
+		var price int
+		var seller string
+		var banned bool
+		if err := rows.Scan(&price, &seller, &banned); err != nil || price <= 0 {
+			continue
+		}
+		if banned || seller == "" {
+			continue
+		}
+		if prev, ok := bySeller[seller]; !ok || price < prev {
+			bySeller[seller] = price
+		}
+	}
+	_ = rows.Close()
+	mlDBMu.Unlock()
+	if len(bySeller) == 0 {
+		return nil, 0
+	}
+	ps = make([]int, 0, len(bySeller))
+	for _, p := range bySeller {
+		ps = append(ps, p)
+	}
+	sort.Ints(ps)
+	return ps, len(ps)
+}
+
+// ahBookMarketAnchorSince — рыночный якорь для book2 sell:
+// p20 среди per-seller min (не lot/uuid p10 — тот завышен клонами витрины).
+const (
+	ahBookMarketSellerPct   = 0.20
+	ahBookMarketMinSellers  = 12
+)
+
+func ahBookMarketAnchorSince(itemID string, since time.Time) (anchor, nSellers int, ok bool) {
+	ps, n := ahBookSellerMinPricesSince(itemID, since)
+	if n < ahBookMarketMinSellers {
+		return 0, n, false
+	}
+	anchor = ahBookPercentileSorted(ps, ahBookMarketSellerPct)
+	if anchor <= 0 {
+		return 0, n, false
+	}
+	return anchor, n, true
+}
+
 // ahBookP10Since — 10-й процентиль цен SKU в окне (витрины тоже).
 // Для set_min: сырой min = дампы, медиана = витрины.
 func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {

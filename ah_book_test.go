@@ -449,3 +449,52 @@ func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
 		t.Fatal("закуп ≥ продаж — не поднимаем даже ниже p10")
 	}
 }
+
+func TestAhBookMarketAnchorSellerP20(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "mkt.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); mlDB = nil })
+	mlDB = db
+	initAhBookTable()
+	item := "sword7-1.21"
+	now := time.Now().UTC()
+	ts := now.Format(time.RFC3339)
+	// 20 sellers: mins 700k, 750k, …; plus wallshop with 40 uuid clones at 2.5M
+	for i := 0; i < 20; i++ {
+		price := 700_000 + i*50_000
+		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+			fmt.Sprintf("s-%d", i), ts, "sword", item, price, fmt.Sprintf("seller%d", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 40; i++ {
+		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+			fmt.Sprintf("wall-%d", i), ts, "sword", item, 2_500_000, "wallshop")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _ = db.Exec(`INSERT INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
+		"banned", ts, item, 3, 900)
+	_, _ = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		"ban-lot", ts, "sword", item, 100_000, "banned")
+
+	anchor, n, ok := ahBookMarketAnchorSince(item, now.Add(-30*time.Minute))
+	if !ok || n < 20 {
+		t.Fatalf("ok=%v n=%d anchor=%d", ok, n, anchor)
+	}
+	// p20 of seller mins should be competitive ~0.8–1.2M, not wall 2.5M
+	if anchor < 800_000 || anchor > 1_200_000 {
+		t.Fatalf("anchor=%d want competitive ~0.8–1.2M (not wall 2.5M)", anchor)
+	}
+	lotP10, lotN, lotOK := ahBookP10Since(item, now.Add(-30*time.Minute))
+	if !lotOK || lotN < 40 {
+		t.Fatalf("lot p10 setup failed")
+	}
+	if lotP10 <= anchor {
+		t.Fatalf("expected lot-p10 (%d) inflated above seller anchor (%d)", lotP10, anchor)
+	}
+}

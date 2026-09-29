@@ -405,6 +405,11 @@ K = max(2×ёмкости bots×5, 2×free, 10). Запас ×2: иначе page
 Live: `global+800k` снова дал sword7/фарм buyMax≈0.40×p10 (как ночной 910k/0.23).
 Фикс: global только на fat; volume/fat потолок nac (buy≥0.70 / ≥0.55 ×p10).
 
+### 2026-09-29 — book2 sell якорь = p20 per-seller min
+
+Lot/uuid p10 завышал рынок (клоны 1.5M+ при реальном крае продавцов ~0.75–0.9M).
+Sell теперь от p20 минимальных цен продавцов (без ban). Volume ceiling 2.5M.
+
 
 
 
