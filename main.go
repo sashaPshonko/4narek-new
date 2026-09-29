@@ -271,6 +271,9 @@ func runServer() {
 	goImmortal("httpServer", startHTTPServer)
 	goImmortal("clanSetupDispatch", startClanSetupDispatcher)
 
+	// book2: цены из книги — таймеры до xray/funauth (те могут висеть минуты).
+	startItemTimers()
+
 	initMLLog()
 	setupMLShutdown()
 
@@ -284,8 +287,6 @@ func runServer() {
 	initFunauth()
 
 	goImmortal("dayChange", func() { checkDayChange(loc) })
-
-	startItemTimers()
 
 	select {}
 }
@@ -1182,6 +1183,7 @@ func firstCycleDelay(item string, cfg ItemConfig) time.Duration {
 }
 
 func startItemTimers() {
+	log.Printf("[TIMER] старт: %d SKU, первый цикл ASAP если нет якоря", len(itemsConfig))
 	i := 0
 	for item, cfg := range itemsConfig {
 		item, cfg, idx := item, cfg, i

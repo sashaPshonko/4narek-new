@@ -9,7 +9,7 @@
 **sell ≈ p10** среди *минимальных цен каждого продавца* (без ban).
 Это нижний конкурентный край AH, не lot/uuid p10 (клоны витрины).
 
-Нужно ≥6 sellers. Volume/fat порог: `mkt < 2.5M` = volume.
+Нужно ≥3 sellers. Volume/fat порог: `mkt < 2.5M` = volume.
 
 ## Buy / nac
 

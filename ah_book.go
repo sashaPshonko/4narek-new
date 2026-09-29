@@ -668,7 +668,7 @@ func ahBookSellerMinPricesSince(itemID string, since time.Time) (ps []int, nSell
 // Минимум sellers низкий: volume-SKU часто 8–15 живых продавцов в 30м.
 const (
 	ahBookMarketSellerPct  = 0.10
-	ahBookMarketMinSellers = 6
+	ahBookMarketMinSellers = 3
 )
 
 func ahBookMarketAnchorSince(itemID string, since time.Time) (anchor, nSellers int, ok bool) {
