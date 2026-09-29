@@ -8,16 +8,16 @@ import (
 	"time"
 )
 
-// book2 — max-profit якорь от живой книги.
-// Окно 30м. sell = sellMult×p10.
+// book2 — цены целиком из живой книги.
+// Окно 30м. sell = sellMult × нижняя граница рынка продавцов.
+//
+// Якорь mkt = p10 per-seller min (без ban). Lot/uuid p10 не используем.
 //
 // Гибкие полы nac (абсолютная щель):
-//  1) жёсткий пол 300k (+ JSON);
+//  1) жёсткий пол 300k (+ JSON), но не ценой убийства buy-ratio;
 //  2) per-SKU: поднять пол по СВОЕЙ книге (K-я щель внутри SKU);
-//  3) global: только FAT (p10≥2.5M), и только если volume-ярус
-//     ещё даёт лоты над порогом — volume сам global'ом не поднимаем;
-//  4) потолок nac: volume buy≥0.70×mkt, fat ≥0.55×mkt;
-//  5) якорь sell = p20 per-seller min (не lot-p10 — тот раздут клонами).
+//  3) global: только FAT (mkt≥2.5M), volume global'ом не поднимаем;
+//  4) потолок nac: volume buy≥0.70×mkt, fat ≥0.55×mkt (покупательная сила).
 // SKU не баним.
 
 const (
@@ -108,20 +108,50 @@ func book2IsVolumeP10(p10 int) bool {
 	return p10 > 0 && p10 < book2VolumeP10Max
 }
 
-// book2MaxNacForP10 — жёсткий потолок щели: volume не ниже ~0.70×p10 buy.
+// book2MaxNacForP10 — потолок щели ради buy-ratio (volume ≥0.70×mkt buy).
+// Не поднимает nac до abs-пола: иначе при низком mkt buy душится.
 func book2MaxNacForP10(p10 int) int {
 	if p10 <= 0 {
-		return book2NacFloorAbs
+		return 0
 	}
 	ratio := book2FatMinBuyRatio
 	if book2IsVolumeP10(p10) {
 		ratio = book2VolumeMinBuyRatio
 	}
 	maxNac := p10 - int(float64(p10)*ratio+0.5)
-	if maxNac < book2NacFloorAbs {
-		return book2NacFloorAbs
+	if maxNac < 0 {
+		return 0
 	}
 	return maxNac
+}
+
+// book2PickNac — пол (soft/sku) vs потолок buy-ratio. Buy-ratio важнее abs softMin.
+func book2PickNac(sellT, wantFloor, softMin, mkt, step int) int {
+	nac := wantFloor
+	if softMin > 0 && nac < softMin {
+		nac = softMin
+	}
+	if mkt > 0 {
+		if cap := book2MaxNacForP10(mkt); nac > cap {
+			nac = cap
+		}
+	}
+	if sellT > 0 {
+		lim := sellT - 1
+		if step > 0 {
+			lim = sellT - step
+		}
+		if lim < 0 {
+			lim = 0
+		}
+		if nac > lim {
+			nac = lim
+		}
+	}
+	if nac < 0 {
+		return 0
+	}
+	return nac
 }
 
 type book2FloorPlan struct {
@@ -549,7 +579,7 @@ func adjustPriceBook(
 	}
 
 	mutex.Unlock()
-	// Рыночный якорь: p20 per-seller min (без ban), не lot/uuid p10.
+	// Нижняя граница рынка: p10 per-seller min (без ban).
 	mkt, mktN, mktOK := ahBookMarketAnchorSince(item, bookSince)
 	if !mktOK || mkt <= 0 {
 		mktOK = false
@@ -565,7 +595,7 @@ func adjustPriceBook(
 	buyEff := mult.Buy
 	notes := []string{
 		fmt.Sprintf(
-			"book2 hybrid 30m sell×%.2f mkt(p20seller)=%d sellers=%d ok=%v type=%s onAH=%d sales=%d buys=%d softMin=%d skuFloor=%d | %s",
+			"book2 hybrid 30m sell×%.2f mkt(p10seller)=%d sellers=%d ok=%v type=%s onAH=%d sales=%d buys=%d softMin=%d skuFloor=%d | %s",
 			mult.Sell, p10, p10N, p10OK, cfg.Type, onAH, sales, buys, softMin, skuFloor, plan.Note,
 		),
 	}
@@ -575,22 +605,7 @@ func adjustPriceBook(
 		sellT := bookSnapWithMarker(rawSell, step, priceBefore)
 		sellT = bookSnapWithMarker(book2ClampStep(priceBefore, sellT, step), step, priceBefore)
 
-		// Пол: softMin → per-SKU → global(только fat). Потолок buy ratio.
-		nacT := skuFloor
-		if p10 > 0 {
-			if cap := book2MaxNacForP10(p10); nacT > cap {
-				nacT = cap
-			}
-		}
-		if nacT >= sellT && step > 0 {
-			nacT = sellT - step
-		}
-		if nacT < softMin {
-			nacT = softMin
-		}
-		if nacT < 0 {
-			nacT = 0
-		}
+		nacT := book2PickNac(sellT, skuFloor, softMin, p10, step)
 		buyMax := sellT - nacT
 		if buyMax < 0 {
 			buyMax = 0
@@ -603,7 +618,7 @@ func adjustPriceBook(
 		if plan.GlobalOn {
 			modeTag = fmt.Sprintf("global+%d", plan.GlobalMarg)
 		}
-		buySrc = fmt.Sprintf("%s floor=%d nac=%d buyMax=%d (%.3f×p10)", modeTag, skuFloor, nacT, buyMax, buyEff)
+		buySrc = fmt.Sprintf("%s floor=%d nac=%d buyMax=%d (%.3f×mkt)", modeTag, skuFloor, nacT, buyMax, buyEff)
 		notes = append(notes, buySrc)
 
 		newNac = nacT
@@ -620,7 +635,7 @@ func adjustPriceBook(
 			decReason = "at_target"
 		}
 		notes = append(notes, fmt.Sprintf(
-			"target sell=%d nac=%d buyMax=%d (p10=%d %s)",
+			"target sell=%d nac=%d buyMax=%d (mkt=%d %s)",
 			sellT, nacT, sellT-nacT, p10, buySrc,
 		))
 	}
@@ -642,29 +657,13 @@ func adjustPriceBook(
 		notes = append(notes, "manual → ↑ запрещён")
 	}
 
-	nacMin := skuFloor
-	if nacMin < softMin {
-		nacMin = softMin
-	}
-	if p10OK && p10 > 0 {
-		if cap := book2MaxNacForP10(p10); nacMin > cap {
-			nacMin = cap
-		}
-	}
+	nacMin := book2PickNac(newPrice, skuFloor, softMin, p10, step)
 	if p10OK && p10 > 0 && newPrice > 0 {
 		wantNac := newNac
 		if wantNac < nacMin {
 			wantNac = nacMin
 		}
-		if wantNac >= newPrice && step > 0 {
-			wantNac = newPrice - step
-		}
-		if wantNac < softMin {
-			wantNac = softMin
-		}
-		if wantNac < 0 {
-			wantNac = 0
-		}
+		wantNac = book2PickNac(newPrice, wantNac, softMin, p10, step)
 		if wantNac != newNac {
 			notes = append(notes, fmt.Sprintf("nac clamp %d→%d (buyMax=%d)", newNac, wantNac, newPrice-wantNac))
 			newNac = wantNac

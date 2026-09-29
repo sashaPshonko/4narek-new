@@ -410,6 +410,12 @@ Live: `global+800k` снова дал sword7/фарм buyMax≈0.40×p10 (как
 Lot/uuid p10 завышал рынок (клоны 1.5M+ при реальном крае продавцов ~0.75–0.9M).
 Sell теперь от p20 минимальных цен продавцов (без ban). Volume ceiling 2.5M.
 
+### 2026-09-29 — book2 sell = seller p10 + buy-ratio > softMin
+
+p20/min12 не срабатывал (sword7 часто 11 sellers → no_book → залипание ~1.4M).
+Якорь: **p10 seller-mins**, min **6** sellers. softMin 300k больше не поднимает nac
+над потолком buy≥0.70×mkt — иначе при mkt~800k buy душили.
+
 
 
 

@@ -450,7 +450,7 @@ func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
 	}
 }
 
-func TestAhBookMarketAnchorSellerP20(t *testing.T) {
+func TestAhBookMarketAnchorSellerP10(t *testing.T) {
 	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "mkt.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -486,9 +486,9 @@ func TestAhBookMarketAnchorSellerP20(t *testing.T) {
 	if !ok || n < 20 {
 		t.Fatalf("ok=%v n=%d anchor=%d", ok, n, anchor)
 	}
-	// p20 of seller mins should be competitive ~0.8–1.2M, not wall 2.5M
-	if anchor < 800_000 || anchor > 1_200_000 {
-		t.Fatalf("anchor=%d want competitive ~0.8–1.2M (not wall 2.5M)", anchor)
+	// p10 of seller mins ≈ lower competitive edge (~750–850k), not wall 2.5M
+	if anchor < 700_000 || anchor > 950_000 {
+		t.Fatalf("anchor=%d want lower seller edge ~0.7–0.95M (not wall 2.5M)", anchor)
 	}
 	lotP10, lotN, lotOK := ahBookP10Since(item, now.Add(-30*time.Minute))
 	if !lotOK || lotN < 40 {
@@ -496,5 +496,17 @@ func TestAhBookMarketAnchorSellerP20(t *testing.T) {
 	}
 	if lotP10 <= anchor {
 		t.Fatalf("expected lot-p10 (%d) inflated above seller anchor (%d)", lotP10, anchor)
+	}
+}
+
+func TestBook2PickNacBuyRatioBeatsSoftMin(t *testing.T) {
+	// mkt=800k volume → max nac = 0.30× = 240k; softMin 300k must yield to buy ratio
+	nac := book2PickNac(800_000, 300_000, 300_000, 800_000, 1000)
+	if nac > 240_000 {
+		t.Fatalf("nac=%d want ≤240k so buy≥0.70×mkt", nac)
+	}
+	buy := 800_000 - nac
+	if float64(buy)/800_000 < 0.69 {
+		t.Fatalf("buy=%d ratio=%.3f", buy, float64(buy)/800_000)
 	}
 }

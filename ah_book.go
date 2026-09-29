@@ -663,11 +663,12 @@ func ahBookSellerMinPricesSince(itemID string, since time.Time) (ps []int, nSell
 	return ps, len(ps)
 }
 
-// ahBookMarketAnchorSince — рыночный якорь для book2 sell:
-// p20 среди per-seller min (не lot/uuid p10 — тот завышен клонами витрины).
+// ahBookMarketAnchorSince — нижняя граница рынка для book2 sell:
+// p10 среди per-seller min (без ban). Не lot/uuid p10 — тот раздут клонами.
+// Минимум sellers низкий: volume-SKU часто 8–15 живых продавцов в 30м.
 const (
-	ahBookMarketSellerPct   = 0.20
-	ahBookMarketMinSellers  = 12
+	ahBookMarketSellerPct  = 0.10
+	ahBookMarketMinSellers = 6
 )
 
 func ahBookMarketAnchorSince(itemID string, since time.Time) (anchor, nSellers int, ok bool) {
