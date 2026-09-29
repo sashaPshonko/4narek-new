@@ -670,6 +670,10 @@ const (
 	ahBookMarketBuyPct     = 0.10
 	ahBookMarketSellPct    = 0.40
 	ahBookMarketMinSellers = 3
+	// Дорогие SKU: только селлеры с ≥N лотами одного item (не разовый лот).
+	ahBookMultiSellerMinLots = 3
+	// Нормальный низ мульти-селлеров (не abs min — дампы 1.5M).
+	ahBookExpensiveBottomPct = 0.10
 )
 
 func ahBookMarketAnchorsSince(itemID string, since time.Time) (sellMkt, buyEdge, nSellers int, ok bool) {
@@ -686,6 +690,85 @@ func ahBookMarketAnchorsSince(itemID string, since time.Time) (sellMkt, buyEdge,
 		sellMkt = buyEdge
 	}
 	return sellMkt, buyEdge, n, true
+}
+
+// ahBookMultiSellerMinPricesSince — мин. цена только у продавцов с ≥minLots лотов SKU в окне.
+// «Селлер» = пачка одного меча, не разовый рандом. Ban-витрины пропускаем.
+func ahBookMultiSellerMinPricesSince(itemID string, since time.Time, minLots int) (ps []int, nSellers int) {
+	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
+		return nil, 0
+	}
+	if minLots < 2 {
+		minLots = ahBookMultiSellerMinLots
+	}
+	mlDBMu.Lock()
+	rows, err := mlDB.Query(
+		`SELECT a.price, lower(trim(coalesce(a.seller,''))),
+			EXISTS(
+				SELECT 1 FROM ah_book_seller_bans b
+				WHERE b.seller = lower(trim(a.seller))
+			) AS banned
+		 FROM ah_book_lots a
+		 WHERE a.item_id = ? AND a.ts >= ? AND a.price > 0`,
+		itemID, since.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		mlDBMu.Unlock()
+		log.Printf("[ah_book] multi seller mins: %v", err)
+		return nil, 0
+	}
+	type agg struct {
+		n   int
+		min int
+	}
+	bySeller := map[string]*agg{}
+	for rows.Next() {
+		var price int
+		var seller string
+		var banned bool
+		if err := rows.Scan(&price, &seller, &banned); err != nil || price <= 0 {
+			continue
+		}
+		if banned || seller == "" {
+			continue
+		}
+		st, ok := bySeller[seller]
+		if !ok {
+			bySeller[seller] = &agg{n: 1, min: price}
+			continue
+		}
+		st.n++
+		if price < st.min {
+			st.min = price
+		}
+	}
+	_ = rows.Close()
+	mlDBMu.Unlock()
+	ps = make([]int, 0, len(bySeller))
+	for _, st := range bySeller {
+		if st.n >= minLots && st.min > 0 {
+			ps = append(ps, st.min)
+		}
+	}
+	if len(ps) == 0 {
+		return nil, 0
+	}
+	sort.Ints(ps)
+	return ps, len(ps)
+}
+
+// ahBookExpensiveBottomAnchorsSince — дорогие: sell/buyEdge = нормальный низ мульти-селлеров.
+// Не p40 «середина витрин» — она на mega/яд завышена.
+func ahBookExpensiveBottomAnchorsSince(itemID string, since time.Time) (sellMkt, buyEdge, nSellers int, ok bool) {
+	ps, n := ahBookMultiSellerMinPricesSince(itemID, since, ahBookMultiSellerMinLots)
+	if n < ahBookMarketMinSellers {
+		return 0, 0, n, false
+	}
+	bottom := ahBookPercentileSorted(ps, ahBookExpensiveBottomPct)
+	if bottom <= 0 {
+		return 0, 0, n, false
+	}
+	return bottom, bottom, n, true
 }
 
 // ahBookMarketAnchorSince — sell-якорь (p40 seller-mins). Для полов/volume gate.

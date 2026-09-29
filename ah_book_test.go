@@ -506,6 +506,68 @@ func TestAhBookMarketAnchorSellerP40(t *testing.T) {
 	_ = lotP10
 }
 
+func TestAhBookExpensiveBottomMultiSellers(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "multi.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); mlDB = nil })
+	mlDB = db
+	initAhBookTable()
+	item := "megasword-1.21"
+	now := time.Now().UTC()
+	ts := now.Format(time.RFC3339)
+
+	// one-off cheap random — must NOT set the bottom
+	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		"once", ts, "sword", item, 1_500_000, "random_once")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// multi sellers: mins at 3.0 / 3.0 / 4.0 / 5.0 / 5.0 + fat mid
+	multis := []struct {
+		seller string
+		prices []int
+	}{
+		{"pack_a", []int{3_000_000, 3_200_000, 3_500_000}},
+		{"pack_b", []int{3_000_000, 3_100_000, 3_100_000}},
+		{"pack_c", []int{4_000_000, 4_100_000, 4_200_000}},
+		{"pack_d", []int{5_000_000, 5_000_000, 5_500_000}},
+		{"pack_e", []int{5_000_000, 5_200_000, 6_000_000}},
+		{"pack_f", []int{5_500_000, 5_500_000, 5_500_000}},
+		{"pack_g", []int{6_000_000, 6_000_000, 6_000_000}},
+	}
+	u := 0
+	for _, m := range multis {
+		for _, p := range m.prices {
+			u++
+			_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+				fmt.Sprintf("m-%d", u), ts, "sword", item, p, m.seller)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	sell, buy, n, ok := ahBookExpensiveBottomAnchorsSince(item, now.Add(-30*time.Minute))
+	if !ok || n != 7 {
+		t.Fatalf("ok=%v n=%d sell=%d buy=%d", ok, n, sell, buy)
+	}
+	// p10 of multi mins ≈ 3.0M — not random 1.5M, not mid ~5M
+	if sell < 2_900_000 || sell > 3_400_000 {
+		t.Fatalf("sell=%d want ~3.0M multi low", sell)
+	}
+	if buy != sell {
+		t.Fatalf("buyEdge=%d want =sell for expensive bottom", buy)
+	}
+
+	// classic p40 still above multi low
+	classicSell, _, _, cok := ahBookMarketAnchorsSince(item, now.Add(-30*time.Minute))
+	if !cok || classicSell <= sell {
+		t.Fatalf("classic sell=%d should be above multiLow=%d", classicSell, sell)
+	}
+}
+
 func TestBook2PickNacHardSoftMin(t *testing.T) {
 	// softMin 300k не режется buy-ratio/buyEdge — место даёт sell
 	nac := book2PickNac(1_000_000, 300_000, 300_000, 1000)

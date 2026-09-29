@@ -11,12 +11,13 @@ import (
 // book2 — цены целиком из живой книги.
 // Окно 30м.
 //
-// Якоря (per-seller min, без ban; lot/uuid p10 не используем):
-//   sell = max(seller-p40, buyEdge+nac) — конкурентный край + место под наценку;
-//   buy  ≥ seller-p10                   — иначе AH пустой для закупа;
-//   nac  ≥ softMin (300k)               — жёсткий пол; не режем ради buy-ratio.
+// Дешёвые / volume (sword5/7 и т.п.):
+//   sell = max(seller-p40, buyEdge+nac); buyEdge = seller-p10; nac ≥ softMin.
+//   Если buyEdge+nac > p40 — поднимаем sell (место под наценку).
 //
-// Если buyEdge+300k > p40 — поднимаем sell, а не режем наценку.
+// Дорогие (mega/pochti/яд / sell≥volume ceiling):
+//   sell = нормальный низ мульти-селлеров (≥3 лота одного SKU), не p40 витрин;
+//   buyMax = sell − nac; sell НЕ поднимаем под buyEdge+nac (иначе снова уезжаем вверх).
 // SKU не баним.
 
 const (
@@ -604,8 +605,20 @@ func adjustPriceBook(
 	}
 
 	mutex.Unlock()
-	// sell = seller-p40, buyEdge = seller-p10 (без ban).
+	// Дешёвые: sell=p40 / buyEdge=p10. Дорогие: низ мульти-селлеров (≥3 лота).
 	sellMkt, buyEdge, mktN, mktOK := ahBookMarketAnchorsSince(item, bookSince)
+	anchorMode := "p40seller"
+	expensiveBottom := book2ExpensiveSKU(item, 0)
+	if !expensiveBottom && mktOK {
+		expensiveBottom = book2ExpensiveSKU(item, sellMkt)
+	}
+	if expensiveBottom {
+		s2, b2, n2, ok2 := ahBookExpensiveBottomAnchorsSince(item, bookSince)
+		if ok2 && s2 > 0 {
+			sellMkt, buyEdge, mktN, mktOK = s2, b2, n2, true
+			anchorMode = "multiLow"
+		}
+	}
 	if !mktOK || sellMkt <= 0 {
 		mktOK = false
 	}
@@ -620,8 +633,8 @@ func adjustPriceBook(
 	buyEff := mult.Buy
 	notes := []string{
 		fmt.Sprintf(
-			"book2 hybrid 30m sell×%.2f mkt(p40seller)=%d buyEdge(p10)=%d sellers=%d ok=%v type=%s onAH=%d sales=%d buys=%d softMin=%d skuFloor=%d | %s",
-			mult.Sell, p10, buyEdge, p10N, p10OK, cfg.Type, onAH, sales, buys, softMin, skuFloor, plan.Note,
+			"book2 hybrid 30m sell×%.2f mkt(%s)=%d buyEdge=%d sellers=%d ok=%v type=%s onAH=%d sales=%d buys=%d softMin=%d skuFloor=%d | %s",
+			mult.Sell, anchorMode, p10, buyEdge, p10N, p10OK, cfg.Type, onAH, sales, buys, softMin, skuFloor, plan.Note,
 		),
 	}
 
@@ -631,15 +644,18 @@ func adjustPriceBook(
 			nacWant = softMin
 		}
 		rawSell := int(float64(p10)*mult.Sell + 0.5)
-		// sell ≥ buyEdge+nacWant — иначе при жёстких 300k buy не достаёт до AH
-		if minSell := book2MinSellForNac(buyEdge, nacWant, step); minSell > rawSell {
-			rawSell = minSell
+		// volume: sell ≥ buyEdge+nac. expensive multiLow — нет, иначе низ снова уедет вверх.
+		if anchorMode != "multiLow" {
+			if minSell := book2MinSellForNac(buyEdge, nacWant, step); minSell > rawSell {
+				rawSell = minSell
+			}
 		}
 		sellT := bookSnapWithMarker(rawSell, step, priceBefore)
 		sellT = bookSnapWithMarker(book2ClampStep(priceBefore, sellT, step), step, priceBefore)
-		// после clamp снова проверить место под nac — при необходимости добить sell (deep)
-		if minSell := book2MinSellForNac(buyEdge, nacWant, step); sellT < minSell {
-			sellT = bookSnapWithMarker(minSell, step, priceBefore)
+		if anchorMode != "multiLow" {
+			if minSell := book2MinSellForNac(buyEdge, nacWant, step); sellT < minSell {
+				sellT = bookSnapWithMarker(minSell, step, priceBefore)
+			}
 		}
 
 		nacT := book2PickNac(sellT, skuFloor, softMin, step)
@@ -717,7 +733,7 @@ func adjustPriceBook(
 			fr := book2FreezeBuyNac(newPrice)
 			if fr > newNac {
 				notes = append(notes, fmt.Sprintf(
-					"expensive under-book sell=%d p40=%d → buy freeze nac %d→%d",
+					"expensive under-book sell=%d mkt=%d → buy freeze nac %d→%d",
 					newPrice, p10, newNac, fr,
 				))
 				newNac = fr
