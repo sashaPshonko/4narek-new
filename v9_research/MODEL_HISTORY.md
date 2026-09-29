@@ -400,6 +400,11 @@ K = max(2×ёмкости bots×5, 2×free, 10). Запас ×2: иначе page
 
 Без банов SKU. Жёсткий пол 300k.
 
+### 2026-09-29 — book2: global не душит volume
+
+Live: `global+800k` снова дал sword7/фарм buyMax≈0.40×p10 (как ночной 910k/0.23).
+Фикс: global только на fat; volume/fat потолок nac (buy≥0.70 / ≥0.55 ×p10).
+
 
 
 

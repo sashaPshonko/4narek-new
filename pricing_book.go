@@ -13,10 +13,10 @@ import (
 //
 // Гибкие полы nac (абсолютная щель):
 //  1) жёсткий пол 300k (+ JSON);
-//  2) per-SKU: поднять пол по СВОЕЙ книге (K-я щель внутри SKU) —
-//     mega может уйти в 500–800k, sword7/фарм остаться ~300k;
-//  3) global: поднять ВСЕМ только если над порогом хватает лотов
-//     на слоты И объёмные SKU (p10<1.5M) тоже ещё кормят.
+//  2) per-SKU: поднять пол по СВОЕЙ книге (K-я щель внутри SKU);
+//  3) global: только FAT (p10≥1.5M), и только если volume-ярус
+//     ещё даёт лоты над порогом — volume сам global'ом не поднимаем;
+//  4) потолок nac: volume buy≥0.70×p10, fat ≥0.55×p10.
 // SKU не баним.
 
 const (
@@ -29,6 +29,9 @@ const (
 	book2MinMarginKFloor = 10
 	book2NacFloorAbs     = 300_000
 	book2VolumeP10Max    = 1_500_000 // sword7/фарм — объёмный ярус
+	// Потолок nac: buyMax/p10 не ниже этих долей (иначе AH time-sorted пустеет).
+	book2VolumeMinBuyRatio = 0.70
+	book2FatMinBuyRatio    = 0.55
 )
 
 type bookCatMult struct {
@@ -98,6 +101,26 @@ func book2SkuRaiseK(nElig int) int {
 		k = nElig
 	}
 	return k
+}
+
+func book2IsVolumeP10(p10 int) bool {
+	return p10 > 0 && p10 < book2VolumeP10Max
+}
+
+// book2MaxNacForP10 — жёсткий потолок щели: volume не ниже ~0.70×p10 buy.
+func book2MaxNacForP10(p10 int) int {
+	if p10 <= 0 {
+		return book2NacFloorAbs
+	}
+	ratio := book2FatMinBuyRatio
+	if book2IsVolumeP10(p10) {
+		ratio = book2VolumeMinBuyRatio
+	}
+	maxNac := p10 - int(float64(p10)*ratio+0.5)
+	if maxNac < book2NacFloorAbs {
+		return book2NacFloorAbs
+	}
+	return maxNac
 }
 
 type book2FloorPlan struct {
@@ -181,6 +204,15 @@ func book2PlanFloors(
 				floor = f
 			}
 		}
+		// volume/fat: не даём щели съесть buy ниже min ratio
+		if p10 := itemP10[id]; p10 > 0 {
+			if cap := book2MaxNacForP10(p10); floor > cap {
+				floor = cap
+			}
+		}
+		if floor < base {
+			floor = base
+		}
 		floors[id] = floor
 	}
 
@@ -192,12 +224,11 @@ func book2PlanFloors(
 	if volNeed < 8 {
 		volNeed = 8
 	}
-	// Global: максимальный пол, при котором и слоты, и volume-ярус ещё кормят.
-	// Не «K-я щель жирных» — иначе mega всегда душит farm/sword7.
+	// Global: max пол для FAT, если volume ещё показывает лоты над порогом.
+	// На volume SKU global НЕ накладываем — иначе 800k при sell≈1.2M → buy 0.4×p10.
 	globalOn := false
 	globalG := 0
 	if nAll >= supplyNeed && len(volume) >= volNeed {
-		// кандидаты порогов: уникальные маржи volume (от больших к меньшим)
 		uniq := append([]book2MarginCand(nil), volume...)
 		sort.SliceStable(uniq, func(i, j int) bool {
 			return uniq[i].Margin > uniq[j].Margin
@@ -210,16 +241,26 @@ func book2PlanFloors(
 			if book2CountMarginsAtLeast(all, f) >= supplyNeed && book2CountMarginsAtLeast(volume, f) >= volNeed {
 				globalG = f
 				globalOn = true
-				break // uniq sorted desc → первый = максимальный
+				break
 			}
 		}
 	}
 	if globalOn {
 		g = globalG
 		for id := range floors {
-			if g > floors[id] {
-				floors[id] = g
+			if book2IsVolumeP10(itemP10[id]) {
+				continue
 			}
+			floor := floors[id]
+			if g > floor {
+				floor = g
+			}
+			if p10 := itemP10[id]; p10 > 0 {
+				if cap := book2MaxNacForP10(p10); floor > cap {
+					floor = cap
+				}
+			}
+			floors[id] = floor
 		}
 	} else if !okG {
 		g = 0
@@ -529,8 +570,13 @@ func adjustPriceBook(
 		sellT := bookSnapWithMarker(rawSell, step, priceBefore)
 		sellT = bookSnapWithMarker(book2ClampStep(priceBefore, sellT, step), step, priceBefore)
 
-		// Пол: softMin → per-SKU raise → optional global (если volume ещё кормит).
+		// Пол: softMin → per-SKU → global(только fat). Потолок buy ratio.
 		nacT := skuFloor
+		if p10 > 0 {
+			if cap := book2MaxNacForP10(p10); nacT > cap {
+				nacT = cap
+			}
+		}
 		if nacT >= sellT && step > 0 {
 			nacT = sellT - step
 		}
@@ -594,6 +640,11 @@ func adjustPriceBook(
 	nacMin := skuFloor
 	if nacMin < softMin {
 		nacMin = softMin
+	}
+	if p10OK && p10 > 0 {
+		if cap := book2MaxNacForP10(p10); nacMin > cap {
+			nacMin = cap
+		}
 	}
 	if p10OK && p10 > 0 && newPrice > 0 {
 		wantNac := newNac

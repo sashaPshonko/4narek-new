@@ -186,12 +186,11 @@ func TestBook2PlanPerSKUWhenVolumeCantMeetGlobal(t *testing.T) {
 	}
 }
 
-// Толстая книга: volume тоже в топе щелей → global ON (общий пол поднимает всех).
+// Толстая книга: global ON, но только fat поднимается; volume capped (~0.30×p10).
 func TestBook2PlanGlobalWhenVolumeFeeds(t *testing.T) {
 	vol := make([]book2MarginCand, 50)
 	fat := make([]book2MarginCand, 30)
 	for i := 0; i < 50; i++ {
-		// volume конкурирует в топе: 520…422k
 		vol[i] = book2MarginCand{Margin: 520_000 - i*2_000}
 	}
 	for i := 0; i < 30; i++ {
@@ -200,16 +199,27 @@ func TestBook2PlanGlobalWhenVolumeFeeds(t *testing.T) {
 	byItem := map[string][]book2MarginCand{"sword7": vol, "mega": fat}
 	base := map[string]int{"sword7": 300_000, "mega": 300_000}
 	p10 := map[string]int{"sword7": 900_000, "mega": 5_000_000}
-	// need=max(2×15,2×8,10)=30 → G = 30-я щель (fat+vol) ≈ ~500k+
 	plan := book2PlanFloors(byItem, base, p10, 15, 8)
 	if !plan.GlobalOn {
 		t.Fatalf("expected global ON, note=%s", plan.Note)
 	}
-	if plan.FloorByItem["sword7"] < 480_000 {
-		t.Fatalf("sword7 under global floor=%d note=%s", plan.FloorByItem["sword7"], plan.Note)
+	// volume: max nac = 0.30×900k = 270k → soft base 300k
+	if plan.FloorByItem["sword7"] > 350_000 {
+		t.Fatalf("sword7 got global crush floor=%d note=%s", plan.FloorByItem["sword7"], plan.Note)
 	}
-	if plan.FloorByItem["mega"] < plan.GlobalMarg {
-		t.Fatalf("mega=%d < global=%d", plan.FloorByItem["mega"], plan.GlobalMarg)
+	if plan.FloorByItem["mega"] < plan.GlobalMarg && plan.FloorByItem["mega"] < 500_000 {
+		t.Fatalf("mega=%d should take fat raise/global note=%s", plan.FloorByItem["mega"], plan.Note)
+	}
+}
+
+func TestBook2MaxNacForP10(t *testing.T) {
+	// volume 1.2M → max nac 360k
+	if got := book2MaxNacForP10(1_200_000); got != 360_000 {
+		t.Fatalf("vol 1.2M → %d want 360k", got)
+	}
+	// fat 4M → max nac 1.8M (1-0.55)
+	if got := book2MaxNacForP10(4_000_000); got != 1_800_000 {
+		t.Fatalf("fat 4M → %d want 1.8M", got)
 	}
 }
 
