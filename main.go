@@ -1155,7 +1155,8 @@ func firstCycleDelay(item string, cfg ItemConfig) time.Duration {
 	defer mutex.Unlock()
 	last := data.LastCycleAt[item]
 	if last.IsZero() {
-		return cfg.AnalysisTime
+		// book2: без якоря сразу сесть к живой книге (не ждать AnalysisTime)
+		return 500 * time.Millisecond
 	}
 	elapsed := time.Since(last)
 	left := cfg.AnalysisTime - elapsed
