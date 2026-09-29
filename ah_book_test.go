@@ -506,11 +506,13 @@ func TestAhBookMarketAnchorSellerP40(t *testing.T) {
 	_ = lotP10
 }
 
-func TestBook2PickNacRespectsBuyEdge(t *testing.T) {
-	// sell=1.0M, softMin 300k would give buy=700k; buyEdge=800k → nac must drop to 200k
-	nac := book2PickNac(1_000_000, 300_000, 300_000, 1_000_000, 800_000, 1000)
-	buy := 1_000_000 - nac
-	if buy < 800_000 {
-		t.Fatalf("buy=%d nac=%d want buy≥buyEdge 800k", buy, nac)
+func TestBook2PickNacHardSoftMin(t *testing.T) {
+	// softMin 300k не режется buy-ratio/buyEdge — место даёт sell
+	nac := book2PickNac(1_000_000, 300_000, 300_000, 1000)
+	if nac != 300_000 {
+		t.Fatalf("nac=%d want softMin 300k", nac)
+	}
+	if min := book2MinSellForNac(800_000, 300_000, 1000); min != 1_100_000 {
+		t.Fatalf("minSell=%d want buyEdge+nac=1.1M", min)
 	}
 }
