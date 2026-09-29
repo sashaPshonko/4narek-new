@@ -672,8 +672,6 @@ const (
 	ahBookMarketMinSellers = 3
 	// Дорогие SKU: только селлеры с ≥N лотами одного item (не разовый лот).
 	ahBookMultiSellerMinLots = 3
-	// Нормальный низ мульти-селлеров (не abs min — дампы 1.5M).
-	ahBookExpensiveBottomPct = 0.10
 )
 
 func ahBookMarketAnchorsSince(itemID string, since time.Time) (sellMkt, buyEdge, nSellers int, ok bool) {
@@ -757,14 +755,14 @@ func ahBookMultiSellerMinPricesSince(itemID string, since time.Time, minLots int
 	return ps, len(ps)
 }
 
-// ahBookExpensiveBottomAnchorsSince — дорогие: sell/buyEdge = нормальный низ мульти-селлеров.
-// Не p40 «середина витрин» — она на mega/яд завышена.
+// ahBookExpensiveBottomAnchorsSince — дорогие: sell/buyEdge = самое дно мульти-селлеров.
+// Не от наших покупок (они могут быть завышены) и не p40 витрин.
 func ahBookExpensiveBottomAnchorsSince(itemID string, since time.Time) (sellMkt, buyEdge, nSellers int, ok bool) {
 	ps, n := ahBookMultiSellerMinPricesSince(itemID, since, ahBookMultiSellerMinLots)
 	if n < ahBookMarketMinSellers {
 		return 0, 0, n, false
 	}
-	bottom := ahBookPercentileSorted(ps, ahBookExpensiveBottomPct)
+	bottom := ps[0] // abs min среди селлеров с ≥3 лотами
 	if bottom <= 0 {
 		return 0, 0, n, false
 	}

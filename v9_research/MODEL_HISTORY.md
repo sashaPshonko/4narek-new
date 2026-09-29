@@ -432,11 +432,8 @@ Buy-ratio/buyEdge больше не режут softMin. Если buyEdge+300k > 
 Sell-side: FunTime max << catalog → skip слот (`4narek-1.12` f9de085), без `set_max_price`.
 OOS full_compare не гонял — gate на закуп, не смена sell-якоря.
 
-### 2026-09-30 — expensive sell = низ мульти-селлеров
+### 2026-09-30 — expensive sell = дно мульти-селлеров (abs min)
 
-Дешёвые/volume (sword5/7…): без изменений — sell≈seller-p40, buyEdge≈seller-p10, sell↑ под nac.
-
-Дорогие (mega/pochti/яд / sell≥2.5M): sell = нормальный низ (≥3 лота одного SKU у селлера, p10 их минимумов). Sell **не** поднимаем под buyEdge+nac. buyMax = sell−nac.
-
-Ретро 30m (локальная книга): почти 3.0→~2.7; мега 5.5→~5.1; яд 6.0→~5.4. sword7/5 не трогаем.
-OOS full_compare по v9 baselines не моделирует live multi-seller book2 — юнит-тест + ретро якоря; смотреть live PnL дорогих.
+Не от наших buy (могут быть завышены). Дешёвые — как были (seller-p40).
+Дорогие: min среди селлеров с ≥3 лотами SKU; sell не ↑ под nac.
+Было «p10 низа» → стало самое дно. Локальный Go, VPS не оплачен.

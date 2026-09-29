@@ -16,8 +16,8 @@ import (
 //   Если buyEdge+nac > p40 — поднимаем sell (место под наценку).
 //
 // Дорогие (mega/pochti/яд / sell≥volume ceiling):
-//   sell = нормальный низ мульти-селлеров (≥3 лота одного SKU), не p40 витрин;
-//   buyMax = sell − nac; sell НЕ поднимаем под buyEdge+nac (иначе снова уезжаем вверх).
+//   sell = самое дно мульти-селлеров (≥3 лота одного SKU), не наши покупки и не p40;
+//   buyMax = sell − nac; sell НЕ поднимаем под buyEdge+nac.
 // SKU не баним.
 
 const (

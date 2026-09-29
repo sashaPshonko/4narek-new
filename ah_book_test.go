@@ -553,9 +553,9 @@ func TestAhBookExpensiveBottomMultiSellers(t *testing.T) {
 	if !ok || n != 7 {
 		t.Fatalf("ok=%v n=%d sell=%d buy=%d", ok, n, sell, buy)
 	}
-	// p10 of multi mins ≈ 3.0M — not random 1.5M, not mid ~5M
-	if sell < 2_900_000 || sell > 3_400_000 {
-		t.Fatalf("sell=%d want ~3.0M multi low", sell)
+	// abs min of multi mins = 3.0M (pack_a/b); random 1.5M ignored (1 lot)
+	if sell < 2_900_000 || sell > 3_100_000 {
+		t.Fatalf("sell=%d want abs multi bottom 3.0M", sell)
 	}
 	if buy != sell {
 		t.Fatalf("buyEdge=%d want =sell for expensive bottom", buy)
