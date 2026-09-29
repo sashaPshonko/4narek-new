@@ -32,6 +32,8 @@ const (
 	// Потолок nac для *полов* volume (не ломает abs softMin 300k на sell).
 	book2VolumeMinBuyRatio = 0.85
 	book2FatMinBuyRatio    = 0.70
+	// Дорогие SKU: без живой книги / sell<<книги — buyMax=0 (не копить меги вслепую).
+	book2ExpensiveBuyFreezeRatio = 0.85
 )
 
 type bookCatMult struct {
@@ -47,6 +49,23 @@ var bookProfitMultByType = map[string]bookCatMult{
 }
 
 var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.85}
+
+// book2ExpensiveSKU — мега/почти/яд и любой каталог ≥ volume ceiling.
+func book2ExpensiveSKU(item string, sellPrice int) bool {
+	if sellPrice >= book2VolumeP10Max {
+		return true
+	}
+	id := strings.ToLower(item)
+	return strings.Contains(id, "megasword") || strings.Contains(id, "pochti")
+}
+
+// book2FreezeBuyNac — nac так, что buyMax=0 (боты не закупают).
+func book2FreezeBuyNac(sell int) int {
+	if sell <= 0 {
+		return 0
+	}
+	return sell
+}
 
 type book2MarginCand struct {
 	Item   string
@@ -693,24 +712,46 @@ func adjustPriceBook(
 		if p10 > 0 && newPrice > newNac {
 			buyEff = float64(newPrice-newNac) / float64(p10)
 		}
+		// sell сильно под книгой (manual max / дамп) — не докупать в яму
+		if book2ExpensiveSKU(item, p10) && newPrice*100 < int(book2ExpensiveBuyFreezeRatio*100)*p10 {
+			fr := book2FreezeBuyNac(newPrice)
+			if fr > newNac {
+				notes = append(notes, fmt.Sprintf(
+					"expensive under-book sell=%d p40=%d → buy freeze nac %d→%d",
+					newPrice, p10, newNac, fr,
+				))
+				newNac = fr
+				decReason = "under_book_buy_freeze"
+			}
+		}
 	} else if newPrice > 0 {
-		buyCap := newPrice * 85 / 100
-		if step > 0 && buyCap >= newPrice {
-			buyCap = newPrice - step
-		}
-		if buyCap < 0 {
-			buyCap = 0
-		}
-		wantNac := newPrice - buyCap
-		if wantNac < softMin {
-			wantNac = softMin
-		}
-		if wantNac > newNac {
-			notes = append(notes, fmt.Sprintf("thin book buy-cap 85%% → nac %d→%d (buyMax=%d)", newNac, wantNac, newPrice-wantNac))
-			newNac = wantNac
-			decReason = "no_book_buy_cap"
+		if book2ExpensiveSKU(item, newPrice) {
+			// Меги без 30m-книги: раньше buy-cap 85% от sticky sell → яд3/мега копились вслепую.
+			fr := book2FreezeBuyNac(newPrice)
+			notes = append(notes, fmt.Sprintf(
+				"expensive no_book → buy freeze nac %d→%d (buyMax=0)", newNac, fr,
+			))
+			newNac = fr
+			decReason = "no_book_buy_freeze"
 		} else {
-			notes = append(notes, "thin/absent book 30m → hold (ждём скан)")
+			buyCap := newPrice * 85 / 100
+			if step > 0 && buyCap >= newPrice {
+				buyCap = newPrice - step
+			}
+			if buyCap < 0 {
+				buyCap = 0
+			}
+			wantNac := newPrice - buyCap
+			if wantNac < softMin {
+				wantNac = softMin
+			}
+			if wantNac > newNac {
+				notes = append(notes, fmt.Sprintf("thin book buy-cap 85%% → nac %d→%d (buyMax=%d)", newNac, wantNac, newPrice-wantNac))
+				newNac = wantNac
+				decReason = "no_book_buy_cap"
+			} else {
+				notes = append(notes, "thin/absent book 30m → hold (ждём скан)")
+			}
 		}
 	}
 
