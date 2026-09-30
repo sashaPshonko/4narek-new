@@ -235,12 +235,6 @@ func TestBook2SkuRaiseK(t *testing.T) {
 	}
 }
 
-func TestBook2VolumeSellCap(t *testing.T) {
-	if book2VolumeSellCap != 1_000_000 {
-		t.Fatalf("cap=%d", book2VolumeSellCap)
-	}
-}
-
 func TestBook2VolumeBuyBelowEdge(t *testing.T) {
 	if book2VolumeBuyBelowEdge != 200_000 {
 		t.Fatalf("slack=%d", book2VolumeBuyBelowEdge)

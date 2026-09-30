@@ -432,7 +432,7 @@ Buy-ratio/buyEdge больше не режут softMin. Если buyEdge+300k > 
 Sell-side: FunTime max << catalog → skip слот (`4narek-1.12` f9de085), без `set_max_price`.
 OOS full_compare не гонял — gate на закуп, не смена sell-якоря.
 
-### 2026-09-30 — volume sell cap 1.0M + expensive multiLow от 1 селлера
+### 2026-09-30 — volume buyMax ≤ buyEdge−200k (без hardcap 1.0M)
 
-sword7: sell не выше **1.0M** (ночью 1.2–1.3 не сливался) + buy≤edge−200k.
-Дорогие: дно мульти достаточно от **1** селлера с ≥3 лотами (раньше ждали ≥3 таких).
+Hardcap sell=1.0M откатили: это не алгоритм. Buy глубже края (edge−200k) оставляем.
+Дорогие: дно от ≥1 мульти-селлера (≥3 лота). Sword7→multiLow — отдельно, если скажет.
