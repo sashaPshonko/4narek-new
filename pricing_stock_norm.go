@@ -196,11 +196,20 @@ func adjustPriceStockNorm(
 
 	newPrice := dec.NewPrice
 	action := dec.Action
+	maxReach := maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts)
 	notes := []string{
 		fmt.Sprintf(
-			"stock_norm held=%d onAH=%d inv=%d norm=%d sales=%d/%d bookFloor=%d ok=%v | %s",
-			totalHeld, onAH, invCount, stockNorm, sales, normalSales, bookFloor, bookOK, dec.Reason,
+			"stock_norm held=%d onAH=%d inv=%d norm=%d maxReach=%d sales=%d/%d bookFloor=%d ok=%v | %s",
+			totalHeld, onAH, invCount, stockNorm, maxReach, sales, normalSales, bookFloor, bookOK, dec.Reason,
 		),
+	}
+
+	// Слоты АХ забиты другими id → норма недостижима → не ↑ (как 37e01ade).
+	if strings.Contains(action, "price_up") &&
+		!allowSellPriceIncreaseLocked(item, cfg, onAH, ahCounts, stockNorm) {
+		newPrice = priceBefore
+		action = "stock_norm_hold_slots"
+		notes = append(notes, fmt.Sprintf("↑ blocked: maxReachable=%d < norm=%d (слоты заняты другими)", maxReach, stockNorm))
 	}
 
 	state.LastCycleSales = sales

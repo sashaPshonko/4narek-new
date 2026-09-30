@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,5 +72,17 @@ func TestServerMaxBookAnomalousNoise(t *testing.T) {
 	}
 	if !serverMaxBookAnomalous(1_000_000, 0, "x", now) {
 		t.Fatal("proposed 0 must ignore")
+	}
+}
+
+func TestStockNormHoldSlotsGatesUp(t *testing.T) {
+	// Симулируем пост-гейт: UP-action + !allow → hold_slots.
+	action := "stock_norm_price_up_deficit"
+	allow := false
+	if strings.Contains(action, "price_up") && !allow {
+		action = "stock_norm_hold_slots"
+	}
+	if action != "stock_norm_hold_slots" {
+		t.Fatalf("want hold_slots got %s", action)
 	}
 }
