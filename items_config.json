@@ -2,7 +2,7 @@
   "pochti-megasword-1.21": {
     "base_price": 3000002,
     "normal_sales": 5,
-    "normal_count": 3,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -35,7 +35,7 @@
   "sword7-1.21": {
     "base_price": 1000003,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -60,7 +60,7 @@
   "megasword-1.21": {
     "base_price": 4200004,
     "normal_sales": 5,
-    "normal_count": 3,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -93,7 +93,7 @@
   "megasword-яд3-1.21": {
     "base_price": 4000007,
     "normal_sales": 5,
-    "normal_count": 3,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -126,7 +126,7 @@
   "штаны-1.21": {
     "base_price": 600005,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 7,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
@@ -147,7 +147,7 @@
   "нагрудник-1.21": {
     "base_price": 600007,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_chestplate",
@@ -168,7 +168,7 @@
   "ботинки-1.21": {
     "base_price": 600009,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 6,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
@@ -189,7 +189,7 @@
   "ботинки-крутые-1.21": {
     "base_price": 600016,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 6,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
@@ -214,7 +214,7 @@
   "шлем-1.21": {
     "base_price": 600011,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 7,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
@@ -235,7 +235,7 @@
   "шлем-крутой-1.21": {
     "base_price": 600015,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 7,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
@@ -264,7 +264,7 @@
   "sword-bare-1.21": {
     "base_price": 80019,
     "normal_sales": 5,
-    "normal_count": 3,
+    "normal_count": 4,
     "price_step": 10000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -277,7 +277,7 @@
   "sword-sharp5-1.21": {
     "base_price": 200015,
     "normal_sales": 5,
-    "normal_count": 3,
+    "normal_count": 4,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -294,7 +294,7 @@
   "sword-sharp6-1.21": {
     "base_price": 300016,
     "normal_sales": 5,
-    "normal_count": 3,
+    "normal_count": 4,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
@@ -311,7 +311,7 @@
   "кирка-бульд-маг-1.21": {
     "base_price": 1000018,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
@@ -340,7 +340,7 @@
   "кирка-эфф7-1.21": {
     "base_price": 2000023,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
@@ -367,7 +367,7 @@
   "кирка-мид-1.21": {
     "base_price": 1200022,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
@@ -400,7 +400,7 @@
   "кирка-топ-1.21": {
     "base_price": 2700025,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
@@ -429,7 +429,7 @@
   "шлем-позор-1.21": {
     "base_price": 500012,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 5,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
@@ -450,7 +450,7 @@
   "штаны-позор-1.21": {
     "base_price": 500014,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 5,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
@@ -471,7 +471,7 @@
   "ботинки-позор-1.21": {
     "base_price": 500010,
     "normal_sales": 5,
-    "normal_count": 4,
+    "normal_count": 6,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
