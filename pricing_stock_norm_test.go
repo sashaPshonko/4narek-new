@@ -107,7 +107,6 @@ func TestStockNormBookMidCapsUp(t *testing.T) {
 }
 
 func TestStockNormBookMidDoesNotBlockWithoutBook(t *testing.T) {
-	// без BookMidOK ↑ свободно (тонкая книга)
 	d := stockNormDecide(stockNormInput{
 		Held: 2, StockNorm: 4, Sales: 0, NormalSales: 5,
 		Price: 500_000, Step: 50_000,
@@ -117,17 +116,8 @@ func TestStockNormBookMidDoesNotBlockWithoutBook(t *testing.T) {
 	}
 }
 
-func TestStockNormBookMidApplies(t *testing.T) {
-	if !stockNormBookMidApplies("sword7-1.21") {
-		t.Fatal("sword7 must have mid cap")
-	}
-	if !stockNormBookMidApplies("megasword-1.21") {
-		t.Fatal("mega must have mid cap")
-	}
-	if stockNormBookMidApplies("sword-sharp5-1.21") {
-		t.Fatal("sharp5 must NOT have mid cap")
-	}
-	if stockNormBookMidApplies("sword-sharp6-1.21") {
-		t.Fatal("sharp6 must NOT have mid cap")
+func TestStockNormBookMidPctIsP75(t *testing.T) {
+	if stockNormBookMidPct != 0.75 {
+		t.Fatalf("want p75 got %v", stockNormBookMidPct)
 	}
 }

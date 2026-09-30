@@ -13,8 +13,8 @@ import (
 //   held > norm ∧ sales < NormalSales → ↓ sell
 //   иначе sales < NormalSales → ↑ sell (переизбыток исключён)
 // Книга не якорь цены; рычаг: пусто ∧ сильно ниже пола книги → ↑.
-// Дорогие + sword7: ↑ не выше seller-p40 («середина» книги).
-// sharp5/6 — нет: p40≈0.3–0.4M при факте продажи ~0.5M (дамп-селлеры).
+// Дорогие + volume: ↑ не выше seller-p75 (верх конкурентной полки книги).
+// p40 ломал sharp5/6 (дампы); p75 ≈ факт слива и универсален на живой книге.
 // set_min/set_max проверяются по книге в main.go.
 //
 // Rollback: capitalPolicy = capitalPolicyV9 (+book2).
@@ -23,6 +23,9 @@ const capitalPolicyStockNorm = "stock_norm_july11"
 
 // Пусто + цена ниже bookFloor×ratio → можно ↑ к рынку.
 const stockNormBookCatchupRatio = 0.85
+
+// Потолок ↑: p75 per-seller min (noban), ≥ ahBookMarketMinSellers.
+const stockNormBookMidPct = 0.75
 
 func isPricingPolicyStockNorm() bool {
 	return capitalPolicy == capitalPolicyStockNorm
@@ -95,12 +98,12 @@ func stockNormDecide(in stockNormInput) stockNormDecision {
 		if in.BookMidOK && in.BookMid > 0 {
 			if price >= in.BookMid {
 				out.Action = "stock_norm_hold_book_mid"
-				out.Reason = fmt.Sprintf("%s · уже ≥ bookMid(p40)=%d", reason, in.BookMid)
+				out.Reason = fmt.Sprintf("%s · уже ≥ bookMid(p75)=%d", reason, in.BookMid)
 				return
 			}
 			if cand > in.BookMid {
 				cand = in.BookMid
-				reason = reason + fmt.Sprintf(" · cap bookMid(p40)=%d", in.BookMid)
+				reason = reason + fmt.Sprintf(" · cap bookMid(p75)=%d", in.BookMid)
 			}
 		}
 		out.Action = action
@@ -154,26 +157,18 @@ func stockNormBookFloor(item string, since time.Time) (floor int, ok bool) {
 	return 0, false
 }
 
-// stockNormBookMidApplies — потолок p40 только где он совпадает с фактом слива.
-// sharp5/6: p40 << наши продажи → не душим. Armor/кирки локально без книги — без потолка.
-func stockNormBookMidApplies(item string) bool {
-	id := strings.ToLower(item)
-	if strings.Contains(id, "sword7") {
-		return true
-	}
-	return book2ExpensiveSKU(item, 0)
-}
-
-// stockNormBookMid — «середина» книги = seller-p40 (конкурентный sell / верх нормы).
+// stockNormBookMid — потолок ↑ = seller-p75 (верх конкурентной полки, не дамп-p40).
+// Любой SKU с ≥3 noban-селлерами.
 func stockNormBookMid(item string, since time.Time) (mid int, ok bool) {
-	if !stockNormBookMidApplies(item) {
+	ps, n := ahBookSellerMinPricesSince(item, since)
+	if n < ahBookMarketMinSellers {
 		return 0, false
 	}
-	sellMkt, _, _, ok2 := ahBookMarketAnchorsSince(item, since)
-	if ok2 && sellMkt > 0 {
-		return sellMkt, true
+	mid = ahBookPercentileSorted(ps, stockNormBookMidPct)
+	if mid <= 0 {
+		return 0, false
 	}
-	return 0, false
+	return mid, true
 }
 
 func adjustPriceStockNorm(
