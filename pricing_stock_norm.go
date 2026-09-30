@@ -13,7 +13,7 @@ import (
 //   held > norm ∧ sales < NormalSales → ↓ sell
 //   иначе sales < NormalSales → ↑ sell (переизбыток исключён)
 // Книга не якорь цены; рычаг: пусто ∧ сильно ниже пола книги → ↑.
-// Дорогие (mega/почти/яд): ↑ не выше seller-p40 («середина» книги).
+// Дорогие и volume (в т.ч. sword7): ↑ не выше seller-p40 («середина» книги).
 // set_min/set_max проверяются по книге в main.go.
 //
 // Rollback: capitalPolicy = capitalPolicyV9 (+book2).
@@ -153,12 +153,9 @@ func stockNormBookFloor(item string, since time.Time) (floor int, ok bool) {
 	return 0, false
 }
 
-// stockNormBookMid — «середина» книги = seller-p40 (как старый якорь нормы продаж).
-// Только для дорогих: потолок ↑.
+// stockNormBookMid — «середина» книги = seller-p40 (конкурентный sell / верх нормы).
+// Потолок ↑ для любого SKU с жирной книгой (≥3 sellers).
 func stockNormBookMid(item string, since time.Time) (mid int, ok bool) {
-	if !book2ExpensiveSKU(item, 0) {
-		return 0, false
-	}
 	sellMkt, _, _, ok2 := ahBookMarketAnchorsSince(item, since)
 	if ok2 && sellMkt > 0 {
 		return sellMkt, true

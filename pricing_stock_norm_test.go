@@ -106,13 +106,24 @@ func TestStockNormBookMidCapsUp(t *testing.T) {
 	}
 }
 
-func TestStockNormBookMidDoesNotBlockVolume(t *testing.T) {
-	// без BookMidOK volume ↑ свободно
+func TestStockNormBookMidDoesNotBlockWithoutBook(t *testing.T) {
+	// без BookMidOK ↑ свободно (тонкая книга)
 	d := stockNormDecide(stockNormInput{
 		Held: 2, StockNorm: 4, Sales: 0, NormalSales: 5,
 		Price: 500_000, Step: 50_000,
 	})
 	if d.Action != "stock_norm_price_up_deficit" || d.NewPrice != 550_000 {
-		t.Fatalf("volume ↑: %+v", d)
+		t.Fatalf("no mid → ↑: %+v", d)
+	}
+}
+
+func TestStockNormBookMidCapsSword7(t *testing.T) {
+	d := stockNormDecide(stockNormInput{
+		Held: 2, StockNorm: 4, Sales: 0, NormalSales: 5,
+		Price: 950_000, Step: 100_000,
+		BookMid: 1_000_000, BookMidOK: true,
+	})
+	if d.Action != "stock_norm_price_up_deficit" || d.NewPrice != 1_000_000 {
+		t.Fatalf("sword7 ↑ cap at mid: %+v", d)
 	}
 }
