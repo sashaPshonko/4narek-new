@@ -58,9 +58,9 @@ func TestStockNormNoNacenkaActions(t *testing.T) {
 	}
 }
 
-func TestCapitalPolicyStockNorm(t *testing.T) {
-	if capitalPolicy != capitalPolicyStockNorm {
-		t.Fatalf("active=%s want %s (rollback: capitalPolicyV9)", capitalPolicy, capitalPolicyStockNorm)
+func TestCapitalPolicyIsV9(t *testing.T) {
+	if capitalPolicy != capitalPolicyV9 {
+		t.Fatalf("active=%s want %s", capitalPolicy, capitalPolicyV9)
 	}
 }
 

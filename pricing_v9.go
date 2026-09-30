@@ -311,6 +311,24 @@ func adjustPriceV9(
 		notes = append(notes, "manual max/set → ↑ запрещён")
 	}
 
+	// Потолок ↑ как у stock_norm 30.09: seller-p{q} q=0.95→0.88 — только стена, не якорь.
+	if strings.Contains(action, "price_up") && newPrice > priceBefore {
+		mutex.Unlock()
+		bookMid, bookMidQ, bookMidOK := stockNormBookMid(item, now.Add(-ahBook2Window))
+		mutex.Lock()
+		if bookMidOK && bookMid > 0 {
+			qTag := fmt.Sprintf("p%.0f", bookMidQ*100)
+			if priceBefore >= bookMid {
+				newPrice = priceBefore
+				action = "corridor_hold_v9_book_mid"
+				notes = append(notes, fmt.Sprintf("уже ≥ bookMid(%s)=%d → ↑ стоп", qTag, bookMid))
+			} else if newPrice > bookMid {
+				newPrice = bookMid
+				notes = append(notes, fmt.Sprintf("cap bookMid(%s)=%d", qTag, bookMid))
+			}
+		}
+	}
+
 	if newPrice < priceFloor {
 		newPrice = priceFloor
 		if newPrice > priceBefore {

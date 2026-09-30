@@ -448,7 +448,9 @@ Hardcap sell=1.0M откатили: это не алгоритм. Buy глубж
 Rollback: `capitalPolicy = capitalPolicyV9` (+book2).
 OOS full_compare vs v9 baselines — отдельно (эта политика не в sim_v9).
 
-### 2026-09-30 — stock_norm UP-cap = крайний случай
+### 2026-09-30 — prod → `stock_corridor_v9` (+book2), UP-cap 0.88
 
-Потолок ↑ `seller-p{q}` по log(p50): **0.95→0.88** (было 0.80→0.55 / 0.75→0.40).
-Не рабочий тормоз витрины — только стена. ↓ не трогает.
+Откат с `stock_norm_july11`. Мечи/relist → book2; остальное → v9 corridor.
+Потолок ↑ с stock_norm (seller-p q=0.95→0.88) оставлен на v9 UP path.
+enoughItems убран с ботов: АХ полон не стопает закуп.
+
