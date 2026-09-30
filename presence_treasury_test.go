@@ -45,3 +45,30 @@ func TestItemConfigTreasuryEmptyInactive_LegacyArmor(t *testing.T) {
 		t.Fatal("legacy armor cfg should match piece treasury_empty type")
 	}
 }
+
+func TestBlockUpTreasuryCashShort_HeldWithTreasuryEmpty(t *testing.T) {
+	cfg := ItemConfig{Name: "netherite_sword", Type: "netherite_sword-1.21"}
+
+	mutex.Lock()
+	prev := clientTreasuryEmptyTypes
+	clientTreasuryEmptyTypes = make(map[*websocket.Conn]map[string]struct{})
+	defer func() {
+		clientTreasuryEmptyTypes = prev
+		mutex.Unlock()
+	}()
+
+	if blockUpTreasuryCashShortLocked(cfg, 5) {
+		t.Fatal("without treasury flag must not block UP")
+	}
+	setClientTreasuryEmptyTypes(nil, []string{"netherite_sword-1.21"})
+	if !blockUpTreasuryCashShortLocked(cfg, 5) {
+		t.Fatal("held>0 + treasury_empty must block demand UP")
+	}
+	if blockUpTreasuryCashShortLocked(cfg, 0) {
+		t.Fatal("held=0 is not this gate (empty recovery/catchup separate)")
+	}
+	clearClientTreasuryEmptyTypes(nil)
+	if blockUpTreasuryCashShortLocked(cfg, 5) {
+		t.Fatal("after clear must not block")
+	}
+}

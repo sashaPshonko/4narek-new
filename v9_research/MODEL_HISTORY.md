@@ -72,6 +72,11 @@ p/h из observational compare на полном `capital_cycles` (14.09.2026).
 
 Правило: при каждой смене pricing — `full_compare_all.py`, % vs все baseline, строка сюда.
 
+### 2026-09-30 — live gate: treasury_empty + held>0 → BlockUp
+Сигнал орка `treasury_empty_types` уже глушил empty_idle recovery при held=0.
+Теперь при **held>0** и казне пустой у ботов типа — `adjustPriceV9` ставит `BlockUp` (ложный недобор из‑за денег ≠ повод ↑).
+OOS sim не моделирует treasury → compare без Δ; policy string без смены (`stock_corridor_v9`).
+
 ### 2026-09-14 — `stock_corridor_v9` vs все
 Источник: `full_compare.json` (3-fold WF, FOCUS). hold — артефакт, не baseline победы.
 

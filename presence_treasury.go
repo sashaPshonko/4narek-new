@@ -86,3 +86,13 @@ func suppressEmptyIdlePriceRecoveryLocked(cfg ItemConfig, held, sales, buys int)
 	}
 	return typeHasTreasuryEmptyInactiveLocked(cfg)
 }
+
+// blockUpTreasuryCashShortLocked — наличие не пустое, но у ботов типа нет денег (treasury_empty):
+// «недобор» ложный (не докупают из‑за баланса) → demand/corridor ↑ запрещён.
+// Пустой held не трогаем здесь (empty recovery / catchup — отдельно).
+func blockUpTreasuryCashShortLocked(cfg ItemConfig, held int) bool {
+	if held <= 0 {
+		return false
+	}
+	return typeHasTreasuryEmptyInactiveLocked(cfg)
+}
