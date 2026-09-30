@@ -447,3 +447,8 @@ Hardcap sell=1.0M откатили: это не алгоритм. Buy глубж
 
 Rollback: `capitalPolicy = capitalPolicyV9` (+book2).
 OOS full_compare vs v9 baselines — отдельно (эта политика не в sim_v9).
+
+### 2026-09-30 — stock_norm UP-cap = крайний случай
+
+Потолок ↑ `seller-p{q}` по log(p50): **0.95→0.88** (было 0.80→0.55 / 0.75→0.40).
+Не рабочий тормоз витрины — только стена. ↓ не трогает.
