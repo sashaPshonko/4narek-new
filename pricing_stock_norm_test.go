@@ -38,7 +38,6 @@ func TestStockNormDecideBookEmptyLever(t *testing.T) {
 }
 
 func TestStockNormDecideBookEmptyNotDeep(t *testing.T) {
-	// 0.86 of floor — выше 0.85 cap, рычаг молчит; sales ок → hold
 	d := stockNormDecide(stockNormInput{
 		Held: 0, StockNorm: 4, Sales: 5, NormalSales: 5,
 		Price: 1_720_000, Step: 100_000,
@@ -90,7 +89,7 @@ func TestStockNormBookMidCapsUp(t *testing.T) {
 	d := stockNormDecide(stockNormInput{
 		Held: 2, StockNorm: 4, Sales: 0, NormalSales: 5,
 		Price: 3_000_000, Step: 100_000,
-		BookMid: 3_050_000, BookMidOK: true,
+		BookMid: 3_050_000, BookMidOK: true, BookMidQ: 0.50,
 	})
 	if d.Action != "stock_norm_price_up_deficit" || d.NewPrice != 3_050_000 {
 		t.Fatalf("want ↑ capped at mid: %+v", d)
@@ -99,7 +98,7 @@ func TestStockNormBookMidCapsUp(t *testing.T) {
 	d = stockNormDecide(stockNormInput{
 		Held: 2, StockNorm: 4, Sales: 0, NormalSales: 5,
 		Price: 3_100_000, Step: 100_000,
-		BookMid: 3_050_000, BookMidOK: true,
+		BookMid: 3_050_000, BookMidOK: true, BookMidQ: 0.50,
 	})
 	if d.Action != "stock_norm_hold_book_mid" || d.NewPrice != 3_100_000 {
 		t.Fatalf("want hold at/above mid: %+v", d)
@@ -116,8 +115,26 @@ func TestStockNormBookMidDoesNotBlockWithoutBook(t *testing.T) {
 	}
 }
 
-func TestStockNormBookMidPctIsP75(t *testing.T) {
-	if stockNormBookMidPct != 0.75 {
-		t.Fatalf("want p75 got %v", stockNormBookMidPct)
+func TestStockNormBookMidPctForAnchorSteps(t *testing.T) {
+	if q := stockNormBookMidPctForAnchor(300_000); q != 0.75 {
+		t.Fatalf("cheap want 0.75 got %v", q)
+	}
+	if q := stockNormBookMidPctForAnchor(1_000_000); q != 0.60 {
+		t.Fatalf("mid want 0.60 got %v", q)
+	}
+	if q := stockNormBookMidPctForAnchor(3_000_000); q != 0.50 {
+		t.Fatalf("expensive want 0.50 got %v", q)
+	}
+}
+
+func TestStockNormBookMidDownNotBlocked(t *testing.T) {
+	// потолок только на ↑: overstock ↓ проходит даже выше mid
+	d := stockNormDecide(stockNormInput{
+		Held: 8, StockNorm: 4, Sales: 1, NormalSales: 5,
+		Price: 4_000_000, Step: 100_000,
+		BookMid: 3_000_000, BookMidOK: true, BookMidQ: 0.50,
+	})
+	if d.Action != "stock_norm_price_down_overstock" || d.NewPrice != 3_900_000 {
+		t.Fatalf("↓ must ignore mid cap: %+v", d)
 	}
 }
