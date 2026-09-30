@@ -434,3 +434,16 @@ Buy-ratio/buyEdge больше не режут softMin. Если buyEdge+300k > 
 
 Hardcap sell=1.0M откатили: это не алгоритм. Buy глубже края (edge−200k) оставляем.
 Дорогие: дно от ≥1 мульти-селлера (≥3 лота). Sword7→multiLow — отдельно, если скажет.
+
+### 2026-09-30 — `stock_norm_july11` (live)
+
+Откат к ядру `37e01ade` без крутилки наценки и без experiments.
+- **DOWN:** `held > normal_count` ∧ `sales < NormalSales`
+- **UP deficit:** `sales < NormalSales` ∧ `held ≤ normal_count`
+- **Книга только рычаг:** empty ∧ price < 0.85×bookFloor → +1
+- set_min / set_max — фильтр по книге (max: шум/стена)
+- `normal_count` capped ≤4
+- nacenka из конфига, не крутится
+
+Rollback: `capitalPolicy = capitalPolicyV9` (+book2).
+OOS full_compare vs v9 baselines — отдельно (эта политика не в sim_v9).

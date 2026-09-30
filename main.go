@@ -1675,17 +1675,29 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			return
 		}
 		now := time.Now()
-		data.Prices[msg.Type] = msg.Price
-		data.LastManualUpdate[msg.Type] = now
-		data.LastManualKind[msg.Type] = "max"
-		recordExternalPriceChangeLocked(msg.Type, "server_max", oldPrice, msg.Price)
-		if msg.Price < oldPrice {
-			log.Printf("[CONFIG] %s: max -> цена %d -> %d (clamp: только ↓ на цикл)", msg.Type, oldPrice, msg.Price)
+		itemType := msg.Type
+		proposed := msg.Price
+		mutex.Unlock()
+		if serverMaxBookAnomalous(oldPrice, proposed, itemType, now) {
+			log.Printf("[CONFIG] %s: max %d vs каталог %d — далеко от книги, ignore", itemType, proposed, oldPrice)
+			return
+		}
+		mutex.Lock()
+		if data.Prices[itemType] != oldPrice {
+			mutex.Unlock()
+			return
+		}
+		data.Prices[itemType] = proposed
+		data.LastManualUpdate[itemType] = now
+		data.LastManualKind[itemType] = "max"
+		recordExternalPriceChangeLocked(itemType, "server_max", oldPrice, proposed)
+		if proposed < oldPrice {
+			log.Printf("[CONFIG] %s: max -> цена %d -> %d (clamp: только ↓ на цикл)", itemType, oldPrice, proposed)
 		} else {
-			log.Printf("[CONFIG] %s: max -> цена %d -> %d (оборот слабый, каталог могли занизить)", msg.Type, oldPrice, msg.Price)
+			log.Printf("[CONFIG] %s: max -> цена %d -> %d (оборот слабый, каталог могли занизить)", itemType, oldPrice, proposed)
 		}
 		mutex.Unlock()
-		logServerPriceEvent(msg.Type, "server_max", oldPrice, msg.Price)
+		logServerPriceEvent(itemType, "server_max", oldPrice, proposed)
 		publishPrices()
 		saveDailyDataNoMessageUpdate()
 

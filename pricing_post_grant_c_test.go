@@ -88,7 +88,7 @@ func TestDoiCoverHoldIntensityUnchanged(t *testing.T) {
 }
 
 func TestCapitalPolicyV8ad(t *testing.T) {
-	if capitalPolicy != capitalPolicyClassic && capitalPolicy != capitalPolicyV4 && capitalPolicy != capitalPolicyV9 && capitalPolicy != capitalPolicyV8af {
+	if capitalPolicy != capitalPolicyClassic && capitalPolicy != capitalPolicyV4 && capitalPolicy != capitalPolicyV9 && capitalPolicy != capitalPolicyV8af && capitalPolicy != capitalPolicyStockNorm {
 		t.Fatalf("policy=%s want classic|v4|v9|v8af", capitalPolicy)
 	}
 }

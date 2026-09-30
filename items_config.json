@@ -126,7 +126,7 @@
   "штаны-1.21": {
     "base_price": 600005,
     "normal_sales": 5,
-    "normal_count": 7,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
@@ -147,7 +147,7 @@
   "нагрудник-1.21": {
     "base_price": 600007,
     "normal_sales": 5,
-    "normal_count": 5,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_chestplate",
@@ -168,7 +168,7 @@
   "ботинки-1.21": {
     "base_price": 600009,
     "normal_sales": 5,
-    "normal_count": 6,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
@@ -189,7 +189,7 @@
   "ботинки-крутые-1.21": {
     "base_price": 600016,
     "normal_sales": 5,
-    "normal_count": 6,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
@@ -214,7 +214,7 @@
   "шлем-1.21": {
     "base_price": 600011,
     "normal_sales": 5,
-    "normal_count": 7,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
@@ -235,7 +235,7 @@
   "шлем-крутой-1.21": {
     "base_price": 600015,
     "normal_sales": 5,
-    "normal_count": 7,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
@@ -311,7 +311,7 @@
   "кирка-бульд-маг-1.21": {
     "base_price": 1000018,
     "normal_sales": 5,
-    "normal_count": 5,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
@@ -367,7 +367,7 @@
   "кирка-мид-1.21": {
     "base_price": 1200022,
     "normal_sales": 5,
-    "normal_count": 5,
+    "normal_count": 4,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
@@ -471,7 +471,7 @@
   "ботинки-позор-1.21": {
     "base_price": 500010,
     "normal_sales": 5,
-    "normal_count": 6,
+    "normal_count": 4,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_boots",

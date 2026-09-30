@@ -1201,6 +1201,14 @@ func actionReasonRU(action string) string {
 		return "book1: nacenka = sell−0.80×p10"
 	case "book_hold", "book_hold_at_target":
 		return "book1: hold (нет книги / уже у цели)"
+	case "stock_norm_price_down_overstock":
+		return "stock_norm: held > normal_count ∧ sales < NormalSales → −1"
+	case "stock_norm_price_up_book_empty":
+		return "stock_norm: empty ∧ сильно ниже пола книги → +1 (рычаг)"
+	case "stock_norm_price_up_deficit":
+		return "stock_norm: sales < NormalSales ∧ held ≤ normal_count → +1"
+	case "stock_norm_hold", "stock_norm_hold_floor":
+		return "stock_norm: нет сигнала / пол"
 	case "corridor_price_up_empty_market_catchup":
 		return "corridor_v8af: Explored ∧ empty ∧ thick book ∧ our/p10<0.85 streak≥2 → +1 catchup"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":
@@ -1561,6 +1569,19 @@ func adjustPrice(item string) AdjustReport {
 	action := ""
 	var notes []string
 	var experimentTG *experimentTelegramEvent
+
+	if isPricingPolicyStockNorm() {
+		return adjustPriceStockNorm(
+			item, cfg, now, lastUpdate,
+			sales, buys, trySells, profitNow,
+			state,
+			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
+			onAH, invCount, heldForCorridor, share, free, need, stockNorm,
+			underbuyOK, tryRatio, stockLoad,
+			onlineForCap, onlineMaxForML,
+			ahCounts,
+		)
+	}
 
 	if isPricingPolicyClassic() {
 		return adjustPriceClassic(
