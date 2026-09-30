@@ -238,98 +238,8 @@ func TestAhBookMinOfLastN(t *testing.T) {
 	}
 }
 
-func TestAhBookWallBanSameSKU(t *testing.T) {
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close(); mlDB = nil })
-	mlDB = db
-	initAhBookTable()
 
-	item := "sword7-1.21"
-	var rows []ahBookWire
-	for i := 0; i < 2; i++ {
-		rows = append(rows, ahBookWire{
-			Uuid: fmt.Sprintf("w-%d", i), GoType: "netherite_sword-1.21", ItemID: item,
-			Price: 2_200_000, Seller: "Laymix777",
-		})
-	}
-	insertAhBookBatch(rows)
-	var bans int
-	_ = db.QueryRow(`SELECT COUNT(*) FROM ah_book_seller_bans`).Scan(&bans)
-	if bans != 0 {
-		t.Fatalf("2 лота — ещё не бан, got %d", bans)
-	}
-	insertAhBookBatch([]ahBookWire{{
-		Uuid: "w-2", GoType: "netherite_sword-1.21", ItemID: item, Price: 2_200_000, Seller: "Laymix777",
-	}})
-	if err := db.QueryRow(`SELECT COUNT(*) FROM ah_book_seller_bans WHERE seller = 'laymix777'`).Scan(&bans); err != nil || bans != 1 {
-		t.Fatalf("3-й лот того же SKU — бан, bans=%d err=%v", bans, err)
-	}
-	// другой SKU того же ника — не второй бан
-	insertAhBookBatch([]ahBookWire{{
-		Uuid: "helm-0", GoType: "netherite_armor-1.21", ItemID: "шлем-1.21", Price: 2_200_000, Seller: "Laymix777",
-	}})
-	_ = db.QueryRow(`SELECT COUNT(*) FROM ah_book_seller_bans`).Scan(&bans)
-	if bans != 1 {
-		t.Fatalf("бан навсегда один раз, got %d", bans)
-	}
-}
 
-func TestAhBookMinSkipsBannedSeller(t *testing.T) {
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close(); mlDB = nil })
-	mlDB = db
-	initAhBookTable()
-
-	item := "шлем-1.21"
-	base := time.Now().UTC()
-	for i := 0; i < 50; i++ {
-		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-			fmt.Sprintf("ok-%d", i), base.Add(time.Duration(i)*time.Second).Format(time.RFC3339),
-			"armor", item, 2_000_000, "player")
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	for i := 0; i < 6; i++ {
-		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-			fmt.Sprintf("wall-%d", i), base.Add(time.Duration(100+i)*time.Second).Format(time.RFC3339),
-			"armor", item, 100_000, "WallBot")
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	backfillAhBookSellerBans()
-	minP, ok := ahBookMinOfLastN(item, 50)
-	if !ok || minP != 2_000_000 {
-		t.Fatalf("витрина в min не входит: min=%d ok=%v", minP, ok)
-	}
-	var nLots int
-	_ = db.QueryRow(`SELECT COUNT(*) FROM ah_book_lots WHERE seller = 'WallBot'`).Scan(&nLots)
-	if nLots != 6 {
-		t.Fatalf("лоты витрины остаются в книге, got %d", nLots)
-	}
-}
-
-func TestAhBookTimesHitWall(t *testing.T) {
-	base := time.Now()
-	var times []time.Time
-	for i := 0; i < 3; i++ {
-		times = append(times, base.Add(time.Duration(i)*time.Minute))
-	}
-	if !ahBookTimesHitWall(times) {
-		t.Fatal("3 за 2 минуты — стена")
-	}
-	times[2] = base.Add(20 * time.Minute)
-	if ahBookTimesHitWall(times) {
-		t.Fatal("3-й через 20 мин — не стена")
-	}
-}
 
 func TestAhBookUpsertRefreshesTsAndPrice(t *testing.T) {
 	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
@@ -476,11 +386,6 @@ func TestAhBookMarketAnchorSellerP40(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_, _ = db.Exec(`INSERT INTO ah_book_seller_bans (seller, ts, item_id, n, window_sec) VALUES (?,?,?,?,?)`,
-		"banned", ts, item, 3, 900)
-	_, _ = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-		"ban-lot", ts, "sword", item, 100_000, "banned")
-
 	sellMkt, buyEdge, n, ok := ahBookMarketAnchorsSince(item, now.Add(-30*time.Minute))
 	if !ok || n < 20 {
 		t.Fatalf("ok=%v n=%d sell=%d buy=%d", ok, n, sellMkt, buyEdge)
