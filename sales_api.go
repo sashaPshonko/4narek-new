@@ -77,6 +77,9 @@ type salesCycleView struct {
 	ID            int64   `json:"id"`
 	TS            string  `json:"ts"`
 	Action        string  `json:"action"`
+	ReasonRU      string  `json:"reason_ru,omitempty"`
+	Notes         string  `json:"notes,omitempty"`
+	Policy        string  `json:"policy,omitempty"`
 	Sales         int     `json:"sales"`
 	Buys          int     `json:"buys"`
 	TrySells      int     `json:"try_sells"`
@@ -1188,7 +1191,8 @@ func querySalesCycles(itemID string, limit int) []salesCycleView {
 	defer mlDBMu.Unlock()
 
 	rows, err := mlDB.Query(`
-SELECT id, ts, action, sales, buys, try_sells, on_ah, inv, held,
+SELECT id, ts, action, COALESCE(notes,''), COALESCE(policy,''),
+	sales, buys, try_sells, on_ah, inv, held,
 	price_before, price_after, nacenka_before, nacenka_after,
 	profit_now, fwd_reward, fwd_profit_1, fwd_profit_2, fwd_profit_3,
 	COALESCE(cycle_minutes,0)
@@ -1207,13 +1211,15 @@ LIMIT ?`, itemID, limit)
 		var c salesCycleView
 		var profit, fwdR, f1, f2, f3 sql.NullInt64
 		if err := rows.Scan(
-			&c.ID, &c.TS, &c.Action, &c.Sales, &c.Buys, &c.TrySells, &c.OnAH, &c.Inv, &c.Held,
+			&c.ID, &c.TS, &c.Action, &c.Notes, &c.Policy,
+			&c.Sales, &c.Buys, &c.TrySells, &c.OnAH, &c.Inv, &c.Held,
 			&c.PriceBefore, &c.PriceAfter, &c.NacenkaBefore, &c.NacenkaAfter,
 			&profit, &fwdR, &f1, &f2, &f3, &c.CycleMinutes,
 		); err != nil {
 			log.Printf("[sales] cycles scan: %v", err)
 			continue
 		}
+		c.ReasonRU = actionReasonRU(c.Action)
 		if profit.Valid {
 			v := int(profit.Int64)
 			c.ProfitNow = &v

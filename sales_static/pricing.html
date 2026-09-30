@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>4narek · Ценообразование</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #e6ebe8;
+      --ink: #122018;
+      --muted: #5a6b62;
+      --faint: #8a9a91;
+      --line: rgba(18, 32, 24, 0.1);
+      --surface: rgba(255,255,255,.82);
+      --up: #0f766e;
+      --up-bg: rgba(15,118,110,.12);
+      --down: #b45309;
+      --down-bg: rgba(180,83,9,.12);
+      --hold: #475569;
+      --hold-bg: rgba(71,85,105,.1);
+      --font: "IBM Plex Sans", system-ui, sans-serif;
+      --display: "Syne", "IBM Plex Sans", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink); font-family: var(--font);
+      background:
+        radial-gradient(900px 420px at 12% -10%, rgba(15,118,110,.16), transparent 60%),
+        radial-gradient(700px 380px at 100% 0%, rgba(180,83,9,.1), transparent 55%),
+        linear-gradient(180deg, #f3f6f4 0%, var(--bg) 40%, #dfe7e2 100%);
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 20px 64px; }
+    .brand { font-family: var(--display); font-weight: 800; font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.03em; margin: 0 0 8px; }
+    .brand span { color: var(--up); }
+    .nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+    .nav a {
+      text-decoration: none; color: var(--muted); font-size: 13px; font-weight: 600;
+      padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.55);
+    }
+    .nav a.active, .nav a:hover { color: var(--ink); background: #fff; }
+    .lede { margin: 0 0 22px; color: var(--muted); max-width: 54ch; line-height: 1.45; }
+    .bar {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px;
+      padding: 12px 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line);
+    }
+    .bar select, .bar button {
+      font: inherit; border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; background: #fff; color: var(--ink);
+    }
+    .bar button { cursor: pointer; font-weight: 600; }
+    .bar button:hover { background: #f8faf9; }
+    .meta { margin-left: auto; color: var(--faint); font-size: 12px; font-family: var(--mono); }
+    .feed { display: flex; flex-direction: column; gap: 10px; }
+    .card {
+      border-radius: 16px; border: 1px solid var(--line); background: rgba(255,255,255,.88);
+      padding: 14px 16px; animation: rise .35s ease both;
+    }
+    .card.head {
+      display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; margin-bottom: 8px;
+    }
+    .item { font-weight: 700; font-size: 15px; }
+    .when { color: var(--faint); font-size: 12px; font-family: var(--mono); }
+    .dir {
+      font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 3px 8px; border-radius: 8px;
+    }
+    .dir.UP { color: var(--up); background: var(--up-bg); }
+    .dir.DOWN { color: var(--down); background: var(--down-bg); }
+    .dir.HOLD { color: var(--hold); background: var(--hold-bg); }
+    .action { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    .grid {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 14px; font-size: 13px; margin: 10px 0;
+    }
+    .k { color: var(--faint); font-size: 11px; }
+    .v { font-family: var(--mono); font-weight: 500; }
+    .reason { font-size: 13px; color: var(--ink); margin: 0 0 6px; }
+    .notes {
+      font-family: var(--mono); font-size: 11.5px; color: var(--muted); line-height: 1.45;
+      white-space: pre-wrap; word-break: break-word; background: rgba(18,32,24,.03);
+      border-radius: 10px; padding: 8px 10px; border: 1px solid var(--line);
+    }
+    .empty { text-align: center; color: var(--muted); padding: 48px 12px; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @media (max-width: 720px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+      .meta { margin-left: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="brand">4narek <span>Цены</span></h1>
+    <nav class="nav" aria-label="Разделы">
+      <a href="/pricing/" data-nav="pricing" class="active">Цены</a>
+      <a href="/sales/" data-nav="sales">Продажи</a>
+      <a href="/funauth/" data-nav="funauth">FunAuth</a>
+      <a href="/fleet/" data-nav="fleet">Баны</a>
+    </nav>
+    <p class="lede">Живые решения adjustPrice — то, что раньше уходило в Telegram: сигнал, цена до/после, сток и почему так.</p>
+
+    <div class="bar">
+      <select id="period">
+        <option value="1h">Час</option>
+        <option value="3h" selected>3 часа</option>
+        <option value="6h">6 часов</option>
+        <option value="24h">24 часа</option>
+        <option value="7d">7 дней</option>
+        <option value="all">Всё</option>
+      </select>
+      <select id="item"><option value="">Все предметы</option></select>
+      <select id="dir">
+        <option value="">Все решения</option>
+        <option value="UP">Только ↑</option>
+        <option value="DOWN">Только ↓</option>
+        <option value="HOLD">Только hold</option>
+      </select>
+      <button type="button" id="refresh">Обновить</button>
+      <span class="meta" id="meta">…</span>
+    </div>
+
+    <div class="feed" id="feed"><div class="empty">Загрузка…</div></div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const fmt = (n) => {
+      if (n == null || Number.isNaN(n)) return "—";
+      return Number(n).toLocaleString("ru-RU");
+    };
+    const when = (iso) => {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return esc(iso);
+      return d.toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    };
+
+    async function loadItems() {
+      const res = await fetch("/pricing/api/items", { cache: "no-store" });
+      const data = await res.json();
+      const sel = $("item");
+      const cur = sel.value;
+      (data.items || []).sort().forEach((id) => {
+        const o = document.createElement("option");
+        o.value = id; o.textContent = id;
+        sel.appendChild(o);
+      });
+      if (cur) sel.value = cur;
+    }
+
+    function card(d) {
+      const dPrice = d.price_after - d.price_before;
+      const dNac = d.nacenka_after - d.nacenka_before;
+      const priceLine = `${fmt(d.price_before)} → ${fmt(d.price_after)}` +
+        (dPrice ? ` (${dPrice > 0 ? "+" : ""}${fmt(dPrice)})` : "");
+      const nacLine = d.nacenka_before === d.nacenka_after
+        ? fmt(d.nacenka_after)
+        : `${fmt(d.nacenka_before)} → ${fmt(d.nacenka_after)}`;
+      return `<article class="card">
+        <div class="head">
+          <span class="dir ${esc(d.dir)}">${esc(d.dir)}</span>
+          <span class="item">${esc(d.item)}</span>
+          <span class="when">${when(d.ts)}</span>
+          <span class="action">${esc(d.action)}</span>
+        </div>
+        <p class="reason">${esc(d.reason_ru || "")}</p>
+        <div class="grid">
+          <div><div class="k">Продажи / норма</div><div class="v">${d.sales} / ${d.normal_sales}</div></div>
+          <div><div class="k">Покупки · try</div><div class="v">${d.buys} · ${d.try_sells}</div></div>
+          <div><div class="k">АХ · инв · всего</div><div class="v">${d.on_ah} · ${d.inv} · ${d.held}</div></div>
+          <div><div class="k">Цена</div><div class="v">${priceLine}</div></div>
+          <div><div class="k">Наценка</div><div class="v">${nacLine}</div></div>
+          <div><div class="k">Пол · step</div><div class="v">${fmt(d.price_floor)} · ${fmt(d.step)}</div></div>
+        </div>
+        ${d.notes ? `<div class="notes">${esc(d.notes)}</div>` : ""}
+      </article>`;
+    }
+
+    async function load() {
+      const period = $("period").value;
+      const item = $("item").value;
+      const dir = $("dir").value;
+      const q = new URLSearchParams({ period, limit: "100" });
+      if (item) q.set("item", item);
+      if (dir) q.set("dir", dir);
+      $("meta").textContent = "загрузка…";
+      try {
+        const res = await fetch("/pricing/api/decisions?" + q.toString(), { cache: "no-store" });
+        const data = await res.json();
+        const list = data.decisions || [];
+        $("meta").textContent = `policy=${data.policy || "?"} · ${list.length} решений`;
+        $("feed").innerHTML = list.length
+          ? list.map(card).join("")
+          : `<div class="empty">За период нет решений</div>`;
+      } catch (e) {
+        $("feed").innerHTML = `<div class="empty">Ошибка: ${esc(e.message)}</div>`;
+        $("meta").textContent = "ошибка";
+      }
+    }
+
+    $("refresh").onclick = load;
+    $("period").onchange = load;
+    $("item").onchange = load;
+    $("dir").onchange = load;
+    loadItems().then(load);
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>

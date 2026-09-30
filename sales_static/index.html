@@ -234,6 +234,7 @@
     <header class="hero">
       <h1 class="brand">4narek <span>Продажи</span></h1>
       <nav class="nav" aria-label="Разделы">
+        <a href="/pricing/" data-nav="pricing">Цены</a>
         <a href="/sales/" data-nav="sales">Продажи</a>
         <a href="/funauth/" data-nav="funauth">FunAuth</a>
         <a href="/fleet/" data-nav="fleet">Баны</a>
@@ -743,19 +744,20 @@
         el.innerHTML = `<div class="nodata" style="padding:14px;font-size:13px">Записей о переоценках пока нет</div>`;
         return;
       }
-      const actions = { up: "подняли цену", down: "опустили цену", hold: "оставили как есть", keep: "оставили как есть" };
       el.innerHTML = cycles.map((c) => {
         const when = c.ts ? new Date(c.ts).toLocaleString("ru-RU", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
         const dPrice = c.price_after - c.price_before;
-        const act = actions[String(c.action || "").toLowerCase()] || c.action || "—";
+        const title = c.reason_ru || c.action || "—";
+        const notes = c.notes ? `<div class="tiny" style="margin-top:4px;white-space:pre-wrap">${escapeHtml(c.notes)}</div>` : "";
         return `<div class="cycle">
           <div>
-            <div class="act">${escapeHtml(act)}</div>
-            <div class="tiny">${when} · куплено ${c.buys}, продано ${c.sales}, на руках ${c.held}</div>
+            <div class="act">${escapeHtml(title)}</div>
+            <div class="tiny">${when} · <code>${escapeHtml(c.action || "")}</code> · куплено ${c.buys}, продано ${c.sales}, на руках ${c.held}</div>
+            ${notes}
           </div>
           <div style="text-align:right">
             <div class="mono ${clsMoney(c.profit_now || 0)}">${c.profit_now != null ? fmtShort(c.profit_now) : "—"}</div>
-            <div class="tiny">цена ${dPrice >= 0 ? "+" : "−"}${fmt(Math.abs(dPrice))}</div>
+            <div class="tiny">цена ${fmt(c.price_before)} → ${fmt(c.price_after)} (${dPrice >= 0 ? "+" : "−"}${fmt(Math.abs(dPrice))})</div>
           </div>
         </div>`;
       }).join("");
