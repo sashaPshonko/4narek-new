@@ -12,9 +12,8 @@ import (
 // Окно 30м.
 //
 // Дешёвые / volume (sword5/7 и т.п.):
-//   sell = max(seller-p40, buyEdge+nac); buyEdge = seller-p10; nac ≥ softMin.
-//   buyMax ≤ buyEdge − 200k — не закупать у самого края (затар sword7).
-//   Если buyEdge+nac > p40 — поднимаем sell (место под наценку).
+//   sell = min(seller-p40(+nac lift), 1.0M) — потолок под реальный слив sword7;
+//   buyEdge = seller-p10; buyMax ≤ buyEdge − 200k; nac ≥ softMin.
 //
 // Дорогие (mega/pochti/яд / sell≥volume ceiling):
 //   sell = самое дно мульти-селлеров (≥3 лота одного SKU), не наши покупки и не p40;
@@ -36,6 +35,8 @@ const (
 	book2FatMinBuyRatio    = 0.70
 	// Volume (sword7/5…): buyMax не выше buyEdge−slack — иначе ночью забиваем край рынка.
 	book2VolumeBuyBelowEdge = 200_000
+	// sword7 реально уходит ~1.0M; p40+lift ночью давал 1.2–1.3 и затар.
+	book2VolumeSellCap = 1_000_000
 	// Дорогие SKU: без живой книги / sell<<книги — buyMax=0 (не копить меги вслепую).
 	book2ExpensiveBuyFreezeRatio = 0.85
 )
@@ -659,6 +660,11 @@ func adjustPriceBook(
 			if minSell := book2MinSellForNac(buyEdge, nacWant, step); sellT < minSell {
 				sellT = bookSnapWithMarker(minSell, step, priceBefore)
 			}
+		}
+		// volume: не выше 1.0M (sword7 ночью 1.2–1.3 не уходили)
+		if anchorMode != "multiLow" && book2IsVolumeP10(p10) && book2VolumeSellCap > 0 && sellT > book2VolumeSellCap {
+			notes = append(notes, fmt.Sprintf("volume sell cap %d→%d", sellT, book2VolumeSellCap))
+			sellT = bookSnapWithMarker(book2VolumeSellCap, step, priceBefore)
 		}
 
 		nacT := book2PickNac(sellT, skuFloor, softMin, step)

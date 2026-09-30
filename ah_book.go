@@ -756,10 +756,10 @@ func ahBookMultiSellerMinPricesSince(itemID string, since time.Time, minLots int
 }
 
 // ahBookExpensiveBottomAnchorsSince — дорогие: sell/buyEdge = самое дно мульти-селлеров.
-// Не от наших покупок (они могут быть завышены) и не p40 витрин.
+// Достаточно ≥1 селлера с пачкой (≥3 лота); не ждём «толпу» из 3+.
 func ahBookExpensiveBottomAnchorsSince(itemID string, since time.Time) (sellMkt, buyEdge, nSellers int, ok bool) {
 	ps, n := ahBookMultiSellerMinPricesSince(itemID, since, ahBookMultiSellerMinLots)
-	if n < ahBookMarketMinSellers {
+	if n < 1 {
 		return 0, 0, n, false
 	}
 	bottom := ps[0] // abs min среди селлеров с ≥3 лотами
