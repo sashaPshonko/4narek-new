@@ -15,8 +15,9 @@ import (
 //   иначе sales < NormalSales → ↑ sell (переизбыток исключён)
 // Книга не якорь цены; рычаг: пусто ∧ сильно ниже пола книги → ↑.
 // Потолок ↑ (только ↑): seller-p{q} по noban-минам.
-//   q(P) = 0.75 → 0.40 по log от seller-p50 книги (0.4M…3M).
-// Цель — не улетать вверх; ↓ не трогаем. Абсолютные ступени не нужны.
+//   q(P) = 0.80 → 0.55 по log от seller-p50 книги (0.4M…3M).
+//   Было 0.75→0.40 — слишком душил almost/mega/sword7 (потолок = середина полки).
+// Цель — не улетать в стену; ↓ не трогаем.
 // set_min/set_max проверяются по книге в main.go.
 //
 // Rollback: capitalPolicy = capitalPolicyV9 (+book2).
@@ -28,10 +29,10 @@ const stockNormBookCatchupRatio = 0.85
 
 // Log-шкала q для потолка ↑ (якорь = seller-p50 книги).
 const (
-	stockNormBookMidPLo   = 400_000.0 // ниже → qMax
-	stockNormBookMidPHi   = 3_000_000.0
-	stockNormBookMidQMax  = 0.75 // дёшево / дамп-полка
-	stockNormBookMidQMin  = 0.40 // дорого → «середина»
+	stockNormBookMidPLo  = 400_000.0
+	stockNormBookMidPHi  = 3_000_000.0
+	stockNormBookMidQMax = 0.80 // дёшево / дамп-полка
+	stockNormBookMidQMin = 0.55 // дорого — не ниже «чуть выше середины»
 )
 
 func isPricingPolicyStockNorm() bool {
