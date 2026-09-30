@@ -425,12 +425,10 @@ Sell = **p40** seller-mins; buyMax жёстко ≥ **p10** seller-mins; volume 
 
 Buy-ratio/buyEdge больше не режут softMin. Если buyEdge+300k > p40 — sell↑.
 
-### 2026-09-30 — expensive no_book / under-book: buy freeze
+### 2026-09-30 — сняли expensive buy freeze
 
-Мега/почти/яд (и sell≥2.5M): без 30m-книги — `buyMax=0` (раньше 85% sticky → копили вслепую).
-Если sell < 0.85×p40 при живой книге — тоже freeze buys (яма после FunTime max).
-Sell-side: FunTime max << catalog → skip слот (`4narek-1.12` f9de085), без `set_max_price`.
-OOS full_compare не гонял — gate на закуп, не смена sell-якоря.
+Не сливается ≠ стоп-закуп. Freeze/no_book buyMax=0 убран. Чинить sell (дно мульти), не отключать buy.
+Остаётся thin-book buy-cap 85% как у volume.
 
 ### 2026-09-30 — volume buyMax ≤ buyEdge−200k (без hardcap 1.0M)
 
