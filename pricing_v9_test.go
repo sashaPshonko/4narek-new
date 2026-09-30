@@ -138,13 +138,18 @@ func TestV9DemandBuysGteSalesHold(t *testing.T) {
 }
 
 func TestV9DemandAboveMarketHold(t *testing.T) {
-	in := v9Base(10, 3, 1, 2_200_000, 100_000, 100, 2_000_000, true)
+	in := v9Base(10, 3, 1, 2_000_000, 100_000, 100, 2_000_000, true) // ratio==1.00
 	d := v9Decide(in)
 	if isV9Up(d.Action) {
-		t.Fatalf("ratio>=1.05 must not UP: %+v", d)
+		t.Fatalf("ratio>=1.00 must not UP: %+v", d)
 	}
 	if d.Reason != "demand_above_market" {
 		t.Fatalf("reason=%s", d.Reason)
+	}
+	in.Price = 2_200_000 // still above
+	d = v9Decide(in)
+	if isV9Up(d.Action) {
+		t.Fatalf("ratio>1 must not UP: %+v", d)
 	}
 }
 
@@ -290,7 +295,7 @@ func TestCapitalPolicyV9(t *testing.T) {
 }
 
 func TestV9BlockUpStopsDemand(t *testing.T) {
-	in := v9Base(5, 5, 0, 2_000_000, 100_000, 100, 2_000_000, true) // under lo=18
+	in := v9Base(5, 5, 0, 1_900_000, 100_000, 100, 2_000_000, true) // under lo=18, under p10
 	in.Held = 5
 	d := v9Decide(in)
 	if !isV9Up(d.Action) {

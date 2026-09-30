@@ -18,7 +18,7 @@ const (
 	// Empty catchup: главный стоп — появились покупки (empty streak сбрасывается при buys>0).
 	// p10 — предохранитель на «боты/лоты сломаны», не цель «рано остановиться».
 	v9CatchupGapRatio = 1.00 // safety: our/p10 < 1 ∧ price+step ≤ p10
-	v9DemandMaxRatio  = 1.05 // demand UP только при our/mkt < this
+	v9DemandMaxRatio  = 1.00 // demand UP только при our/mkt < p10 (без надбавки)
 	v9CatchupArmCycles = 2
 	v9UpCooldownCycles  = 2
 	v9MaxUpStreak      = 1
@@ -318,7 +318,7 @@ func adjustPriceV9(
 		notes = append(notes, "manual max/set → ↑ запрещён")
 	}
 
-	// Потолок ↑ как у stock_norm 30.09: seller-p{q} q=0.95→0.88 — только стена, не якорь.
+	// Потолок ↑: seller-p{q} q=0.80→0.55 — стена против разгона (не якорь).
 	if strings.Contains(action, "price_up") && newPrice > priceBefore {
 		mutex.Unlock()
 		bookMid, bookMidQ, bookMidOK := stockNormBookMid(item, now.Add(-ahBook2Window))

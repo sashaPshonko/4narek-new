@@ -755,7 +755,7 @@ def mass_search(train, test, dm):
     return results
 
 
-def policy_v9_core(st, obs, dm, streak_need=2, gap=1.00, min_sales_up=3, down_block_ratio=0.90) -> Decision:
+def policy_v9_core(st, obs, dm, streak_need=2, gap=1.00, min_sales_up=3, down_block_ratio=0.95, demand_max_ratio=1.00) -> Decision:
     """Production stock_corridor_v9 (matches pricing_v9.go). gap=1.0 = p10 safety; buy-stop via empty streak."""
     share = obs["share"] or 12
     lo, hi, soft, over, dump = step_band(share, 0.18, 0.25)
@@ -776,7 +776,7 @@ def policy_v9_core(st, obs, dm, streak_need=2, gap=1.00, min_sales_up=3, down_bl
         return "DOWN", max(step, st.price - step)
 
     if st.held < lo and st.held > 0 and sales >= min_sales and sales > buys and st.up_cd == 0:
-        if ratio is not None and ratio >= 1.05:
+        if ratio is not None and ratio >= demand_max_ratio:
             return "HOLD", st.price
         return "UP", st.price + step
 

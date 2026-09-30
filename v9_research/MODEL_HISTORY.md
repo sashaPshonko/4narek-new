@@ -77,6 +77,12 @@ p/h из observational compare на полном `capital_cycles` (14.09.2026).
 Теперь при **held>0** и казне пустой у ботов типа — `adjustPriceV9` ставит `BlockUp` (ложный недобор из‑за денег ≠ повод ↑).
 OOS sim не моделирует treasury → compare без Δ; policy string без смены (`stock_corridor_v9`).
 
+### 2026-10-01 — строже book UP-cap + demand ≤ p10
+Live: mid(p88–p95) ≫ book floor (sword7 mid~4–6M при book~0.7M) → ↑ не тормозился.
+- bookMid q: **0.95→0.88 → 0.80→0.55** (вернуть mid-shelf стену)
+- `v9DemandMaxRatio`: **1.05 → 1.00** (demand ↑ только under p10)
+OOS `full_compare_all.py` на локальной `pricing.db`: panel cycles=0 (нет FOCUS истории для WF) — Δ% не посчитан; драйвер правки = live mid≫book.
+
 ### 2026-09-14 — `stock_corridor_v9` vs все
 Источник: `full_compare.json` (3-fold WF, FOCUS). hold — артефакт, не baseline победы.
 

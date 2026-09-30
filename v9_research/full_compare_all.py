@@ -183,7 +183,7 @@ def pol_v8_late(st, obs, dm):
 
 
 def pol_v9(st, obs, dm):
-    return S.policy_v9_core(st, obs, dm, streak_need=2, gap=1.00, min_sales_up=3, down_block_ratio=0.90)
+    return S.policy_v9_core(st, obs, dm, streak_need=2, gap=1.00, min_sales_up=3, down_block_ratio=0.95, demand_max_ratio=1.00)
 
 
 POLICIES = [

@@ -126,9 +126,9 @@ func TestStockNormBookMidPctForAnchorLog(t *testing.T) {
 		t.Fatalf("above Phi want %.2f got %v", stockNormBookMidQMin, q)
 	}
 	q1m := stockNormBookMidPctForAnchor(1_000_000)
-	// 0.95→0.88: at 1M ≈ 0.92
-	if q1m < 0.90 || q1m > 0.94 {
-		t.Fatalf("1M want ~0.92 got %v", q1m)
+	// 0.80→0.55: at 1M ≈ 0.69
+	if q1m < 0.66 || q1m > 0.73 {
+		t.Fatalf("1M want ~0.69 got %v", q1m)
 	}
 	prev := stockNormBookMidPctForAnchor(400_000)
 	for _, p := range []int{500_000, 800_000, 1_500_000, 2_500_000} {
