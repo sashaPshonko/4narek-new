@@ -13,9 +13,9 @@ import (
 //   held > norm ∧ sales < NormalSales → ↓ sell
 //   иначе sales < NormalSales → ↑ sell (переизбыток исключён)
 // Книга не якорь цены; рычаг: пусто ∧ сильно ниже пола книги → ↑.
-// Потолок ↑ (только ↑):
-//   дешёвые — середина полки (seller-p50);
-//   sword7/дорогие (anchor≥1.2M или mega/pochti) — низ мульти-селлеров (p25), не mid.
+// Потолок ↑ (только ↑) — перцентиль минимальных цен мульти-селлеров (≥2 лота):
+//   sharp5 → 60%, sharp6 → 50%, sword7 → 40%,
+//   pochti → 25%, mega/яд3 → 10%, прочие мечи → 25%, остальное → 50%.
 // ↓ не трогаем.
 // set_min/set_max проверяются по книге в main.go.
 //
@@ -26,15 +26,7 @@ const capitalPolicyStockNorm = "stock_norm_july11"
 // Пусто + цена ниже bookFloor×ratio → можно ↑ к рынку.
 const stockNormBookCatchupRatio = 0.85
 
-// Потолок ↑: дешёвые mid, дорогие — ниже mid (низ мульти).
-const (
-	stockNormBookMidQCheap     = 0.50 // середина seller-mins
-	stockNormBookMidQExpensive = 0.25 // нижняя четверть
-	// sword7-класс: p50 книги уже ≥ этого → потолок ниже mid.
-	stockNormBookMidExpensiveAnchor = 1_200_000
-	// Пачка: ≥2 лота одного селлера (для p25; ≥3 часто пусто на 30м).
-	stockNormBookMidMultiMinLots = 2
-)
+const stockNormBookMidMultiMinLots = 2
 
 func isPricingPolicyStockNorm() bool {
 	return capitalPolicy == capitalPolicyStockNorm
@@ -171,54 +163,43 @@ func stockNormBookFloor(item string, since time.Time) (floor int, ok bool) {
 	return 0, false
 }
 
-// stockNormBookMidExpensive — sword7-класс / mega: потолок ниже mid.
-func stockNormBookMidExpensive(item string, anchor int) bool {
-	if book2ExpensiveSKU(item, anchor) {
-		return true
+// stockNormBookMidQForItem — какой перцентиль мульти-селлеров режет ↑ для SKU.
+func stockNormBookMidQForItem(item string) float64 {
+	id := strings.ToLower(strings.TrimSpace(item))
+	switch {
+	case id == "sword-sharp5-1.21":
+		return 0.60
+	case id == "sword-sharp6-1.21":
+		return 0.50
+	case id == "sword7-1.21":
+		return 0.40
+	case id == "megasword-1.21":
+		return 0.10
+	case strings.Contains(id, "яд") && strings.Contains(id, "megasword"):
+		return 0.10
+	case strings.Contains(id, "pochti"):
+		return 0.25
+	case strings.Contains(id, "sword"):
+		return 0.25 // loot/bare и прочие мечи
+	default:
+		return 0.50 // броня / кирки — середина
 	}
-	return anchor >= stockNormBookMidExpensiveAnchor
 }
 
-// stockNormBookMidPctForAnchor — q потолка ↑: дешёвые 0.50, дорогие 0.25 (fallback без мульти).
-func stockNormBookMidPctForAnchor(anchor int) float64 {
-	if anchor >= stockNormBookMidExpensiveAnchor {
-		return stockNormBookMidQExpensive
-	}
-	return stockNormBookMidQCheap
-}
-
-// stockNormBookMid — потолок ↑.
-// Дешёвые: seller-p50. Дорогие/sword7: multi-seller p25 (ниже mid); иначе all-p25.
+// stockNormBookMid — потолок ↑ из мульти-селлеров (fallback: все селлеры, тот же %).
 // Только блокирует ↑; ↓/overstock не трогает.
 func stockNormBookMid(item string, since time.Time) (mid int, q float64, ok bool) {
+	q = stockNormBookMidQForItem(item)
+	if mps, mn := ahBookMultiSellerMinPricesSince(item, since, stockNormBookMidMultiMinLots); mn >= 1 {
+		mid = ahBookPercentileSorted(mps, q)
+		if mid > 0 {
+			return mid, q, true
+		}
+	}
 	ps, n := ahBookSellerMinPricesSince(item, since)
 	if n < ahBookMarketMinSellers {
-		return 0, 0, false
+		return 0, q, false
 	}
-	anchor := ahBookPercentileSorted(ps, 0.50)
-	if anchor <= 0 {
-		anchor = ahBookPercentileSorted(ps, ahBookMarketSellPct) // fallback p40
-	}
-	if anchor <= 0 {
-		return 0, 0, false
-	}
-
-	if stockNormBookMidExpensive(item, anchor) {
-		q = stockNormBookMidQExpensive
-		if mps, mn := ahBookMultiSellerMinPricesSince(item, since, stockNormBookMidMultiMinLots); mn >= 1 {
-			mid = ahBookPercentileSorted(mps, q)
-			if mid > 0 {
-				return mid, q, true
-			}
-		}
-		mid = ahBookPercentileSorted(ps, q)
-		if mid <= 0 {
-			return 0, q, false
-		}
-		return mid, q, true
-	}
-
-	q = stockNormBookMidQCheap
 	mid = ahBookPercentileSorted(ps, q)
 	if mid <= 0 {
 		return 0, q, false

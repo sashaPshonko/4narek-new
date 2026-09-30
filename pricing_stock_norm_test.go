@@ -115,30 +115,25 @@ func TestStockNormBookMidDoesNotBlockWithoutBook(t *testing.T) {
 	}
 }
 
-func TestStockNormBookMidPctForAnchor(t *testing.T) {
-	if q := stockNormBookMidPctForAnchor(300_000); q != stockNormBookMidQCheap {
-		t.Fatalf("cheap want %.2f got %v", stockNormBookMidQCheap, q)
+func TestStockNormBookMidQForItem(t *testing.T) {
+	cases := []struct {
+		item string
+		want float64
+	}{
+		{"sword-sharp5-1.21", 0.60},
+		{"sword-sharp6-1.21", 0.50},
+		{"sword7-1.21", 0.40},
+		{"pochti-megasword-1.21", 0.25},
+		{"megasword-1.21", 0.10},
+		{"megasword-яд3-1.21", 0.10},
+		{"sword-bare-1.21", 0.25},
+		{"sword-sharp5-loot5-1.21", 0.25},
+		{"штаны-1.21", 0.50},
 	}
-	if q := stockNormBookMidPctForAnchor(1_000_000); q != stockNormBookMidQCheap {
-		t.Fatalf("below sword7 band want %.2f got %v", stockNormBookMidQCheap, q)
-	}
-	if q := stockNormBookMidPctForAnchor(1_200_000); q != stockNormBookMidQExpensive {
-		t.Fatalf("sword7-band want %.2f got %v", stockNormBookMidQExpensive, q)
-	}
-	if q := stockNormBookMidPctForAnchor(3_000_000); q != stockNormBookMidQExpensive {
-		t.Fatalf("expensive want %.2f got %v", stockNormBookMidQExpensive, q)
-	}
-}
-
-func TestStockNormBookMidExpensiveSword7Band(t *testing.T) {
-	if stockNormBookMidExpensive("sword-sharp5-1.21", 500_000) {
-		t.Fatal("sharp5 must be cheap-cap")
-	}
-	if !stockNormBookMidExpensive("sword7-1.21", 1_400_000) {
-		t.Fatal("sword7 @1.4M mid must use below-p50 cap")
-	}
-	if !stockNormBookMidExpensive("megasword-1.21", 500_000) {
-		t.Fatal("megasword by name")
+	for _, c := range cases {
+		if g := stockNormBookMidQForItem(c.item); g != c.want {
+			t.Fatalf("%s: got %.2f want %.2f", c.item, g, c.want)
+		}
 	}
 }
 

@@ -89,6 +89,11 @@ Paid vs book: sword7 paid~1.2M при all-p50~1.4M — mid как потолок
 - sword7/mega/pochti / anchor≥1.2M: **multi-seller p25** (иначе all-p25)
 Не трогает book2 sell-якорь (`ExpensiveBottom`).
 
+### 2026-10-01 — UP-cap per-SKU multi percentiles
+Без seller-ban. Потолок ↑ = перцентиль мин. цен мульти (≥2 лота):
+sharp5 **60%**, sharp6 **50%**, sword7 **40%**, pochti **25%**, mega/яд3 **10%**,
+прочие мечи 25%, остальное 50%. Сверка с серединой наших продаж за сутки/3д.
+
 ### 2026-09-14 — `stock_corridor_v9` vs все
 Источник: `full_compare.json` (3-fold WF, FOCUS). hold — артефакт, не baseline победы.
 
