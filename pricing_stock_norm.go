@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"time"
 )
@@ -13,9 +14,9 @@ import (
 //   held > norm ∧ sales < NormalSales → ↓ sell
 //   иначе sales < NormalSales → ↑ sell (переизбыток исключён)
 // Книга не якорь цены; рычаг: пусто ∧ сильно ниже пола книги → ↑.
-// Потолок ↑ (только ↑): seller-p{q} по noban-минам, q от полки книги:
-//   book p50 <0.8M → p75; <2.5M → p60; иначе p50.
-// Цель — не улетать вверх и потом долго пилить вниз; ↓ не трогаем.
+// Потолок ↑ (только ↑): seller-p{q} по noban-минам.
+//   q(P) = 0.75 → 0.40 по log от seller-p50 книги (0.4M…3M).
+// Цель — не улетать вверх; ↓ не трогаем. Абсолютные ступени не нужны.
 // set_min/set_max проверяются по книге в main.go.
 //
 // Rollback: capitalPolicy = capitalPolicyV9 (+book2).
@@ -25,13 +26,12 @@ const capitalPolicyStockNorm = "stock_norm_july11"
 // Пусто + цена ниже bookFloor×ratio → можно ↑ к рынку.
 const stockNormBookCatchupRatio = 0.85
 
-// Ступени q для потолка ↑ (якорь = seller-p50 книги).
+// Log-шкала q для потолка ↑ (якорь = seller-p50 книги).
 const (
-	stockNormBookMidCheapMax  = 800_000   // < → p75
-	stockNormBookMidMidMax    = 2_500_000 // < → p60; иначе p50
-	stockNormBookMidPctCheap  = 0.75
-	stockNormBookMidPctMid    = 0.60
-	stockNormBookMidPctExpensive = 0.50
+	stockNormBookMidPLo   = 400_000.0 // ниже → qMax
+	stockNormBookMidPHi   = 3_000_000.0
+	stockNormBookMidQMax  = 0.75 // дёшево / дамп-полка
+	stockNormBookMidQMin  = 0.40 // дорого → «середина»
 )
 
 func isPricingPolicyStockNorm() bool {
@@ -169,16 +169,26 @@ func stockNormBookFloor(item string, since time.Time) (floor int, ok bool) {
 	return 0, false
 }
 
-// stockNormBookMidPctForAnchor — q потолка ↑ от «полки» книги (seller-p50).
+// stockNormBookMidPctForAnchor — q потолка ↑ от полки книги (seller-p50).
+// q = qMax − (qMax−qMin)·clamp(log(P/Plo)/log(Phi/Plo), 0, 1).
 func stockNormBookMidPctForAnchor(anchor int) float64 {
-	switch {
-	case anchor < stockNormBookMidCheapMax:
-		return stockNormBookMidPctCheap
-	case anchor < stockNormBookMidMidMax:
-		return stockNormBookMidPctMid
-	default:
-		return stockNormBookMidPctExpensive
+	if anchor <= 0 {
+		return stockNormBookMidQMax
 	}
+	p := float64(anchor)
+	if p <= stockNormBookMidPLo {
+		return stockNormBookMidQMax
+	}
+	if p >= stockNormBookMidPHi {
+		return stockNormBookMidQMin
+	}
+	t := math.Log(p/stockNormBookMidPLo) / math.Log(stockNormBookMidPHi/stockNormBookMidPLo)
+	if t < 0 {
+		t = 0
+	} else if t > 1 {
+		t = 1
+	}
+	return stockNormBookMidQMax - (stockNormBookMidQMax-stockNormBookMidQMin)*t
 }
 
 // stockNormBookMid — потолок ↑: percentile(seller mins noban, q(p50)).

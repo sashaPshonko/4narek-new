@@ -1212,7 +1212,7 @@ func actionReasonRU(action string) string {
 	case "stock_norm_hold_slots":
 		return "stock_norm: ↑ запрещён — норма недостижима (слоты АХ заняты другими id)"
 	case "stock_norm_hold_book_mid":
-		return "stock_norm: ↑ запрещён — уже ≥ потолка книги (p75/p60/p50 от полки)"
+		return "stock_norm: ↑ запрещён — уже ≥ потолка книги (log q от полки)"
 	case "corridor_price_up_empty_market_catchup":
 		return "corridor_v8af: Explored ∧ empty ∧ thick book ∧ our/p10<0.85 streak≥2 → +1 catchup"
 	case "corridor_price_up_recover", "corridor_price_up_recover_deep":

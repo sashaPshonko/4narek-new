@@ -115,15 +115,28 @@ func TestStockNormBookMidDoesNotBlockWithoutBook(t *testing.T) {
 	}
 }
 
-func TestStockNormBookMidPctForAnchorSteps(t *testing.T) {
-	if q := stockNormBookMidPctForAnchor(300_000); q != 0.75 {
-		t.Fatalf("cheap want 0.75 got %v", q)
+func TestStockNormBookMidPctForAnchorLog(t *testing.T) {
+	if q := stockNormBookMidPctForAnchor(300_000); q != stockNormBookMidQMax {
+		t.Fatalf("below Plo want %.2f got %v", stockNormBookMidQMax, q)
 	}
-	if q := stockNormBookMidPctForAnchor(1_000_000); q != 0.60 {
-		t.Fatalf("mid want 0.60 got %v", q)
+	if q := stockNormBookMidPctForAnchor(3_000_000); q != stockNormBookMidQMin {
+		t.Fatalf("at Phi want %.2f got %v", stockNormBookMidQMin, q)
 	}
-	if q := stockNormBookMidPctForAnchor(3_000_000); q != 0.50 {
-		t.Fatalf("expensive want 0.50 got %v", q)
+	if q := stockNormBookMidPctForAnchor(5_000_000); q != stockNormBookMidQMin {
+		t.Fatalf("above Phi want %.2f got %v", stockNormBookMidQMin, q)
+	}
+	q1m := stockNormBookMidPctForAnchor(1_000_000)
+	if q1m < 0.55 || q1m > 0.65 {
+		t.Fatalf("1M want ~0.59 got %v", q1m)
+	}
+	// монотонно убывает с ценой
+	prev := stockNormBookMidPctForAnchor(400_000)
+	for _, p := range []int{500_000, 800_000, 1_500_000, 2_500_000} {
+		q := stockNormBookMidPctForAnchor(p)
+		if q > prev+1e-9 {
+			t.Fatalf("q must fall with P: %d → %v > prev %v", p, q, prev)
+		}
+		prev = q
 	}
 }
 
