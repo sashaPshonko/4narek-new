@@ -13,6 +13,7 @@ import (
 //
 // Дешёвые / volume (sword5/7 и т.п.):
 //   sell = max(seller-p40, buyEdge+nac); buyEdge = seller-p10; nac ≥ softMin.
+//   buyMax ≤ buyEdge − 200k — не закупать у самого края (затар sword7).
 //   Если buyEdge+nac > p40 — поднимаем sell (место под наценку).
 //
 // Дорогие (mega/pochti/яд / sell≥volume ceiling):
@@ -33,6 +34,8 @@ const (
 	// Потолок nac для *полов* volume (не ломает abs softMin 300k на sell).
 	book2VolumeMinBuyRatio = 0.85
 	book2FatMinBuyRatio    = 0.70
+	// Volume (sword7/5…): buyMax не выше buyEdge−slack — иначе ночью забиваем край рынка.
+	book2VolumeBuyBelowEdge = 200_000
 	// Дорогие SKU: без живой книги / sell<<книги — buyMax=0 (не копить меги вслепую).
 	book2ExpensiveBuyFreezeRatio = 0.85
 )
@@ -662,6 +665,24 @@ func adjustPriceBook(
 		buyMax := sellT - nacT
 		if buyMax < 0 {
 			buyMax = 0
+		}
+		// volume: не брать у самого buyEdge — только глубже (sell не трогаем)
+		if anchorMode != "multiLow" && book2IsVolumeP10(p10) && buyEdge > 0 {
+			cap := buyEdge - book2VolumeBuyBelowEdge
+			if cap < 0 {
+				cap = 0
+			}
+			if buyMax > cap {
+				notes = append(notes, fmt.Sprintf(
+					"volume buy cap buyMax %d→%d (edge=%d −%dk)",
+					buyMax, cap, buyEdge, book2VolumeBuyBelowEdge/1000,
+				))
+				buyMax = cap
+				nacT = sellT - buyMax
+				if nacT < 0 {
+					nacT = 0
+				}
+			}
 		}
 		buyEff = 0
 		if p10 > 0 {

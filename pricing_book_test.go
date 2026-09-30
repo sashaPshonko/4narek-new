@@ -235,6 +235,22 @@ func TestBook2SkuRaiseK(t *testing.T) {
 	}
 }
 
+func TestBook2VolumeBuyBelowEdge(t *testing.T) {
+	if book2VolumeBuyBelowEdge != 200_000 {
+		t.Fatalf("slack=%d", book2VolumeBuyBelowEdge)
+	}
+	// sell 1.0 nac 300k → buyMax 0.7; edge 0.78 → cap 0.58
+	sell, nac, edge := 1_000_000, 300_000, 780_000
+	buyMax := sell - nac
+	cap := edge - book2VolumeBuyBelowEdge
+	if buyMax <= cap {
+		t.Fatalf("fixture: buyMax %d should exceed cap %d", buyMax, cap)
+	}
+	if cap != 580_000 {
+		t.Fatalf("cap=%d want 580k", cap)
+	}
+}
+
 func TestBook2ExpensiveBuyFreezeHelpers(t *testing.T) {
 	if !book2ExpensiveSKU("megasword-яд3-1.21", 1_000_000) {
 		t.Fatal("megasword by name")
