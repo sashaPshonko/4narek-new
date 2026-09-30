@@ -76,7 +76,6 @@ func TestServerMaxBookAnomalousNoise(t *testing.T) {
 }
 
 func TestStockNormHoldSlotsGatesUp(t *testing.T) {
-	// Симулируем пост-гейт: UP-action + !allow → hold_slots.
 	action := "stock_norm_price_up_deficit"
 	allow := false
 	if strings.Contains(action, "price_up") && !allow {
@@ -84,5 +83,36 @@ func TestStockNormHoldSlotsGatesUp(t *testing.T) {
 	}
 	if action != "stock_norm_hold_slots" {
 		t.Fatalf("want hold_slots got %s", action)
+	}
+}
+
+func TestStockNormBookMidCapsUp(t *testing.T) {
+	d := stockNormDecide(stockNormInput{
+		Held: 2, StockNorm: 4, Sales: 0, NormalSales: 5,
+		Price: 3_000_000, Step: 100_000,
+		BookMid: 3_050_000, BookMidOK: true,
+	})
+	if d.Action != "stock_norm_price_up_deficit" || d.NewPrice != 3_050_000 {
+		t.Fatalf("want ↑ capped at mid: %+v", d)
+	}
+
+	d = stockNormDecide(stockNormInput{
+		Held: 2, StockNorm: 4, Sales: 0, NormalSales: 5,
+		Price: 3_100_000, Step: 100_000,
+		BookMid: 3_050_000, BookMidOK: true,
+	})
+	if d.Action != "stock_norm_hold_book_mid" || d.NewPrice != 3_100_000 {
+		t.Fatalf("want hold at/above mid: %+v", d)
+	}
+}
+
+func TestStockNormBookMidDoesNotBlockVolume(t *testing.T) {
+	// без BookMidOK volume ↑ свободно
+	d := stockNormDecide(stockNormInput{
+		Held: 2, StockNorm: 4, Sales: 0, NormalSales: 5,
+		Price: 500_000, Step: 50_000,
+	})
+	if d.Action != "stock_norm_price_up_deficit" || d.NewPrice != 550_000 {
+		t.Fatalf("volume ↑: %+v", d)
 	}
 }

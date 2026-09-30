@@ -13,6 +13,7 @@ import (
 //   held > norm ∧ sales < NormalSales → ↓ sell
 //   иначе sales < NormalSales → ↑ sell (переизбыток исключён)
 // Книга не якорь цены; рычаг: пусто ∧ сильно ниже пола книги → ↑.
+// Дорогие (mega/почти/яд): ↑ не выше seller-p40 («середина» книги).
 // set_min/set_max проверяются по книге в main.go.
 //
 // Rollback: capitalPolicy = capitalPolicyV9 (+book2).
@@ -32,6 +33,8 @@ type stockNormInput struct {
 	Price, Step, PriceFloor           int
 	BookFloor                         int
 	BookOK                            bool
+	BookMid                           int  // seller-p40; 0 = нет потолка
+	BookMidOK                         bool
 	BlockUp, BlockDown                bool
 }
 
@@ -87,8 +90,20 @@ func stockNormDecide(in stockNormInput) stockNormDecision {
 			out.Reason = "manual → ↑ запрещён"
 			return
 		}
+		cand := price + step
+		if in.BookMidOK && in.BookMid > 0 {
+			if price >= in.BookMid {
+				out.Action = "stock_norm_hold_book_mid"
+				out.Reason = fmt.Sprintf("%s · уже ≥ bookMid(p40)=%d", reason, in.BookMid)
+				return
+			}
+			if cand > in.BookMid {
+				cand = in.BookMid
+				reason = reason + fmt.Sprintf(" · cap bookMid(p40)=%d", in.BookMid)
+			}
+		}
 		out.Action = action
-		out.NewPrice = price + step
+		out.NewPrice = cand
 		out.Reason = reason
 	}
 
@@ -138,6 +153,19 @@ func stockNormBookFloor(item string, since time.Time) (floor int, ok bool) {
 	return 0, false
 }
 
+// stockNormBookMid — «середина» книги = seller-p40 (как старый якорь нормы продаж).
+// Только для дорогих: потолок ↑.
+func stockNormBookMid(item string, since time.Time) (mid int, ok bool) {
+	if !book2ExpensiveSKU(item, 0) {
+		return 0, false
+	}
+	sellMkt, _, _, ok2 := ahBookMarketAnchorsSince(item, since)
+	if ok2 && sellMkt > 0 {
+		return sellMkt, true
+	}
+	return 0, false
+}
+
 func adjustPriceStockNorm(
 	item string,
 	cfg ItemConfig,
@@ -169,7 +197,9 @@ func adjustPriceStockNorm(
 	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
 
 	mutex.Unlock()
-	bookFloor, bookOK := stockNormBookFloor(item, now.Add(-ahBook2Window))
+	bookSince := now.Add(-ahBook2Window)
+	bookFloor, bookOK := stockNormBookFloor(item, bookSince)
+	bookMid, bookMidOK := stockNormBookMid(item, bookSince)
 	mutex.Lock()
 
 	nacT := nacenka
@@ -190,6 +220,8 @@ func adjustPriceStockNorm(
 		PriceFloor:  priceFloor,
 		BookFloor:   bookFloor,
 		BookOK:      bookOK,
+		BookMid:     bookMid,
+		BookMidOK:   bookMidOK,
 		BlockUp:     blockUp,
 		BlockDown:   blockDown,
 	})
@@ -199,8 +231,8 @@ func adjustPriceStockNorm(
 	maxReach := maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts)
 	notes := []string{
 		fmt.Sprintf(
-			"stock_norm held=%d onAH=%d inv=%d norm=%d maxReach=%d sales=%d/%d bookFloor=%d ok=%v | %s",
-			totalHeld, onAH, invCount, stockNorm, maxReach, sales, normalSales, bookFloor, bookOK, dec.Reason,
+			"stock_norm held=%d onAH=%d inv=%d norm=%d maxReach=%d sales=%d/%d bookFloor=%d ok=%v bookMid=%d midOK=%v | %s",
+			totalHeld, onAH, invCount, stockNorm, maxReach, sales, normalSales, bookFloor, bookOK, bookMid, bookMidOK, dec.Reason,
 		),
 	}
 
@@ -243,8 +275,8 @@ func adjustPriceStockNorm(
 	} else if strings.Contains(action, "price_down") {
 		dir = "DOWN"
 	}
-	log.Printf("[STOCK_NORM] %s: %s %s | цена %d→%d nac=%d | held=%d norm=%d sales=%d book=%d | %s",
-		item, dir, action, priceBefore, newPrice, nacT, totalHeld, stockNorm, sales, bookFloor, dec.Reason)
+	log.Printf("[STOCK_NORM] %s: %s %s | цена %d→%d nac=%d | held=%d norm=%d sales=%d book=%d mid=%d | %s",
+		item, dir, action, priceBefore, newPrice, nacT, totalHeld, stockNorm, sales, bookFloor, bookMid, dec.Reason)
 
 	queueMLDecisionLocked(
 		item, cfg, action,
