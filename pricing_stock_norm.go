@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"math"
 	"strings"
 	"time"
 )
@@ -14,9 +13,9 @@ import (
 //   held > norm ∧ sales < NormalSales → ↓ sell
 //   иначе sales < NormalSales → ↑ sell (переизбыток исключён)
 // Книга не якорь цены; рычаг: пусто ∧ сильно ниже пола книги → ↑.
-// Потолок ↑ (только ↑): seller-p{q} по noban-минам — стена против разгона вверх.
-//   q(P) = 0.80 → 0.55 по log от seller-p50 книги (0.4M…3M).
-//   0.95→0.88 был «emergency only» и пропускал wall-chase (mid ≫ book floor).
+// Потолок ↑ (только ↑):
+//   дешёвые — середина полки (seller-p50);
+//   sword7/дорогие (anchor≥1.2M или mega/pochti) — низ мульти-селлеров (p25), не mid.
 // ↓ не трогаем.
 // set_min/set_max проверяются по книге в main.go.
 //
@@ -27,12 +26,14 @@ const capitalPolicyStockNorm = "stock_norm_july11"
 // Пусто + цена ниже bookFloor×ratio → можно ↑ к рынку.
 const stockNormBookCatchupRatio = 0.85
 
-// Log-шкала q для потолка ↑ (якорь = seller-p50 книги).
+// Потолок ↑: дешёвые mid, дорогие — ниже mid (низ мульти).
 const (
-	stockNormBookMidPLo  = 400_000.0
-	stockNormBookMidPHi  = 3_000_000.0
-	stockNormBookMidQMax = 0.80 // дёшево — верхняя треть полки
-	stockNormBookMidQMin = 0.55 // дорого — около середины полки
+	stockNormBookMidQCheap     = 0.50 // середина seller-mins
+	stockNormBookMidQExpensive = 0.25 // нижняя четверть
+	// sword7-класс: p50 книги уже ≥ этого → потолок ниже mid.
+	stockNormBookMidExpensiveAnchor = 1_200_000
+	// Пачка: ≥2 лота одного селлера (для p25; ≥3 часто пусто на 30м).
+	stockNormBookMidMultiMinLots = 2
 )
 
 func isPricingPolicyStockNorm() bool {
@@ -170,29 +171,24 @@ func stockNormBookFloor(item string, since time.Time) (floor int, ok bool) {
 	return 0, false
 }
 
-// stockNormBookMidPctForAnchor — q потолка ↑ от полки книги (seller-p50).
-// q = qMax − (qMax−qMin)·clamp(log(P/Plo)/log(Phi/Plo), 0, 1).
-func stockNormBookMidPctForAnchor(anchor int) float64 {
-	if anchor <= 0 {
-		return stockNormBookMidQMax
+// stockNormBookMidExpensive — sword7-класс / mega: потолок ниже mid.
+func stockNormBookMidExpensive(item string, anchor int) bool {
+	if book2ExpensiveSKU(item, anchor) {
+		return true
 	}
-	p := float64(anchor)
-	if p <= stockNormBookMidPLo {
-		return stockNormBookMidQMax
-	}
-	if p >= stockNormBookMidPHi {
-		return stockNormBookMidQMin
-	}
-	t := math.Log(p/stockNormBookMidPLo) / math.Log(stockNormBookMidPHi/stockNormBookMidPLo)
-	if t < 0 {
-		t = 0
-	} else if t > 1 {
-		t = 1
-	}
-	return stockNormBookMidQMax - (stockNormBookMidQMax-stockNormBookMidQMin)*t
+	return anchor >= stockNormBookMidExpensiveAnchor
 }
 
-// stockNormBookMid — потолок ↑: percentile(seller mins noban, q(p50)).
+// stockNormBookMidPctForAnchor — q потолка ↑: дешёвые 0.50, дорогие 0.25 (fallback без мульти).
+func stockNormBookMidPctForAnchor(anchor int) float64 {
+	if anchor >= stockNormBookMidExpensiveAnchor {
+		return stockNormBookMidQExpensive
+	}
+	return stockNormBookMidQCheap
+}
+
+// stockNormBookMid — потолок ↑.
+// Дешёвые: seller-p50. Дорогие/sword7: multi-seller p25 (ниже mid); иначе all-p25.
 // Только блокирует ↑; ↓/overstock не трогает.
 func stockNormBookMid(item string, since time.Time) (mid int, q float64, ok bool) {
 	ps, n := ahBookSellerMinPricesSince(item, since)
@@ -206,7 +202,23 @@ func stockNormBookMid(item string, since time.Time) (mid int, q float64, ok bool
 	if anchor <= 0 {
 		return 0, 0, false
 	}
-	q = stockNormBookMidPctForAnchor(anchor)
+
+	if stockNormBookMidExpensive(item, anchor) {
+		q = stockNormBookMidQExpensive
+		if mps, mn := ahBookMultiSellerMinPricesSince(item, since, stockNormBookMidMultiMinLots); mn >= 1 {
+			mid = ahBookPercentileSorted(mps, q)
+			if mid > 0 {
+				return mid, q, true
+			}
+		}
+		mid = ahBookPercentileSorted(ps, q)
+		if mid <= 0 {
+			return 0, q, false
+		}
+		return mid, q, true
+	}
+
+	q = stockNormBookMidQCheap
 	mid = ahBookPercentileSorted(ps, q)
 	if mid <= 0 {
 		return 0, q, false

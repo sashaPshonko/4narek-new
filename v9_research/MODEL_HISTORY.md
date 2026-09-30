@@ -83,6 +83,12 @@ Live: mid(p88–p95) ≫ book floor (sword7 mid~4–6M при book~0.7M) → ↑
 - `v9DemandMaxRatio`: **1.05 → 1.00** (demand ↑ только under p10)
 OOS `full_compare_all.py` на локальной `pricing.db`: panel cycles=0 (нет FOCUS истории для WF) — Δ% не посчитан; драйвер правки = live mid≫book.
 
+### 2026-10-01 — UP-cap: cheap p50 / sword7+ multi p25
+Paid vs book: sword7 paid~1.2M при all-p50~1.4M — mid как потолок ещё высоковат.
+- дешёвые (anchor<1.2M): seller-**p50**
+- sword7/mega/pochti / anchor≥1.2M: **multi-seller p25** (иначе all-p25)
+Не трогает book2 sell-якорь (`ExpensiveBottom`).
+
 ### 2026-09-14 — `stock_corridor_v9` vs все
 Источник: `full_compare.json` (3-fold WF, FOCUS). hold — артефакт, не baseline победы.
 

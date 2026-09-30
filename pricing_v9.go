@@ -318,7 +318,7 @@ func adjustPriceV9(
 		notes = append(notes, "manual max/set → ↑ запрещён")
 	}
 
-	// Потолок ↑: seller-p{q} q=0.80→0.55 — стена против разгона (не якорь).
+	// Потолок ↑: дешёвые seller-p50; sword7/дорогие — multi p25 (ниже mid).
 	if strings.Contains(action, "price_up") && newPrice > priceBefore {
 		mutex.Unlock()
 		bookMid, bookMidQ, bookMidOK := stockNormBookMid(item, now.Add(-ahBook2Window))
