@@ -1,11 +1,10 @@
-"""v10 rails decide — pure function for sim / unit tests.
+"""v10 rails decide — rev2: sell-through vs stock, not 'hope it pays'.
 
 See V10_RAILS_DESIGN.md. Not wired to production Go.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 
 @dataclass
@@ -22,18 +21,18 @@ class V10In:
     mid_ok: bool = False
     try_sells: int = 0
     night: bool = False
-    # tunable
     lo_frac: float = 0.18
     hi_frac: float = 0.25
     over_frac: float = 0.35
     dump_frac: float = 0.50
     deadband_steps: float = 0.75
     max_steps: int = 2
-    min_sales_up_day: int = 3
-    min_sales_up_night: int = 4
-    # toxic: weak flow
-    toxic_max_sales: int = 1  # sales <= this while excess → toxic if also buys>=sales
-    try_toxic_mult: float = 3.0  # try_sells >= mult*max(sales,1) → toxic
+    # sell-through = sales/held; below → prefer DOWN when excess
+    turn_low: float = 0.08
+    turn_high: float = 0.25
+    # optional model score P(DOWN better than HOLD); None = rules only
+    p_down_better: float | None = None
+    p_down_tau: float = 0.55
 
 
 @dataclass
@@ -46,61 +45,50 @@ class V10Out:
 def _band(share: int, lo_f, hi_f, over_f, dump_f):
     if share <= 0:
         return 0, 0, 0, 0
-    lo = int(share * lo_f + 0.5)
-    hi = int(share * hi_f + 0.5)
-    over = int(share * over_f + 0.5)
-    dump = int(share * dump_f + 0.5)
-    return lo, hi, over, dump
+    return (
+        int(share * lo_f + 0.5),
+        int(share * hi_f + 0.5),
+        int(share * over_f + 0.5),
+        int(share * dump_f + 0.5),
+    )
 
 
 def _pos_target(load: float) -> float:
-    """held/share → desired position in [floor,mid] (0=floor, 1=mid)."""
     if load <= 0.05:
-        return 0.85
+        return 0.90
     if load < 0.18:
-        return 0.70
+        return 0.75
     if load <= 0.25:
         return 0.50
     if load < 0.35:
-        return 0.30
+        return 0.28
     if load < 0.50:
-        return 0.15
+        return 0.12
     return 0.05
 
 
-def _toxic(inp: V10In, hi: int, dump: int) -> bool:
-    if inp.held <= hi:
-        return False
-    if inp.held >= dump:
-        return True
-    sales, buys = inp.sales, inp.buys
-    if sales <= inp.toxic_max_sales and buys >= sales:
-        return True
-    if sales > 0 and buys > sales * 1.5:
-        return True
-    if inp.try_sells >= inp.try_toxic_mult * max(sales, 1) and sales <= 2:
-        return True
-    return False
+def _turn(sales: int, held: int) -> float:
+    return sales / max(held, 1)
 
 
-def _patient_excess(inp: V10In, hi: int) -> bool:
-    """Overstock but still flowing — do not force DOWN."""
-    if inp.held <= hi:
-        return False
-    if inp.sales >= 2 and inp.sales >= inp.buys:
-        return True
-    if inp.sales >= 3:
-        return True
-    return False
+def _rail_span(inp: V10In, price: int, step: int):
+    floor = inp.floor if inp.floor_ok and inp.floor > 0 else max(step, price // 4)
+    mid = inp.mid if inp.mid_ok and inp.mid > 0 else price + 10 * step
+    if mid <= floor:
+        mid = floor + step
+    return floor, mid
+
+
+def _band_pos(price: int, floor: int, mid: int) -> float:
+    if mid <= floor:
+        return 0.5
+    return max(0.0, min(1.0, (price - floor) / (mid - floor)))
 
 
 def v10_decide(inp: V10In) -> V10Out:
     step = max(1, inp.step)
     price = inp.price
-    if price < inp.price and False:
-        pass
 
-    # --- rails first ---
     if inp.floor_ok and inp.floor > 0 and price < inp.floor:
         return V10Out("price_up_floor_jump", inp.floor, "below_floor")
     if inp.mid_ok and inp.mid > 0 and price > inp.mid:
@@ -108,88 +96,101 @@ def v10_decide(inp: V10In) -> V10Out:
 
     lo, hi, over, dump = _band(inp.share, inp.lo_frac, inp.hi_frac, inp.over_frac, inp.dump_frac)
     load = (inp.held / inp.share) if inp.share > 0 else 0.0
-    pos_t = _pos_target(load)
-
-    floor = inp.floor if inp.floor_ok and inp.floor > 0 else max(step, price // 4)
-    mid = inp.mid if inp.mid_ok and inp.mid > 0 else price + 10 * step
-    if mid <= floor:
-        mid = floor + max(step, 1)
-
-    target = int(round(floor + pos_t * (mid - floor)))
-    # clamp target into rails
+    turn = _turn(inp.sales, inp.held)
+    floor, mid = _rail_span(inp, price, step)
+    pos = _band_pos(price, floor, mid)
+    target = int(round(floor + _pos_target(load) * (mid - floor)))
     target = max(floor, min(mid, target))
-
     dead = int(inp.deadband_steps * step)
+
     if abs(price - target) <= dead:
         return V10Out("hold_deadband", price, "near_target")
 
-    # --- DOWN toward target ---
-    if target < price - dead:
-        toxic = _toxic(inp, hi, dump)
-        patient = _patient_excess(inp, hi)
-        if patient and not toxic and inp.held < dump:
-            return V10Out("hold_patient_excess", price, "patient_excess")
-        if not toxic and inp.held <= hi:
-            return V10Out("hold_no_down_signal", price, "no_down_permission")
-        # allowed: toxic or dump
+    # ----- DOWN: excess + weak sell-through vs stock -----
+    if target < price - dead and inp.held > hi:
+        want_down = False
+        reason = "hold_flow_ok"
+        if turn < inp.turn_low:
+            want_down = True
+            reason = "low_turn"
+        elif inp.held >= dump and turn < inp.turn_high:
+            want_down = True
+            reason = "dump_zone"
+        elif inp.held >= over and turn < (inp.turn_low + inp.turn_high) / 2:
+            want_down = True
+            reason = "over_mid_turn"
+
+        # model override in grey zone
+        if inp.p_down_better is not None:
+            if inp.p_down_better >= inp.p_down_tau:
+                want_down = True
+                reason = "model_down"
+            elif turn >= inp.turn_low and inp.held < dump:
+                want_down = False
+                reason = "model_hold"
+
+        if not want_down:
+            return V10Out("hold_sellthrough_ok", price, reason)
+
         delta = min(inp.max_steps * step, price - target)
-        # dump zone: prefer hard
-        if inp.held >= dump or inp.held >= over:
+        if inp.held >= over:
             delta = max(delta, min(2 * step, price - target))
-        new_p = max(target, price - delta)
-        new_p = max(floor, new_p)
+        new_p = max(floor, max(target, price - delta))
         if new_p < price:
-            return V10Out("price_down_v10", new_p, "toxic_or_dump" if toxic else "to_target")
+            return V10Out("price_down_v10", new_p, reason)
         return V10Out("hold_at_floor", price, "at_floor")
 
-    # --- UP toward target ---
+    if target < price - dead and inp.held <= hi:
+        return V10Out("hold_no_excess", price, "no_excess")
+
+    # ----- UP: understock — both strong AND weak sales -----
     if target > price + dead:
-        min_s = inp.min_sales_up_night if inp.night else inp.min_sales_up_day
-        under = inp.held > 0 and inp.held < lo
+        under = 0 < inp.held < lo
         empty = inp.held == 0
-        strong = inp.sales >= min_s and inp.sales > inp.buys
-        # empty: only climb if we want high target (low load) — rails already fixed below floor
-        if under and strong:
+        # veto: high in band, visible but no sales
+        if pos >= 0.85 and inp.try_sells >= 3 and inp.sales == 0:
+            return V10Out("hold_up_veto_dead_high", price, "dead_near_ceiling")
+
+        if under or empty:
+            # default: climb toward high target (incl. weak sales)
             delta = min(inp.max_steps * step, target - price)
-            new_p = min(target, price + delta)
-            new_p = min(mid, new_p)
+            if empty and inp.sales == 0 and inp.buys == 0:
+                delta = min(step, delta)  # one step when totally idle
+            new_p = min(mid, min(target, price + delta))
             if new_p > price:
-                return V10Out("price_up_v10_demand", new_p, "under_demand")
+                tag = "under_weak" if inp.sales < 2 else "under_strong"
+                return V10Out("price_up_v10", new_p, tag)
             return V10Out("hold_at_mid", price, "at_mid")
-        if empty and strong:
-            # rare: empty but sales in window — allow toward target
-            delta = min(step, target - price)
-            new_p = min(mid, price + delta)
-            if new_p > price:
-                return V10Out("price_up_v10_empty_flow", new_p, "empty_but_sales")
-        return V10Out("hold_no_up_permission", price, "no_up_permission")
+
+        return V10Out("hold_no_up", price, "no_understock")
 
     return V10Out("hold", price, "balanced")
 
 
 def _selftest() -> None:
-    # below floor → jump
+    # rails
     o = v10_decide(V10In(10, 0, 0, 100, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True))
-    assert o.new_price == 400 and "floor" in o.reason
-    # above mid → jump
+    assert o.new_price == 400
     o = v10_decide(V10In(10, 0, 0, 900, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True))
-    assert o.new_price == 800 and "mid" in o.reason
-    # patient excess: held high, sales ok → hold
-    o = v10_decide(
-        V10In(40, 4, 1, 600, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True)
-    )
-    assert o.action == "hold_patient_excess", o
-    # toxic excess: held high, sales 0 buys 5 → down
-    o = v10_decide(
-        V10In(40, 0, 5, 600, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True)
-    )
+    assert o.new_price == 800
+
+    # excess + low turn (sales=1 held=40 → 0.025) → down
+    o = v10_decide(V10In(40, 1, 0, 650, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True))
     assert o.action == "price_down_v10", o
-    # under + demand → up
-    o = v10_decide(
-        V10In(10, 4, 1, 500, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True)
-    )
-    assert o.action == "price_up_v10_demand", o
-    print("policy_v10_rails selftest OK")
+
+    # excess + high turn (sales=12 held=40 → 0.3) → hold
+    o = v10_decide(V10In(40, 12, 2, 650, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True))
+    assert o.action == "hold_sellthrough_ok", o
+
+    # under + weak sales → up
+    o = v10_decide(V10In(8, 0, 0, 500, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True))
+    assert o.action == "price_up_v10", o
+
+    # under + strong → up
+    o = v10_decide(V10In(8, 4, 1, 500, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True))
+    assert o.action == "price_up_v10", o
+
+    print("policy_v10_rails rev2 selftest OK")
 
 
 if __name__ == "__main__":
