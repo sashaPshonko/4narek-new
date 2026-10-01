@@ -265,7 +265,7 @@
     "base_price": 80019,
     "normal_sales": 5,
     "normal_count": 4,
-    "price_step": 10000,
+    "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
     "type": "netherite_sword-1.21",
