@@ -173,9 +173,9 @@ func stockNormBookMidQDefault(item string) float64 {
 	case id == "sword7-1.21":
 		return 0.45
 	case id == "megasword-1.21":
-		return 0.10
+		return 0.25
 	case strings.Contains(id, "яд") && strings.Contains(id, "megasword"):
-		return 0.10
+		return 0.25
 	case strings.Contains(id, "pochti"):
 		return 0.25
 	case strings.Contains(id, "sword"):
