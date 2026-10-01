@@ -298,7 +298,7 @@
     ],
     "nacenka": 300000,
     "num": 1,
-    "book_mid_q": 0.60,
+    "book_mid_q": 0.50,
     "book_floor_q": 0.15
   },
   "sword-sharp6-1.21": {
@@ -317,7 +317,7 @@
     ],
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.50,
+    "book_mid_q": 0.30,
     "book_floor_q": 0.15
   },
   "кирка-бульд-маг-1.21": {
