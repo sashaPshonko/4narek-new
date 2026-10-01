@@ -10,16 +10,15 @@ import (
 // stock_corridor_v9 — inventory corridor + market guards (Sep 2026 research).
 // Не патч v8af: отдельная политика. Rollback: capitalPolicy = capitalPolicyV8af.
 //
-// Книга НЕ задаёт sell. Только рельсы:
-//   • потолок — прыжок к book_mid_q при ↑ (demand);
-//   • пол — прыжок к book_floor_q при empty catchup; ↓ не ниже пола.
+// Книга НЕ задаёт sell. Жёсткие рельсы (приоритетнее коридора):
+//   • цена < пол  → прыжок к полу;
+//   • цена > потолок → прыжок к потолку.
+// Дальше обычный corridor (demand +1 / excess ↓).
 
 const (
 	capitalPolicyV8af = "stock_corridor_v8af"
 	capitalPolicyV9   = "stock_corridor_v9"
 
-	// Empty catchup: buys>0 сбрасывает streak. Порог = book_floor_q (прыжок, не +1).
-	v9CatchupArmCycles = 2
 	v9UpCooldownCycles = 2
 	v9MaxUpStreak      = 1
 	v9DayMinSalesUp    = 3
@@ -37,9 +36,11 @@ type v9Input struct {
 	Price, Step, Share   int
 	P10                  int  // demand UP guard (не цель sell)
 	P10OK                bool // thick raw p10
-	MultiFloor           int // перцентиль мульти-селлеров — порог empty catchup
+	MultiFloor           int  // пол книги
 	MultiFloorOK         bool
-	EmptyStreak          int // до обновления этим циклом
+	BookMid              int // потолок книги
+	BookMidOK            bool
+	EmptyStreak          int // до обновления этим циклом (лог/совместимость)
 	UpCooldown, UpStreak int
 	Night                bool
 	BlockUp, BlockDown   bool
@@ -71,7 +72,7 @@ func v9MinSalesForUp(night bool) int {
 	return v9DayMinSalesUp
 }
 
-// v9Decide — ядро v9. Порядок: DOWN veto → DOWN → UP demand → UP catchup → HOLD.
+// v9Decide — ядро v9. Порядок: рельсы пол/потолок → DOWN → UP demand → HOLD.
 func v9Decide(in v9Input) v9Decision {
 	band := in.Band
 	if band.hi == 0 {
@@ -114,7 +115,25 @@ func v9Decide(in v9Input) v9Decision {
 		UpStreak:    0,
 	}
 
-	// --- DOWN (только excess; пол книги — жёсткий низ, без market-ratio veto) ---
+	// --- Рельсы книги (всегда, до коридора) ---
+	if !in.BlockUp && in.MultiFloorOK && in.MultiFloor > 0 && price < in.MultiFloor {
+		out.Action = "corridor_price_up_v9_book_floor"
+		out.NewPrice = in.MultiFloor
+		out.Reason = "below_book_floor_jump"
+		out.UpCooldown = v9UpCooldownCycles
+		out.UpStreak = upStreak + 1
+		return out
+	}
+	if !in.BlockDown && in.BookMidOK && in.BookMid > 0 && price > in.BookMid {
+		out.Action = "corridor_price_down_v9_book_mid"
+		out.NewPrice = in.BookMid
+		out.Reason = "above_book_mid_jump"
+		out.UpStreak = 0
+		out.UpCooldown = upCD
+		return out
+	}
+
+	// --- DOWN (только excess; не ниже пола книги) ---
 	if !in.BlockDown && step > 0 {
 		if in.Held <= hi {
 			// low stock → ↓ запрещён; дальше смотрим UP
@@ -146,7 +165,6 @@ func v9Decide(in v9Input) v9Decision {
 				out.UpCooldown = upCD
 				return out
 			}
-			// Уже на полу (книга/min) при excess → HOLD, не пилим ниже.
 			out.Action = "corridor_hold_v9_book_floor"
 			out.Reason = "at_book_floor"
 			out.UpCooldown = upCD
@@ -156,10 +174,8 @@ func v9Decide(in v9Input) v9Decision {
 		}
 	}
 
-	// --- UP ---
+	// --- UP demand (+1; потолок уже отрезан рельсом выше) ---
 	canUp := !in.BlockUp && step > 0 && upCD == 0 && upStreak < v9MaxUpStreak
-
-	// 1) demand
 	minSales := v9MinSalesForUp(in.Night)
 	if canUp && in.Held > 0 && in.Held < lo && in.Sales >= minSales && in.Sales > in.Buys {
 		if ratioOK && ratio >= v9DemandMaxRatio {
@@ -169,27 +185,20 @@ func v9Decide(in v9Input) v9Decision {
 			return out
 		}
 		newP := price + step
-		out.Action = "corridor_price_up_v9_demand"
-		out.NewPrice = newP
-		out.Reason = "demand"
-		out.UpCooldown = v9UpCooldownCycles
-		out.UpStreak = upStreak + 1
-		return out
-	}
-
-	// 2) empty catchup — прыжок к book_floor_q (не +1)
-	if canUp && in.Held == 0 && emptyStreak >= v9CatchupArmCycles && in.MultiFloorOK && in.MultiFloor > 0 {
-		if price >= in.MultiFloor {
-			out.Action = "corridor_hold_v9_catchup_no_gap"
-			out.Reason = "catchup_no_gap"
-			out.UpCooldown = upCD
+		if in.BookMidOK && in.BookMid > 0 && newP > in.BookMid {
+			newP = in.BookMid
+		}
+		if newP > price {
+			out.Action = "corridor_price_up_v9_demand"
+			out.NewPrice = newP
+			out.Reason = "demand"
+			out.UpCooldown = v9UpCooldownCycles
+			out.UpStreak = upStreak + 1
 			return out
 		}
-		out.Action = "corridor_price_up_v9_empty_catchup"
-		out.NewPrice = in.MultiFloor
-		out.Reason = "empty_catchup_jump"
-		out.UpCooldown = v9UpCooldownCycles
-		out.UpStreak = upStreak + 1
+		out.Action = "corridor_hold_v9_book_mid"
+		out.Reason = "at_book_mid"
+		out.UpCooldown = upCD
 		return out
 	}
 
@@ -235,40 +244,43 @@ func adjustPriceV9(
 		p10OK = false
 	}
 	multiFloor, multiFloorQ, multiN := 0, 0.0, 0
-	multiFloorOK := false
 	if _, mn := ahBookMultiSellerMinPricesSince(item, bookSince, stockNormBookMidMultiMinLots); mn >= 1 {
 		multiN = mn
 	}
-	multiFloor, multiFloorQ, multiFloorOK = stockNormBookCatchupFloor(cfg, bookSince)
+	multiFloor, multiFloorQ, multiFloorOK := stockNormBookCatchupFloor(cfg, bookSince)
+	bookMid, bookMidQ, bookMidOK := stockNormBookMid(cfg, now.Add(-ahBook2Window))
 	mutex.Lock()
 
 	dec := v9Decide(v9Input{
-		Held:        totalHeld,
-		Sales:       sales,
-		Buys:        buys,
-		Price:       priceBefore,
-		Step:        step,
-		Share:       share,
-		P10:         p10,
-		P10OK:       p10OK,
+		Held:           totalHeld,
+		Sales:          sales,
+		Buys:           buys,
+		Price:          priceBefore,
+		Step:           step,
+		Share:          share,
+		P10:            p10,
+		P10OK:          p10OK,
 		MultiFloor:     multiFloor,
 		MultiFloorOK:   multiFloorOK,
-		EmptyStreak: state.EmptyMarketGapStreak,
-		UpCooldown:  state.CorridorUpCooldown,
-		UpStreak:    state.CorridorUpStreak,
-		Night:       night,
-		BlockUp:     blockUp,
-		BlockDown:   blockDown,
-		PriceFloor:  priceFloor,
-		Band:        band,
+		BookMid:        bookMid,
+		BookMidOK:      bookMidOK,
+		EmptyStreak:    state.EmptyMarketGapStreak,
+		UpCooldown:     state.CorridorUpCooldown,
+		UpStreak:       state.CorridorUpStreak,
+		Night:          night,
+		BlockUp:        blockUp,
+		BlockDown:      blockDown,
+		PriceFloor:     priceFloor,
+		Band:           band,
 	})
 
 	newPrice := dec.NewPrice
 	action := dec.Action
 	notes := []string{
-		fmt.Sprintf("v9 reason=%s held=%d(onAH=%d inv=%d) lo=%d hi=%d sales=%d buys=%d p10=%d p10N=%d multiFloor(p%.0f)=%d multiN=%d ratio=%s empty_streak=%d up_cd=%d relist=%v",
-			dec.Reason, totalHeld, onAH, invCount, targetLo, targetHi, sales, buys, p10, p10N, multiFloorQ*100, multiFloor, multiN,
-			v9RatioStr(priceBefore, p10, p10OK), dec.EmptyStreak, dec.UpCooldown, isTypeRelistEnabled(cfg.Type)),
+		fmt.Sprintf("v9 reason=%s held=%d(onAH=%d inv=%d) lo=%d hi=%d sales=%d buys=%d p10=%d p10N=%d floor(p%.0f)=%d mid(p%.0f)=%d multiN=%d ratio=%s empty_streak=%d up_cd=%d",
+			dec.Reason, totalHeld, onAH, invCount, targetLo, targetHi, sales, buys, p10, p10N,
+			multiFloorQ*100, multiFloor, bookMidQ*100, bookMid, multiN,
+			v9RatioStr(priceBefore, p10, p10OK), dec.EmptyStreak, dec.UpCooldown),
 	}
 	if treasuryCashBlocksUp {
 		notes = append(notes, "treasury_empty + held>0 → ↑ gated (cash short, not shortage)")
@@ -289,24 +301,6 @@ func adjustPriceV9(
 			action = "hold_manual_set"
 		}
 		notes = append(notes, "manual max/set → ↑ запрещён")
-	}
-
-	// Потолок: при demand ↑ — прыжок к book_mid (catchup к полу не трогаем).
-	if action == "corridor_price_up_v9_demand" && newPrice > priceBefore {
-		mutex.Unlock()
-		bookMid, bookMidQ, bookMidOK := stockNormBookMid(cfg, now.Add(-ahBook2Window))
-		mutex.Lock()
-		if bookMidOK && bookMid > 0 {
-			qTag := fmt.Sprintf("p%.0f", bookMidQ*100)
-			if priceBefore >= bookMid {
-				newPrice = priceBefore
-				action = "corridor_hold_v9_book_mid"
-				notes = append(notes, fmt.Sprintf("уже ≥ bookMid(%s)=%d → ↑ стоп", qTag, bookMid))
-			} else {
-				newPrice = bookMid
-				notes = append(notes, fmt.Sprintf("jump bookMid(%s)=%d", qTag, bookMid))
-			}
-		}
 	}
 
 	if newPrice < priceFloor {

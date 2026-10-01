@@ -72,6 +72,11 @@ p/h из observational compare на полном `capital_cycles` (14.09.2026).
 
 Правило: при каждой смене pricing — `full_compare_all.py`, % vs все baseline, строка сюда.
 
+### 2026-10-02 — v9: пол/потолок = жёсткие рельсы-прыжки
+- `price < floor` → прыжок к полу (всегда, не только empty).
+- `price > mid` → прыжок к потолку (всегда, не только demand ↑).
+- Demand снова **+1** внутри [floor, mid]. Empty catchup как отдельная ветка убран (поглощён полом).
+
 ### 2026-10-02 — v9: без underprice↓ veto; demand 1.05; пол/потолок прыжками
 - Убран DOWN-veto «уже дёшево vs рынок» — низ режет **пол книги** (↓ не ниже).
 - Demand ↑ снова при our/p10 **< 1.05** (как BEST_MODEL).

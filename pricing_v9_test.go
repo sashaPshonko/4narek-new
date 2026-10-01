@@ -189,69 +189,72 @@ func TestV9NightDemandNeeds4(t *testing.T) {
 	}
 }
 
-func TestV9EmptyCatchup(t *testing.T) {
-	in := v9WithBookFloor(v9Base(0, 0, 0, 1_500_000, 100_000, 100, 2_000_000, true), 2_000_000)
-	in.EmptyStreak = 1
+func TestV9BookFloorJumpAnytime(t *testing.T) {
+	// ниже пола → прыжок к полу, даже с наличием и без empty streak
+	in := v9WithBookFloor(v9Base(10, 0, 0, 1_500_000, 100_000, 100, 2_000_000, true), 2_000_000)
 	d := v9Decide(in)
-	if d.Action != "corridor_price_up_v9_empty_catchup" {
-		t.Fatalf("want catchup got %+v", d)
+	if d.Action != "corridor_price_up_v9_book_floor" {
+		t.Fatalf("want floor jump got %+v", d)
+	}
+	if d.NewPrice != 2_000_000 || d.Reason != "below_book_floor_jump" {
+		t.Fatalf("got %+v", d)
+	}
+}
+
+func TestV9BookFloorNoJumpWhenAtOrAbove(t *testing.T) {
+	in := v9WithBookFloor(v9Base(10, 0, 0, 2_000_000, 100_000, 100, 2_000_000, true), 2_000_000)
+	d := v9Decide(in)
+	if d.Action == "corridor_price_up_v9_book_floor" {
+		t.Fatalf("at floor must not jump: %+v", d)
+	}
+}
+
+func TestV9BookMidJumpAnytime(t *testing.T) {
+	in := v9Base(20, 0, 0, 3_000_000, 100_000, 100, 2_000_000, true)
+	in.BookMid = 2_500_000
+	in.BookMidOK = true
+	d := v9Decide(in)
+	if d.Action != "corridor_price_down_v9_book_mid" {
+		t.Fatalf("want mid jump got %+v", d)
+	}
+	if d.NewPrice != 2_500_000 || d.Reason != "above_book_mid_jump" {
+		t.Fatalf("got %+v", d)
+	}
+}
+
+func TestV9BookMidNoJumpWhenAtOrBelow(t *testing.T) {
+	in := v9Base(20, 0, 0, 2_500_000, 100_000, 100, 2_000_000, true)
+	in.BookMid = 2_500_000
+	in.BookMidOK = true
+	d := v9Decide(in)
+	if d.Action == "corridor_price_down_v9_book_mid" {
+		t.Fatalf("at mid must not jump: %+v", d)
+	}
+}
+
+func TestV9FloorTakesPriorityOverMid(t *testing.T) {
+	// кривой конфиг floor>mid не ожидаем; ниже пола бьёт первым
+	in := v9Base(5, 0, 0, 1_000_000, 100_000, 100, 2_000_000, true)
+	in.MultiFloor = 1_800_000
+	in.MultiFloorOK = true
+	in.BookMid = 1_500_000
+	in.BookMidOK = true
+	d := v9Decide(in)
+	if d.Action != "corridor_price_up_v9_book_floor" {
+		t.Fatalf("floor first: %+v", d)
+	}
+}
+
+func TestV9DemandCapsAtBookMid(t *testing.T) {
+	in := v9Base(10, 3, 1, 1_950_000, 100_000, 100, 2_000_000, true)
+	in.BookMid = 2_000_000
+	in.BookMidOK = true
+	d := v9Decide(in)
+	if d.Action != "corridor_price_up_v9_demand" {
+		t.Fatalf("want demand: %+v", d)
 	}
 	if d.NewPrice != 2_000_000 {
-		t.Fatalf("catchup jump to floor=%d got %d", in.MultiFloor, d.NewPrice)
-	}
-	if d.Reason != "empty_catchup_jump" {
-		t.Fatalf("reason=%s", d.Reason)
-	}
-}
-
-func TestV9EmptyCatchupStreak1Hold(t *testing.T) {
-	in := v9WithBookFloor(v9Base(0, 0, 0, 1_500_000, 100_000, 100, 2_000_000, true), 2_000_000)
-	in.EmptyStreak = 0
-	d := v9Decide(in)
-	if isV9Up(d.Action) {
-		t.Fatalf("streak 1 must HOLD: %+v", d)
-	}
-}
-
-func TestV9EmptyCatchupBelowP10OK(t *testing.T) {
-	in := v9WithBookFloor(v9Base(0, 0, 0, 1_700_000, 100_000, 100, 2_000_000, true), 2_000_000)
-	in.EmptyStreak = 1
-	d := v9Decide(in)
-	if d.Action != "corridor_price_up_v9_empty_catchup" {
-		t.Fatalf("below floor must catchup: %+v", d)
-	}
-	if d.NewPrice != in.MultiFloor {
-		t.Fatalf("jump to %d got %d", in.MultiFloor, d.NewPrice)
-	}
-}
-
-func TestV9EmptyCatchupAtP10Hold(t *testing.T) {
-	in := v9WithBookFloor(v9Base(0, 0, 0, 2_000_000, 100_000, 100, 2_000_000, true), 2_000_000)
-	in.EmptyStreak = 2
-	d := v9Decide(in)
-	if isV9Up(d.Action) {
-		t.Fatalf("at floor must HOLD: %+v", d)
-	}
-}
-
-func TestV9EmptyCatchupStopsWhenBuys(t *testing.T) {
-	in := v9WithBookFloor(v9Base(0, 0, 1, 1_500_000, 100_000, 100, 2_000_000, true), 2_000_000)
-	in.EmptyStreak = 5
-	d := v9Decide(in)
-	if isV9Up(d.Action) {
-		t.Fatalf("buys>0 must not catchup: %+v", d)
-	}
-}
-
-func TestV9EmptyCatchupJumpNearFloor(t *testing.T) {
-	in := v9WithBookFloor(v9Base(0, 0, 0, 900_000, 400_000, 100, 1_200_000, true), 1_200_000)
-	in.EmptyStreak = 2
-	d := v9Decide(in)
-	if d.Action != "corridor_price_up_v9_empty_catchup" {
-		t.Fatalf("want jump got %+v", d)
-	}
-	if d.NewPrice != 1_200_000 {
-		t.Fatalf("jump price=%d", d.NewPrice)
+		t.Fatalf("cap mid: %d", d.NewPrice)
 	}
 }
 
@@ -272,25 +275,24 @@ func TestV9CooldownBlocksSecondUp(t *testing.T) {
 	}
 }
 
-func TestV9TrajectoryEmptyCatchupThenCd(t *testing.T) {
-	price, p10, step := 1_500_000, 2_000_000, 100_000
-	streak, cd, ups := 0, 0, 0
+func TestV9TrajectoryFloorJumpOnce(t *testing.T) {
+	price, floor, step := 1_500_000, 2_000_000, 100_000
+	cd, ups := 0, 0
 	for i := 0; i < 8; i++ {
-		in := v9WithBookFloor(v9Base(0, 0, 0, price, step, 100, p10, true), p10)
-		in.EmptyStreak = streak
+		in := v9WithBookFloor(v9Base(0, 0, 0, price, step, 100, floor, true), floor)
 		in.UpCooldown = cd
 		d := v9Decide(in)
-		streak, cd = d.EmptyStreak, d.UpCooldown
+		cd = d.UpCooldown
 		if isV9Up(d.Action) {
 			ups++
 			price = d.NewPrice
 		}
 	}
 	if ups != 1 {
-		t.Fatalf("jump catchup once, got ups=%d", ups)
+		t.Fatalf("floor jump once, got ups=%d", ups)
 	}
-	if price != p10 {
-		t.Fatalf("price %d want floor %d", price, p10)
+	if price != floor {
+		t.Fatalf("price %d want floor %d", price, floor)
 	}
 }
 
