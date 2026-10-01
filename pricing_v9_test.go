@@ -14,11 +14,13 @@ func isV9Up(action string) bool {
 }
 
 // share=100 → lo=18 hi=25 soft=28 over=35 dump=50 (без corridorMinBandSpan expand).
+// p10 — demand-guard; multiP5 для catchup в тестах = тот же уровень (явный порог).
 func v9Base(held, sales, buys, price, step, share, p10 int, p10OK bool) v9Input {
 	return v9Input{
 		Held: held, Sales: sales, Buys: buys,
 		Price: price, Step: step, Share: share,
 		P10: p10, P10OK: p10OK,
+		MultiP5: p10, MultiP5OK: p10OK,
 		PriceFloor: 100_000,
 		Band: stockBandFracs{
 			lo: stockBandLoFrac, hi: stockBandHiFrac, soft: stockSoftDownFrac,
@@ -189,12 +191,12 @@ func TestV9EmptyCatchupStreak1Hold(t *testing.T) {
 }
 
 func TestV9EmptyCatchupBelowP10OK(t *testing.T) {
-	// ratio 0.85 — раньше стоп на 0.80; теперь safety только p10
+	// ниже multiP5 (=p10 в фикстуре) → catchup
 	in := v9Base(0, 0, 0, 1_700_000, 100_000, 100, 2_000_000, true)
 	in.EmptyStreak = 1
 	d := v9Decide(in)
 	if d.Action != "corridor_price_up_v9_empty_catchup" {
-		t.Fatalf("ratio 0.85 must catchup toward p10: %+v", d)
+		t.Fatalf("below multiP5 must catchup: %+v", d)
 	}
 }
 

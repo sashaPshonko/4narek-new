@@ -1613,18 +1613,8 @@ func adjustPrice(item string) AdjustReport {
 	}
 
 	if isPricingPolicyV9() {
-		if isTypeRelistEnabled(cfg.Type) {
-			return adjustPriceBook(
-				item, cfg, now, lastUpdate,
-				sales, buys, trySells, profitNow,
-				state,
-				priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
-				onAH, invCount, heldForCorridor, share, free, need, stockNorm,
-				underbuyOK, tryRatio, stockLoad,
-				onlineForCap, onlineMaxForML,
-				ahCounts,
-			)
-		}
+		// Sell только из коридора v9. Книга — потолок ↑ (bookMid) и catchup
+		// если наша цена ниже 5% мульти-селлеров. Не book2 (sell≠живая книга).
 		return adjustPriceV9(
 			item, cfg, now, lastUpdate,
 			sales, buys, trySells, profitNow,

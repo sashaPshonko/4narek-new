@@ -9,21 +9,23 @@ import (
 
 // stock_corridor_v9 — inventory corridor + market guards (Sep 2026 research).
 // Не патч v8af: отдельная политика. Rollback: capitalPolicy = capitalPolicyV8af.
+//
+// Книга НЕ задаёт sell. Только:
+//   • потолок ↑ — перцентиль мульти-селлеров (stockNormBookMid);
+//   • empty catchup — если наша цена ниже 5% мин. цен мульти-селлеров (+1 step, не snap).
 
 const (
 	capitalPolicyV8af = "stock_corridor_v8af"
 	capitalPolicyV9   = "stock_corridor_v9"
 
 	v9DownBlockRatio = 0.95 // ratio < this → DOWN запрещён (H1 2026-09-16)
-	// Empty catchup: главный стоп — появились покупки (empty streak сбрасывается при buys>0).
-	// p10 — предохранитель на «боты/лоты сломаны», не цель «рано остановиться».
-	v9CatchupGapRatio = 1.00 // safety: our/p10 < 1 ∧ price+step ≤ p10
-	v9DemandMaxRatio  = 1.00 // demand UP только при our/mkt < p10 (без надбавки)
+	// Empty catchup: buys>0 сбрасывает streak. Рынок = 5% мульти-селлеров (не p10/book2).
 	v9CatchupArmCycles = 2
-	v9UpCooldownCycles  = 2
+	v9UpCooldownCycles = 2
 	v9MaxUpStreak      = 1
 	v9DayMinSalesUp    = 3
 	v9NightMinSalesUp  = 4
+	v9DemandMaxRatio   = 1.00 // demand UP только при our/p10 < 1 (предохранитель)
 )
 
 func isPricingPolicyV9() bool {
@@ -32,16 +34,18 @@ func isPricingPolicyV9() bool {
 
 // v9Input — снимок цикла для чистого решения (unit-testable).
 type v9Input struct {
-	Held, Sales, Buys   int
-	Price, Step, Share  int
-	P10                 int
-	P10OK               bool // thick raw p10: p10N≥40
-	EmptyStreak         int  // до обновления этим циклом
+	Held, Sales, Buys    int
+	Price, Step, Share   int
+	P10                  int  // demand UP guard (не цель sell)
+	P10OK                bool // thick raw p10
+	MultiP5              int  // 5% мин. цен мульти-селлеров — порог empty catchup
+	MultiP5OK            bool
+	EmptyStreak          int // до обновления этим циклом
 	UpCooldown, UpStreak int
-	Night               bool
-	BlockUp, BlockDown  bool
-	PriceFloor          int
-	Band                stockBandFracs
+	Night                bool
+	BlockUp, BlockDown   bool
+	PriceFloor           int
+	Band                 stockBandFracs
 }
 
 // v9Decision — результат одного цикла.
@@ -181,15 +185,15 @@ func v9Decide(in v9Input) v9Decision {
 		return out
 	}
 
-	// 2) empty catchup (raw p10 thick only)
-	if canUp && in.Held == 0 && emptyStreak >= v9CatchupArmCycles && in.P10OK && in.P10 > 0 {
-		if !ratioOK || ratio >= v9CatchupGapRatio {
+	// 2) empty catchup — только если цена ниже 5% мульти-селлеров (+1, не snap к книге)
+	if canUp && in.Held == 0 && emptyStreak >= v9CatchupArmCycles && in.MultiP5OK && in.MultiP5 > 0 {
+		if price >= in.MultiP5 {
 			out.Action = "corridor_hold_v9_catchup_no_gap"
 			out.Reason = "catchup_no_gap"
 			out.UpCooldown = upCD
 			return out
 		}
-		if price+step > in.P10 {
+		if price+step > in.MultiP5 {
 			out.Action = "corridor_hold_v9_catchup_cap"
 			out.Reason = "catchup_above_market"
 			out.UpCooldown = upCD
@@ -266,6 +270,13 @@ func adjustPriceV9(
 	if p10N < ahBookMinLotsInWindow || p10 <= 0 {
 		p10OK = false
 	}
+	multiP5, multiN := 0, 0
+	multiP5OK := false
+	if mps, mn := ahBookMultiSellerMinPricesSince(item, bookSince, stockNormBookMidMultiMinLots); mn >= 1 {
+		multiN = mn
+		multiP5 = ahBookPercentileSorted(mps, 0.05)
+		multiP5OK = multiP5 > 0
+	}
 	mutex.Lock()
 
 	dec := v9Decide(v9Input{
@@ -277,6 +288,8 @@ func adjustPriceV9(
 		Share:       share,
 		P10:         p10,
 		P10OK:       p10OK,
+		MultiP5:     multiP5,
+		MultiP5OK:   multiP5OK,
 		EmptyStreak: state.EmptyMarketGapStreak,
 		UpCooldown:  state.CorridorUpCooldown,
 		UpStreak:    state.CorridorUpStreak,
@@ -290,8 +303,8 @@ func adjustPriceV9(
 	newPrice := dec.NewPrice
 	action := dec.Action
 	notes := []string{
-		fmt.Sprintf("v9 reason=%s held=%d(onAH=%d inv=%d) lo=%d hi=%d sales=%d buys=%d p10=%d p10N=%d ratio=%s empty_streak=%d up_cd=%d relist=%v",
-			dec.Reason, totalHeld, onAH, invCount, targetLo, targetHi, sales, buys, p10, p10N,
+		fmt.Sprintf("v9 reason=%s held=%d(onAH=%d inv=%d) lo=%d hi=%d sales=%d buys=%d p10=%d p10N=%d multiP5=%d multiN=%d ratio=%s empty_streak=%d up_cd=%d relist=%v",
+			dec.Reason, totalHeld, onAH, invCount, targetLo, targetHi, sales, buys, p10, p10N, multiP5, multiN,
 			v9RatioStr(priceBefore, p10, p10OK), dec.EmptyStreak, dec.UpCooldown, isTypeRelistEnabled(cfg.Type)),
 	}
 	if treasuryCashBlocksUp {
