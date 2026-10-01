@@ -10,3 +10,5 @@ ml_data/
 *.db-wal
 backups/
 dist/
+.venv/
+v9_research/.venv/

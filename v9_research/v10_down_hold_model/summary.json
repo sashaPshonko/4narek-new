@@ -1,0 +1,116 @@
+{
+  "db": "/Users/sasha_pshonko/Documents/4narek/4narek-ml/data/pricing.db",
+  "generated": "2026-10-01T20:43:36.897873Z",
+  "n_total": 22944,
+  "n_train": 13766,
+  "n_val": 4589,
+  "n_test": 4589,
+  "span": [
+    "2026-07-15T15:48:44Z",
+    "2026-09-02T13:31:48Z"
+  ],
+  "imitation_auc_val": 0.7469239516662121,
+  "imitation_auc_test": 0.6571108608529888,
+  "tau": 1675305.9530198055,
+  "val_best": {
+    "name": "tau=1675306",
+    "n": 4589,
+    "pred_down_rate": 0.6572237960339944,
+    "agree_n": 2452,
+    "agree_mean_fwd3": 6654712.2141109295,
+    "logged_down_mean_fwd3": 8224057.187178019,
+    "logged_hold_mean_fwd3": 4463593.172413793,
+    "when_pred_down_logged_down_fwd3": 8090032.334348819,
+    "when_pred_down_logged_hold_fwd3": 4104750.3828537874,
+    "when_pred_hold_logged_down_fwd3": 8629528.688940093,
+    "when_pred_hold_logged_hold_fwd3": 5000124.577699737
+  },
+  "test_reports": [
+    {
+      "name": "reward_delta",
+      "n": 4589,
+      "pred_down_rate": 0.6367400305077359,
+      "agree_n": 2249,
+      "agree_mean_fwd3": 5373251.420631392,
+      "logged_down_mean_fwd3": 6056991.011320755,
+      "logged_hold_mean_fwd3": 4390487.1370456815,
+      "when_pred_down_logged_down_fwd3": 5360455.202578269,
+      "when_pred_down_logged_hold_fwd3": 3760393.697712418,
+      "when_pred_hold_logged_down_fwd3": 7557859.837301588,
+      "when_pred_hold_logged_hold_fwd3": 5385200.425623388
+    },
+    {
+      "name": "turn_baseline",
+      "n": 4589,
+      "pred_down_rate": 0.48877751144040094,
+      "agree_n": 2012,
+      "agree_mean_fwd3": 5372125.380715705,
+      "logged_down_mean_fwd3": 6056991.011320755,
+      "logged_hold_mean_fwd3": 4390487.1370456815,
+      "when_pred_down_logged_down_fwd3": 4595993.501592357,
+      "when_pred_down_logged_hold_fwd3": 3247454.227244582,
+      "when_pred_hold_logged_down_fwd3": 7010739.905405405,
+      "when_pred_hold_logged_hold_fwd3": 5724300.828757226
+    },
+    {
+      "name": "imitate_logged_down",
+      "n": 4589,
+      "pred_down_rate": 0.41250817171497056,
+      "agree_n": 3004,
+      "agree_mean_fwd3": 5337231.491011984,
+      "logged_down_mean_fwd3": 6056991.011320755,
+      "logged_hold_mean_fwd3": 4390487.1370456815,
+      "when_pred_down_logged_down_fwd3": 6326923.840885142,
+      "when_pred_down_logged_hold_fwd3": 3324447.2987288134,
+      "when_pred_hold_logged_down_fwd3": 5657355.667706708,
+      "when_pred_hold_logged_hold_fwd3": 4880191.082238443
+    },
+    {
+      "name": "always_hold",
+      "n": 4589,
+      "pred_down_rate": 0.0,
+      "agree_n": 2999,
+      "agree_mean_fwd3": 4390487.1370456815,
+      "logged_down_mean_fwd3": 6056991.011320755,
+      "logged_hold_mean_fwd3": 4390487.1370456815,
+      "when_pred_down_logged_down_fwd3": null,
+      "when_pred_down_logged_hold_fwd3": null,
+      "when_pred_hold_logged_down_fwd3": 6056991.011320755,
+      "when_pred_hold_logged_hold_fwd3": 4390487.1370456815
+    },
+    {
+      "name": "always_down",
+      "n": 4589,
+      "pred_down_rate": 1.0,
+      "agree_n": 1590,
+      "agree_mean_fwd3": 6056991.011320755,
+      "logged_down_mean_fwd3": 6056991.011320755,
+      "logged_hold_mean_fwd3": 4390487.1370456815,
+      "when_pred_down_logged_down_fwd3": 6056991.011320755,
+      "when_pred_down_logged_hold_fwd3": 4390487.1370456815,
+      "when_pred_hold_logged_down_fwd3": null,
+      "when_pred_hold_logged_hold_fwd3": null
+    }
+  ],
+  "test_by_turn": {
+    "mid": {
+      "n": 1053,
+      "pred_down": 968,
+      "pred_down_rate": 0.9192782526115859,
+      "mean_delta": 2736363.0479868264
+    },
+    "high": {
+      "n": 1917,
+      "pred_down": 948,
+      "pred_down_rate": 0.4945226917057903,
+      "mean_delta": 1584793.7040355208
+    },
+    "low": {
+      "n": 1619,
+      "pred_down": 1006,
+      "pred_down_rate": 0.6213712168004941,
+      "mean_delta": 2246775.138511872
+    }
+  },
+  "note": "Observational reward model — biased by logged policy; use as prior + turn baseline."
+}
