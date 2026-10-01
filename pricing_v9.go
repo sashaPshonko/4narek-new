@@ -10,22 +10,21 @@ import (
 // stock_corridor_v9 — inventory corridor + market guards (Sep 2026 research).
 // Не патч v8af: отдельная политика. Rollback: capitalPolicy = capitalPolicyV8af.
 //
-// Книга НЕ задаёт sell. Только:
-//   • потолок ↑ — перцентиль мульти-селлеров (stockNormBookMid);
-//   • empty catchup — если наша цена ниже book_floor_q мульти-селлеров (+1 step, не snap).
+// Книга НЕ задаёт sell. Только рельсы:
+//   • потолок — прыжок к book_mid_q при ↑ (demand);
+//   • пол — прыжок к book_floor_q при empty catchup; ↓ не ниже пола.
 
 const (
 	capitalPolicyV8af = "stock_corridor_v8af"
 	capitalPolicyV9   = "stock_corridor_v9"
 
-	v9DownBlockRatio = 0.95 // ratio < this → DOWN запрещён (H1 2026-09-16)
-	// Empty catchup: buys>0 сбрасывает streak. Порог = book_floor_q (не p10/book2).
+	// Empty catchup: buys>0 сбрасывает streak. Порог = book_floor_q (прыжок, не +1).
 	v9CatchupArmCycles = 2
 	v9UpCooldownCycles = 2
 	v9MaxUpStreak      = 1
 	v9DayMinSalesUp    = 3
 	v9NightMinSalesUp  = 4
-	v9DemandMaxRatio   = 1.00 // demand UP только при our/p10 < 1 (предохранитель)
+	v9DemandMaxRatio   = 1.05 // demand ↑ пока our/p10 < 1.05 (как BEST_MODEL)
 )
 
 func isPricingPolicyV9() bool {
@@ -115,19 +114,11 @@ func v9Decide(in v9Input) v9Decision {
 		UpStreak:    0,
 	}
 
-	// --- DOWN (только excess; жёсткие veto нельзя обойти) ---
+	// --- DOWN (только excess; пол книги — жёсткий низ, без market-ratio veto) ---
 	if !in.BlockDown && step > 0 {
-		downBlocked := false
-		downReason := ""
 		if in.Held <= hi {
-			downBlocked = true
-			downReason = "low_stock_down_veto"
-		} else if ratioOK && ratio < v9DownBlockRatio {
-			downBlocked = true
-			downReason = "underprice_down_veto"
-		}
-
-		if !downBlocked && in.Held > hi {
+			// low stock → ↓ запрещён; дальше смотрим UP
+		} else {
 			mult := 1
 			action := "corridor_price_down_v9_soft"
 			reason := "overstock"
@@ -141,6 +132,9 @@ func v9Decide(in v9Input) v9Decision {
 				reason = "over"
 			}
 			newP := price - mult*step
+			if in.MultiFloorOK && in.MultiFloor > 0 && newP < in.MultiFloor {
+				newP = in.MultiFloor
+			}
 			if newP < in.PriceFloor {
 				newP = in.PriceFloor
 			}
@@ -152,14 +146,12 @@ func v9Decide(in v9Input) v9Decision {
 				out.UpCooldown = upCD
 				return out
 			}
-		}
-		if downBlocked && in.Held > hi {
-			// Явно логируем veto при excess, который иначе выглядел бы как DOWN.
-			out.Action = "corridor_hold_v9_" + downReason
-			out.Reason = downReason
+			// Уже на полу (книга/min) при excess → HOLD, не пилим ниже.
+			out.Action = "corridor_hold_v9_book_floor"
+			out.Reason = "at_book_floor"
 			out.UpCooldown = upCD
 			out.UpStreak = 0
-			_ = lo // understock used below
+			_ = lo
 			return out
 		}
 	}
@@ -185,7 +177,7 @@ func v9Decide(in v9Input) v9Decision {
 		return out
 	}
 
-	// 2) empty catchup — только если цена ниже book_floor_q (+1, не snap к книге)
+	// 2) empty catchup — прыжок к book_floor_q (не +1)
 	if canUp && in.Held == 0 && emptyStreak >= v9CatchupArmCycles && in.MultiFloorOK && in.MultiFloor > 0 {
 		if price >= in.MultiFloor {
 			out.Action = "corridor_hold_v9_catchup_no_gap"
@@ -193,15 +185,9 @@ func v9Decide(in v9Input) v9Decision {
 			out.UpCooldown = upCD
 			return out
 		}
-		if price+step > in.MultiFloor {
-			out.Action = "corridor_hold_v9_catchup_cap"
-			out.Reason = "catchup_above_market"
-			out.UpCooldown = upCD
-			return out
-		}
 		out.Action = "corridor_price_up_v9_empty_catchup"
-		out.NewPrice = price + step
-		out.Reason = "empty_catchup"
+		out.NewPrice = in.MultiFloor
+		out.Reason = "empty_catchup_jump"
 		out.UpCooldown = v9UpCooldownCycles
 		out.UpStreak = upStreak + 1
 		return out
@@ -305,8 +291,8 @@ func adjustPriceV9(
 		notes = append(notes, "manual max/set → ↑ запрещён")
 	}
 
-	// Потолок ↑: мульти-селлеры, q по SKU (sharp5=60% … mega/яд=10%).
-	if strings.Contains(action, "price_up") && newPrice > priceBefore {
+	// Потолок: при demand ↑ — прыжок к book_mid (catchup к полу не трогаем).
+	if action == "corridor_price_up_v9_demand" && newPrice > priceBefore {
 		mutex.Unlock()
 		bookMid, bookMidQ, bookMidOK := stockNormBookMid(cfg, now.Add(-ahBook2Window))
 		mutex.Lock()
@@ -316,9 +302,9 @@ func adjustPriceV9(
 				newPrice = priceBefore
 				action = "corridor_hold_v9_book_mid"
 				notes = append(notes, fmt.Sprintf("уже ≥ bookMid(%s)=%d → ↑ стоп", qTag, bookMid))
-			} else if newPrice > bookMid {
+			} else {
 				newPrice = bookMid
-				notes = append(notes, fmt.Sprintf("cap bookMid(%s)=%d", qTag, bookMid))
+				notes = append(notes, fmt.Sprintf("jump bookMid(%s)=%d", qTag, bookMid))
 			}
 		}
 	}

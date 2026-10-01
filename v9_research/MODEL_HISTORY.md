@@ -72,6 +72,12 @@ p/h из observational compare на полном `capital_cycles` (14.09.2026).
 
 Правило: при каждой смене pricing — `full_compare_all.py`, % vs все baseline, строка сюда.
 
+### 2026-10-02 — v9: без underprice↓ veto; demand 1.05; пол/потолок прыжками
+- Убран DOWN-veto «уже дёшево vs рынок» — низ режет **пол книги** (↓ не ниже).
+- Demand ↑ снова при our/p10 **< 1.05** (как BEST_MODEL).
+- Empty ниже пола → **прыжок к полу**; demand ↑ при живом потолке → **прыжок к потолку**.
+OOS full_compare: панель без WF deltas; драйвер = live rails + откат H1 veto.
+
 ### 2026-10-02 — v9: убрать relist-гейты из коридора
 - В `adjustPriceV9` больше **не** режем ↑ из‑за «АХ забит / нет места» (это режим `pricing_relist`, не v9).
 - `itemSlotShareLocked` снова всегда **32×боты / nItems** (не 5 слотов перевыстава) — полоса «мало/много» как в inventory-симах.

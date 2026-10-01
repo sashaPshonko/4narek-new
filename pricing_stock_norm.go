@@ -213,7 +213,7 @@ func stockNormBookMidQForConfig(cfg ItemConfig) float64 {
 	return stockNormBookMidQDefault(cfg.ID)
 }
 
-// stockNormBookFloorQForConfig — порог empty catchup (не snap, только «ниже рынка»).
+// stockNormBookFloorQForConfig — порог empty catchup / низ ↓ (прыжок к полу).
 func stockNormBookFloorQForConfig(cfg ItemConfig) float64 {
 	if cfg.BookFloorQ > 0 && cfg.BookFloorQ < 1 {
 		return cfg.BookFloorQ

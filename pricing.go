@@ -1142,11 +1142,11 @@ func actionReasonRU(action string) string {
 	case "corridor_price_up_cold_start":
 		return "corridor_v8ae: !Explored ∧ s0b0 ∧ thick book ∧ our≪p10 → разведочный +1 step"
 	case "corridor_price_up_v9_demand":
-		return "corridor_v9: understock ∧ sales≥threshold ∧ sales>buys ∧ ratio<1.05 → +1"
+		return "corridor_v9: understock ∧ sales≥threshold ∧ sales>buys ∧ ratio<1.05 → ↑ (прыжок к потолку книги)"
 	case "corridor_price_up_v9_empty_catchup":
-		return "corridor_v9: empty∧no buys streak≥2 ∧ ratio<p10 ∧ price+step≤p10 → +1 (buy-stop + p10 safety)"
+		return "corridor_v9: empty streak≥2 ∧ ниже пола книги → прыжок к полу"
 	case "corridor_price_down_v9_soft", "corridor_price_down_v9_over", "corridor_price_down_v9_dump":
-		return "corridor_v9: excess held ∧ ratio≥0.95 → ↓"
+		return "corridor_v9: excess held → ↓ (не ниже пола книги)"
 	case "corridor_price_up_v4_demand":
 		return "corridor_v4: understock ∧ sales≥3 (ночь≥4) ∧ sales>buys → +1"
 	case "corridor_price_down_v4_soft", "corridor_price_down_v4_over", "corridor_price_down_v4_dump":
@@ -1170,11 +1170,15 @@ func actionReasonRU(action string) string {
 	case "corridor_hold_v9_low_stock_down_veto":
 		return "corridor_v9: held≤hi → DOWN запрещён"
 	case "corridor_hold_v9_underprice_down_veto":
-		return "corridor_v9: ratio<0.95 → DOWN запрещён"
+		return "corridor_v9: (legacy) underprice DOWN veto — выкл, пол книги"
 	case "corridor_hold_v9_demand_above_market":
 		return "corridor_v9: demand был, но ratio≥1.05"
 	case "corridor_hold_v9_catchup_no_gap", "corridor_hold_v9_catchup_cap":
-		return "corridor_v9: empty catchup без gap / выше market"
+		return "corridor_v9: empty catchup без gap / уже на полу"
+	case "corridor_hold_v9_book_floor":
+		return "corridor_v9: excess, но уже на полу книги → ↓ стоп"
+	case "corridor_hold_v9_book_mid":
+		return "corridor_v9: уже ≥ потолка книги → ↑ стоп"
 	case "relist_price_down_stuck":
 		return "relist5: onAH≥fair(5×bots/nItems) ∧ sales<5 → −1"
 	case "relist_price_up_empty":
