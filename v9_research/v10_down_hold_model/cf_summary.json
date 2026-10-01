@@ -1,0 +1,98 @@
+{
+  "generated": "2026-10-01T20:46:50.372508+00:00",
+  "db": "/Users/sasha_pshonko/Documents/4narek/4narek-ml/data/pricing.db",
+  "focus": [
+    "штаны-1.21",
+    "ботинки-1.21",
+    "шлем-1.21",
+    "нагрудник-1.21",
+    "фарм-1.21",
+    "sword7-1.21",
+    "pochti-megasword-1.21",
+    "megasword-1.21",
+    "кирка-эфф7-1.21",
+    "кирка-бульд-маг-1.21",
+    "sword-sharp5-1.21",
+    "sword-sharp6-1.21"
+  ],
+  "cf": {
+    "n_train": 6212,
+    "n_val": 1554,
+    "n_test": 3995,
+    "down_better_rate_train": 0.5310688989053445,
+    "down_better_rate_test": 0.5178973717146433,
+    "auc_val": 0.6285937125828167,
+    "auc_test": 0.6796065340759379,
+    "tau": 0.3,
+    "test_mean_cf_hold": 3038995.4271339206,
+    "test_mean_cf_oracle": 3340163.913329296,
+    "test_mean_cf_model": 3204298.6945913695,
+    "test_mean_cf_turn": 3078546.717710328,
+    "model_vs_hold_pct": 5.4394049422228585,
+    "turn_vs_hold_pct": 1.3014593646068162,
+    "oracle_vs_hold_pct": 9.910132917817771
+  },
+  "trajectory_test": {
+    "hold": {
+      "profit": 12113215952.37755,
+      "profit_per_cycle": 769924.1055347073,
+      "ups": 0,
+      "downs": 0,
+      "cycles": 15733,
+      "under_frac": 0.0873323587364139,
+      "over_frac": 0.35473209178160553,
+      "x_v9": 1.0171977728384498
+    },
+    "v9_core": {
+      "profit": 11908417690.078209,
+      "profit_per_cycle": 756906.9910429168,
+      "ups": 68,
+      "downs": 35,
+      "cycles": 15733,
+      "under_frac": 0.15654992690523103,
+      "over_frac": 0.4744168308650607,
+      "x_v9": 1.0
+    },
+    "classic_inv": {
+      "profit": 11381814655.73081,
+      "profit_per_cycle": 723435.750062341,
+      "ups": 480,
+      "downs": 617,
+      "cycles": 15733,
+      "under_frac": 0.20364838238098265,
+      "over_frac": 0.7181084345007309,
+      "x_v9": 0.9557789247864432
+    },
+    "turn_baseline": {
+      "profit": 10937847043.88642,
+      "profit_per_cycle": 695216.871790912,
+      "ups": 468,
+      "downs": 17,
+      "cycles": 15733,
+      "under_frac": 0.11663382698785991,
+      "over_frac": 0.8238733871480328,
+      "x_v9": 0.9184970941185205
+    },
+    "cf_model": {
+      "profit": 11123703273.836113,
+      "profit_per_cycle": 707030.0180408132,
+      "ups": 527,
+      "downs": 538,
+      "cycles": 15733,
+      "under_frac": 0.18953791393885464,
+      "over_frac": 0.7535752876120256,
+      "x_v9": 0.9341042247035137
+    },
+    "v10_rails_synth": {
+      "profit": 12652353358.727652,
+      "profit_per_cycle": 804192.0395809859,
+      "ups": 826,
+      "downs": 856,
+      "cycles": 15733,
+      "under_frac": 0.045064514078688105,
+      "over_frac": 0.0,
+      "x_v9": 1.062471412072594
+    }
+  },
+  "note": "CF uses DemandModel; synth rails for v10_rails = 0.75–1.05×mkt (no AH book in dump)."
+}
