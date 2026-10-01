@@ -12,14 +12,14 @@ import (
 //
 // Книга НЕ задаёт sell. Только:
 //   • потолок ↑ — перцентиль мульти-селлеров (stockNormBookMid);
-//   • empty catchup — если наша цена ниже 5% мин. цен мульти-селлеров (+1 step, не snap).
+//   • empty catchup — если наша цена ниже book_floor_q мульти-селлеров (+1 step, не snap).
 
 const (
 	capitalPolicyV8af = "stock_corridor_v8af"
 	capitalPolicyV9   = "stock_corridor_v9"
 
 	v9DownBlockRatio = 0.95 // ratio < this → DOWN запрещён (H1 2026-09-16)
-	// Empty catchup: buys>0 сбрасывает streak. Рынок = 5% мульти-селлеров (не p10/book2).
+	// Empty catchup: buys>0 сбрасывает streak. Порог = book_floor_q (не p10/book2).
 	v9CatchupArmCycles = 2
 	v9UpCooldownCycles = 2
 	v9MaxUpStreak      = 1
@@ -38,8 +38,8 @@ type v9Input struct {
 	Price, Step, Share   int
 	P10                  int  // demand UP guard (не цель sell)
 	P10OK                bool // thick raw p10
-	MultiP5              int  // 5% мин. цен мульти-селлеров — порог empty catchup
-	MultiP5OK            bool
+	MultiFloor           int // перцентиль мульти-селлеров — порог empty catchup
+	MultiFloorOK         bool
 	EmptyStreak          int // до обновления этим циклом
 	UpCooldown, UpStreak int
 	Night                bool
@@ -185,15 +185,15 @@ func v9Decide(in v9Input) v9Decision {
 		return out
 	}
 
-	// 2) empty catchup — только если цена ниже 5% мульти-селлеров (+1, не snap к книге)
-	if canUp && in.Held == 0 && emptyStreak >= v9CatchupArmCycles && in.MultiP5OK && in.MultiP5 > 0 {
-		if price >= in.MultiP5 {
+	// 2) empty catchup — только если цена ниже book_floor_q (+1, не snap к книге)
+	if canUp && in.Held == 0 && emptyStreak >= v9CatchupArmCycles && in.MultiFloorOK && in.MultiFloor > 0 {
+		if price >= in.MultiFloor {
 			out.Action = "corridor_hold_v9_catchup_no_gap"
 			out.Reason = "catchup_no_gap"
 			out.UpCooldown = upCD
 			return out
 		}
-		if price+step > in.MultiP5 {
+		if price+step > in.MultiFloor {
 			out.Action = "corridor_hold_v9_catchup_cap"
 			out.Reason = "catchup_above_market"
 			out.UpCooldown = upCD
@@ -230,7 +230,7 @@ func adjustPriceV9(
 	underbuyOK bool,
 	tryRatio, stockLoad float64,
 	onlineForCap, onlineMaxForML int,
-	ahCounts map[string]int,
+	_ map[string]int,
 ) AdjustReport {
 	band := stockBandFor(item, cfg)
 	targetLo, targetHi, _, _, _ := stockTargets(share, band)
@@ -241,28 +241,6 @@ func adjustPriceV9(
 		blockUp = true
 	}
 
-	// Relist: не поднимать sell, если этому id некуда выставиться (АХ категории забит /
-	// другие id съели слоты). Иначе demand/catchup UP при полном АХ раздувает buy-потолок.
-	if isTypeRelistEnabled(cfg.Type) {
-		cap := categoryAhCapacityLocked(cfg.Type)
-		sumAH := 0
-		for name, c := range ahCounts {
-			if c <= 0 {
-				continue
-			}
-			other, ok := itemsConfig[name]
-			if !ok || other.Type != cfg.Type {
-				continue
-			}
-			sumAH += c
-		}
-		if cap > 0 && sumAH >= cap {
-			blockUp = true
-		} else if maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts) <= onAH {
-			blockUp = true
-		}
-	}
-
 	bookSince := now.Add(-ahBookRaiseWindow)
 	mutex.Unlock()
 	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
@@ -270,13 +248,12 @@ func adjustPriceV9(
 	if p10N < ahBookMinLotsInWindow || p10 <= 0 {
 		p10OK = false
 	}
-	multiP5, multiN := 0, 0
-	multiP5OK := false
-	if mps, mn := ahBookMultiSellerMinPricesSince(item, bookSince, stockNormBookMidMultiMinLots); mn >= 1 {
+	multiFloor, multiFloorQ, multiN := 0, 0.0, 0
+	multiFloorOK := false
+	if _, mn := ahBookMultiSellerMinPricesSince(item, bookSince, stockNormBookMidMultiMinLots); mn >= 1 {
 		multiN = mn
-		multiP5 = ahBookPercentileSorted(mps, 0.05)
-		multiP5OK = multiP5 > 0
 	}
+	multiFloor, multiFloorQ, multiFloorOK = stockNormBookCatchupFloor(cfg, bookSince)
 	mutex.Lock()
 
 	dec := v9Decide(v9Input{
@@ -288,8 +265,8 @@ func adjustPriceV9(
 		Share:       share,
 		P10:         p10,
 		P10OK:       p10OK,
-		MultiP5:     multiP5,
-		MultiP5OK:   multiP5OK,
+		MultiFloor:     multiFloor,
+		MultiFloorOK:   multiFloorOK,
 		EmptyStreak: state.EmptyMarketGapStreak,
 		UpCooldown:  state.CorridorUpCooldown,
 		UpStreak:    state.CorridorUpStreak,
@@ -303,15 +280,12 @@ func adjustPriceV9(
 	newPrice := dec.NewPrice
 	action := dec.Action
 	notes := []string{
-		fmt.Sprintf("v9 reason=%s held=%d(onAH=%d inv=%d) lo=%d hi=%d sales=%d buys=%d p10=%d p10N=%d multiP5=%d multiN=%d ratio=%s empty_streak=%d up_cd=%d relist=%v",
-			dec.Reason, totalHeld, onAH, invCount, targetLo, targetHi, sales, buys, p10, p10N, multiP5, multiN,
+		fmt.Sprintf("v9 reason=%s held=%d(onAH=%d inv=%d) lo=%d hi=%d sales=%d buys=%d p10=%d p10N=%d multiFloor(p%.0f)=%d multiN=%d ratio=%s empty_streak=%d up_cd=%d relist=%v",
+			dec.Reason, totalHeld, onAH, invCount, targetLo, targetHi, sales, buys, p10, p10N, multiFloorQ*100, multiFloor, multiN,
 			v9RatioStr(priceBefore, p10, p10OK), dec.EmptyStreak, dec.UpCooldown, isTypeRelistEnabled(cfg.Type)),
 	}
 	if treasuryCashBlocksUp {
 		notes = append(notes, "treasury_empty + held>0 → ↑ gated (cash short, not shortage)")
-	}
-	if blockUp && isTypeRelistEnabled(cfg.Type) {
-		notes = append(notes, "ah_cap/no_room → ↑ gated")
 	}
 
 	if blockDown && strings.Contains(action, "price_down") {
@@ -334,7 +308,7 @@ func adjustPriceV9(
 	// Потолок ↑: мульти-селлеры, q по SKU (sharp5=60% … mega/яд=10%).
 	if strings.Contains(action, "price_up") && newPrice > priceBefore {
 		mutex.Unlock()
-		bookMid, bookMidQ, bookMidOK := stockNormBookMid(item, now.Add(-ahBook2Window))
+		bookMid, bookMidQ, bookMidOK := stockNormBookMid(cfg, now.Add(-ahBook2Window))
 		mutex.Lock()
 		if bookMidOK && bookMid > 0 {
 			qTag := fmt.Sprintf("p%.0f", bookMidQ*100)

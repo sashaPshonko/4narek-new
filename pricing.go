@@ -1077,9 +1077,9 @@ func countItemsInCategoryLocked(minecraftType string) int {
 	return n
 }
 
-// itemSlotShareLocked — доля слотов категории на один предмет.
-// Обычный режим: (32 × боты) / nItems.
-// Режим перевыставления (relist): (5 × боты) / nItems — цель по лотам на АХ, не по инвентарю.
+// itemSlotShareLocked — доля слотов категории на один предмет:
+// (32 × боты_в_категории) / число_предметов_в_категории.
+// Коридор v9 всегда на широкой доле (инвентарный scale), даже если buy+relist на 5 слотах.
 // Только под mutex.Lock.
 func itemSlotShareLocked(minecraftType string) int {
 	bots := botsForGoTypeLocked(minecraftType)
@@ -1087,11 +1087,7 @@ func itemSlotShareLocked(minecraftType string) int {
 	if bots <= 0 || nItems <= 0 {
 		return 0
 	}
-	slotsPerBot := botTotalSlots
-	if isTypeRelistEnabled(minecraftType) {
-		slotsPerBot = ahStorageSlotsPerBot
-	}
-	return (slotsPerBot * bots) / nItems
+	return (botTotalSlots * bots) / nItems
 }
 
 // hasSpaceToCoverBuyDeficit — хватает ли свободной доли предмета, чтобы докупить (sales−buys).
@@ -1401,9 +1397,6 @@ func maybeBuySurgePriceDownLocked(item string) BuySurgeEvent {
 	_, targetHi, soft, _, _ := stockTargets(share, stockBandFor(item, cfg))
 	threshold := maxInt(4, soft)
 	held := getItemCount(item) + getInventoryCount(item)
-	if isTypeRelistEnabled(cfg.Type) {
-		held = getItemCount(item) // только АХ
-	}
 
 	now := time.Now()
 	since := now.Add(-cfg.AnalysisTime)
@@ -1543,11 +1536,8 @@ func adjustPrice(item string) AdjustReport {
 	onAH := ahCounts[item]
 	invCount := invCounts[item]
 	totalHeld := onAH + invCount
-	// Перевыставление: коридор смотрит только лоты на АХ (инвентарь — буфер до /ah sell).
+	// Коридор v9: затар = всё наличие (АХ + инвентарь), как в оригинальном inventory core.
 	heldForCorridor := totalHeld
-	if isTypeRelistEnabled(cfg.Type) {
-		heldForCorridor = onAH
-	}
 
 	share := itemSlotShareLocked(cfg.Type)
 	free, need := 0, 0

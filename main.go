@@ -112,6 +112,10 @@ type ItemConfig struct {
 	Nacenka          int
 	NacenkaMin       int
 	Num              int
+	// BookMidQ — перцентиль мульти-селлеров, потолок ↑ (0 = дефолт по id).
+	BookMidQ float64
+	// BookFloorQ — перцентиль порога empty catchup «мы слишком дёшевы» (0 = дефолт).
+	BookFloorQ float64
 	Effects          []ItemEffect
 	ForbiddenEffects []ItemEffect
 	MaxEffects       []ItemEffect

@@ -30,7 +30,9 @@
       }
     ],
     "nacenka": 300000,
-    "num": 5
+    "num": 5,
+    "book_mid_q": 0.25,
+    "book_floor_q": 0.10
   },
   "sword7-1.21": {
     "base_price": 1000003,
@@ -55,7 +57,9 @@
       }
     ],
     "nacenka": 300000,
-    "num": 3
+    "num": 3,
+    "book_mid_q": 0.45,
+    "book_floor_q": 0.10
   },
   "megasword-1.21": {
     "base_price": 4200004,
@@ -88,7 +92,9 @@
       }
     ],
     "nacenka": 400000,
-    "num": 6
+    "num": 6,
+    "book_mid_q": 0.10,
+    "book_floor_q": 0.05
   },
   "megasword-яд3-1.21": {
     "base_price": 4000007,
@@ -121,7 +127,9 @@
       }
     ],
     "nacenka": 300000,
-    "num": 7
+    "num": 7,
+    "book_mid_q": 0.10,
+    "book_floor_q": 0.01
   },
   "штаны-1.21": {
     "base_price": 600005,
@@ -289,7 +297,9 @@
       }
     ],
     "nacenka": 300000,
-    "num": 1
+    "num": 1,
+    "book_mid_q": 0.60,
+    "book_floor_q": 0.15
   },
   "sword-sharp6-1.21": {
     "base_price": 300016,
@@ -306,7 +316,9 @@
       }
     ],
     "nacenka": 300000,
-    "num": 2
+    "num": 2,
+    "book_mid_q": 0.50,
+    "book_floor_q": 0.15
   },
   "кирка-бульд-маг-1.21": {
     "base_price": 1000018,

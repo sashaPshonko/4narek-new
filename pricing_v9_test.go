@@ -20,7 +20,7 @@ func v9Base(held, sales, buys, price, step, share, p10 int, p10OK bool) v9Input 
 		Held: held, Sales: sales, Buys: buys,
 		Price: price, Step: step, Share: share,
 		P10: p10, P10OK: p10OK,
-		MultiP5: p10, MultiP5OK: p10OK,
+		MultiFloor: p10, MultiFloorOK: p10OK,
 		PriceFloor: 100_000,
 		Band: stockBandFracs{
 			lo: stockBandLoFrac, hi: stockBandHiFrac, soft: stockSoftDownFrac,

@@ -163,8 +163,7 @@ func stockNormBookFloor(item string, since time.Time) (floor int, ok bool) {
 	return 0, false
 }
 
-// stockNormBookMidQForItem — какой перцентиль мульти-селлеров режет ↑ для SKU.
-func stockNormBookMidQForItem(item string) float64 {
+func stockNormBookMidQDefault(item string) float64 {
 	id := strings.ToLower(strings.TrimSpace(item))
 	switch {
 	case id == "sword-sharp5-1.21":
@@ -172,7 +171,7 @@ func stockNormBookMidQForItem(item string) float64 {
 	case id == "sword-sharp6-1.21":
 		return 0.50
 	case id == "sword7-1.21":
-		return 0.40
+		return 0.45
 	case id == "megasword-1.21":
 		return 0.10
 	case strings.Contains(id, "яд") && strings.Contains(id, "megasword"):
@@ -186,25 +185,80 @@ func stockNormBookMidQForItem(item string) float64 {
 	}
 }
 
-// stockNormBookMid — потолок ↑ из мульти-селлеров (fallback: все селлеры, тот же %).
-// Только блокирует ↑; ↓/overstock не трогает.
-func stockNormBookMid(item string, since time.Time) (mid int, q float64, ok bool) {
-	q = stockNormBookMidQForItem(item)
+func stockNormBookFloorQDefault(item string) float64 {
+	id := strings.ToLower(strings.TrimSpace(item))
+	switch {
+	case id == "sword-sharp5-1.21", id == "sword-sharp6-1.21":
+		return 0.15
+	case strings.Contains(id, "sharp5") || strings.Contains(id, "sharp6"):
+		return 0.15
+	case id == "megasword-1.21":
+		return 0.05
+	case strings.Contains(id, "яд") && strings.Contains(id, "megasword"):
+		return 0.01
+	case id == "sword7-1.21", strings.Contains(id, "pochti"):
+		return 0.10
+	case strings.Contains(id, "sword"):
+		return 0.10
+	default:
+		return 0.10
+	}
+}
+
+// stockNormBookMidQForConfig — потолок ↑: JSON book_mid_q или дефолт по id.
+func stockNormBookMidQForConfig(cfg ItemConfig) float64 {
+	if cfg.BookMidQ > 0 && cfg.BookMidQ < 1 {
+		return cfg.BookMidQ
+	}
+	return stockNormBookMidQDefault(cfg.ID)
+}
+
+// stockNormBookFloorQForConfig — порог empty catchup (не snap, только «ниже рынка»).
+func stockNormBookFloorQForConfig(cfg ItemConfig) float64 {
+	if cfg.BookFloorQ > 0 && cfg.BookFloorQ < 1 {
+		return cfg.BookFloorQ
+	}
+	return stockNormBookFloorQDefault(cfg.ID)
+}
+
+// stockNormBookMidQForItem — legacy / тесты без полного ItemConfig.
+func stockNormBookMidQForItem(item string) float64 {
+	return stockNormBookMidQDefault(item)
+}
+
+func stockNormBookPercentileSince(item string, since time.Time, q float64) (px int, ok bool) {
+	if q <= 0 || q >= 1 {
+		return 0, false
+	}
 	if mps, mn := ahBookMultiSellerMinPricesSince(item, since, stockNormBookMidMultiMinLots); mn >= 1 {
-		mid = ahBookPercentileSorted(mps, q)
-		if mid > 0 {
-			return mid, q, true
+		px = ahBookPercentileSorted(mps, q)
+		if px > 0 {
+			return px, true
 		}
 	}
 	ps, n := ahBookSellerMinPricesSince(item, since)
 	if n < ahBookMarketMinSellers {
-		return 0, q, false
+		return 0, false
 	}
-	mid = ahBookPercentileSorted(ps, q)
-	if mid <= 0 {
-		return 0, q, false
+	px = ahBookPercentileSorted(ps, q)
+	if px <= 0 {
+		return 0, false
 	}
-	return mid, q, true
+	return px, true
+}
+
+// stockNormBookMid — потолок ↑ из мульти-селлеров (fallback: все селлеры, тот же %).
+// Только блокирует ↑; ↓/overstock не трогает.
+func stockNormBookMid(cfg ItemConfig, since time.Time) (mid int, q float64, ok bool) {
+	q = stockNormBookMidQForConfig(cfg)
+	mid, ok = stockNormBookPercentileSince(cfg.ID, since, q)
+	return mid, q, ok
+}
+
+func stockNormBookCatchupFloor(cfg ItemConfig, since time.Time) (floor int, q float64, ok bool) {
+	q = stockNormBookFloorQForConfig(cfg)
+	floor, ok = stockNormBookPercentileSince(cfg.ID, since, q)
+	return floor, q, ok
 }
 
 func adjustPriceStockNorm(
@@ -240,7 +294,7 @@ func adjustPriceStockNorm(
 	mutex.Unlock()
 	bookSince := now.Add(-ahBook2Window)
 	bookFloor, bookOK := stockNormBookFloor(item, bookSince)
-	bookMid, bookMidQ, bookMidOK := stockNormBookMid(item, bookSince)
+	bookMid, bookMidQ, bookMidOK := stockNormBookMid(cfg, bookSince)
 	mutex.Lock()
 
 	nacT := nacenka

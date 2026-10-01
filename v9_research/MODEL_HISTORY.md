@@ -72,6 +72,11 @@ p/h из observational compare на полном `capital_cycles` (14.09.2026).
 
 Правило: при каждой смене pricing — `full_compare_all.py`, % vs все baseline, строка сюда.
 
+### 2026-10-02 — v9: убрать relist-гейты из коридора
+- В `adjustPriceV9` больше **не** режем ↑ из‑за «АХ забит / нет места» (это режим `pricing_relist`, не v9).
+- `itemSlotShareLocked` снова всегда **32×боты / nItems** (не 5 слотов перевыстава) — полоса «мало/много» как в inventory-симах.
+Held по-прежнему АХ+инв. OOS sim share уже был ×32 → compare без Δ policy string.
+
 ### 2026-09-30 — live gate: treasury_empty + held>0 → BlockUp
 Сигнал орка `treasury_empty_types` уже глушил empty_idle recovery при held=0.
 Теперь при **held>0** и казне пустой у ботов типа — `adjustPriceV9` ставит `BlockUp` (ложный недобор из‑за денег ≠ повод ↑).
@@ -82,6 +87,22 @@ OOS sim не моделирует treasury → compare без Δ; policy string 
 Sell снова только из коридора `stock_corridor_v9` (в т.ч. `netherite_sword` / relist).
 Книга: **потолок ↑** (мульти-селлеры, q по SKU) + **empty catchup** если цена **ниже 5%**
 мин. цен мульти-селлеров (+1 step). `adjustPriceBook` / book2 на v9-пути не вызывается.
+
+### 2026-10-01 — анализ: empty catchup jump → multi p5
+
+Скрипт: `v9_research/analyze_catchup_jump.py`, панель local `pricing.db` 29.09–01.10 (~650 циклов).
+Цель catchup = multi-seller **p5** (не p10/середина).
+
+| вариант | late vs step | under | over | avg jump |
+|---------|-------------:|------:|-----:|---------:|
+| step +1 | 0% | 0.19 | 0.42 | 100k |
+| jump cap≤5 steps | −0.7% | 0.16 | 0.45 | 500k |
+| jump cap≤3 | −4.5% | 0.17 | 0.42 | 300k |
+| **jump full → p5** | **−28%** | 0.11 | **0.60** | **~1.9M** |
+
+Empty ниже p5: медиана **~4 шага**, p90 ~12, max ~25 (n=86).
+**Вердикт:** полный прыжок к p5 **портит** (разгон over). Cap 3–5 ≈ шум/чуть хуже.
+Оставить **+1**. Панель короткая — не OOS-якорь на месяцы, но знак over ясен.
 
 ### 2026-10-01 — строже book UP-cap + demand ≤ p10
 Live: mid(p88–p95) ≫ book floor (sword7 mid~4–6M при book~0.7M) → ↑ не тормозился.
