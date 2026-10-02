@@ -193,7 +193,7 @@ func stockNormBookFloorQDefault(item string) float64 {
 	case strings.Contains(id, "sharp5") || strings.Contains(id, "sharp6"):
 		return 0.15
 	case id == "megasword-1.21":
-		return 0.005
+		return 0.01
 	case strings.Contains(id, "яд") && strings.Contains(id, "megasword"):
 		return 0.005
 	case strings.Contains(id, "pochti"):

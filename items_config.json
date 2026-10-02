@@ -94,7 +94,7 @@
     "nacenka": 400000,
     "num": 6,
     "book_mid_q": 0.25,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.01
   },
   "megasword-яд3-1.21": {
     "base_price": 4000007,
