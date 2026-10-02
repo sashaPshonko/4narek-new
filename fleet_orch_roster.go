@@ -7,8 +7,14 @@ import (
 )
 
 type orchBotNick struct {
-	Username string `json:"username"`
-	Anarchy  any    `json:"anarchy"`
+	Username  string `json:"username"`
+	Anarchy   any    `json:"anarchy"`
+	GoType    string `json:"go_type,omitempty"`
+	Success   bool   `json:"success"`
+	OnAnarchy bool   `json:"on_anarchy"`
+	Banned    bool   `json:"banned"`
+	Unstable  bool   `json:"unstable"`
+	Live      bool   `json:"live"`
 }
 
 // clientOrchBots — список ников с оркестратора (fleet/presence).

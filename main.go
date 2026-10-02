@@ -1421,6 +1421,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			AuthFaults          []authFaultView `json:"auth_faults"`
 			ClanOwners          []clanOwnerView `json:"clan_owners"`
 			Bots                []orchBotNick   `json:"bots"`
+			FleetStats          map[string]int  `json:"fleet_stats"`
 			Price               int             `json:"price"`
 			Enchants            []ItemEffect    `json:"enchants"`
 			Durability          *float64        `json:"durability"`
@@ -1466,6 +1467,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	AuthFaults         []authFaultView `json:"auth_faults"`
 	ClanOwners         []clanOwnerView `json:"clan_owners"`
 	Bots               []orchBotNick   `json:"bots"`
+	FleetStats         map[string]int  `json:"fleet_stats"`
 	Price              int             `json:"price"`
 	Enchants           []ItemEffect    `json:"enchants"`
 	Durability         *float64        `json:"durability"`
@@ -1592,6 +1594,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 			}
 		}
 		updateTypeFleetActivityLocked()
+		applyPresenceFleetStats(ws, msg.BotsPerType, msg.FleetStats)
 		mutex.Unlock()
 
 	case "add":

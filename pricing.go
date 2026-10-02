@@ -1490,10 +1490,16 @@ func adjustPrice(item string) AdjustReport {
 	rep := AdjustReport{Item: item, NormalSales: cfg.NormalSales, Step: cfg.PriceStep}
 
 	if !itemConfigActiveLocked(cfg) {
-		log.Printf("[SKIP] %s: тип %s — нет активных ботов", item, cfg.Type)
+		mode := fleetModeForGoTypeLocked(cfg.Type)
+		if mode == fleetOutage {
+			log.Printf("[SKIP] %s: тип %s — FLEET OUTAGE (нет pricing-ботов)", item, cfg.Type)
+			rep.Reason = "fleet_outage"
+		} else {
+			log.Printf("[SKIP] %s: тип %s — нет активных ботов", item, cfg.Type)
+			rep.Reason = actionReasonRU("skip_inactive")
+		}
 		mutex.Unlock()
 		rep.Action = "skip_inactive"
-		rep.Reason = actionReasonRU(rep.Action)
 		rep.Skipped = true
 		return rep
 	}
