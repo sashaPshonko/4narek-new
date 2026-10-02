@@ -174,12 +174,14 @@ func stockNormBookMidQDefault(item string) float64 {
 		return 0.45
 	case id == "megasword-1.21":
 		return 0.25
+	case id == "sword-bare-1.21":
+		return 0.20
 	case strings.Contains(id, "яд") && strings.Contains(id, "megasword"):
 		return 0.10
 	case strings.Contains(id, "pochti"):
 		return 0.25
 	case strings.Contains(id, "sword"):
-		return 0.25 // loot/bare и прочие мечи
+		return 0.25 // loot и прочие мечи
 	default:
 		return 0.50 // броня / кирки — середина
 	}
@@ -193,6 +195,8 @@ func stockNormBookFloorQDefault(item string) float64 {
 	case strings.Contains(id, "sharp5") || strings.Contains(id, "sharp6"):
 		return 0.15
 	case id == "megasword-1.21":
+		return 0.05
+	case id == "sword-bare-1.21":
 		return 0.05
 	case strings.Contains(id, "яд") && strings.Contains(id, "megasword"):
 		return 0.01
