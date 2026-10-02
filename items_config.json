@@ -32,7 +32,7 @@
     "nacenka": 300000,
     "num": 5,
     "book_mid_q": 0.25,
-    "book_floor_q": 0.05
+    "book_floor_q": 0.01
   },
   "sword7-1.21": {
     "base_price": 1000003,
@@ -94,7 +94,7 @@
     "nacenka": 400000,
     "num": 6,
     "book_mid_q": 0.25,
-    "book_floor_q": 0.01
+    "book_floor_q": 0.005
   },
   "megasword-яд3-1.21": {
     "base_price": 4000007,
@@ -129,7 +129,7 @@
     "nacenka": 300000,
     "num": 7,
     "book_mid_q": 0.10,
-    "book_floor_q": 0.01
+    "book_floor_q": 0.005
   },
   "штаны-1.21": {
     "base_price": 600005,
