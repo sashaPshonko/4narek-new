@@ -59,17 +59,25 @@ func deleteClientOrchestratorAnarchy(ws *websocket.Conn) {
 	delete(clientOrchestratorAnarchy, ws)
 }
 
-// collectRunningAnarchiesLocked — анки с подключённым оркестратором (WS в clients).
+// collectRunningAnarchiesLocked — анки с живым WS-оркестратором.
+// Раньше только clientOrchestratorAnarchy: если карта пуста/устарела — UI прятал
+// все баны (persisted>0, total_banned=0), хотя presence уже пришёл.
 func collectRunningAnarchiesLocked() map[int]struct{} {
 	out := make(map[int]struct{})
-	for ws, an := range clientOrchestratorAnarchy {
-		if an <= 0 {
-			continue
+	for ws := range clients {
+		if an, ok := clientOrchestratorAnarchy[ws]; ok && an > 0 {
+			out[an] = struct{}{}
 		}
-		if _, ok := clients[ws]; !ok {
-			continue
+		for _, row := range clientOrchBots[ws] {
+			if a := anarchyInt(row.Anarchy); a > 0 {
+				out[a] = struct{}{}
+			}
 		}
-		out[an] = struct{}{}
+		for _, o := range clientClanOwners[ws] {
+			if a := anarchyInt(o.Anarchy); a > 0 {
+				out[a] = struct{}{}
+			}
+		}
 	}
 	return out
 }
@@ -91,17 +99,21 @@ func isBannedVisibleInFleet(b bannedBotView, running map[int]struct{}, roster fu
 	if an <= 0 {
 		return false
 	}
+	u := strings.TrimSpace(b.Username)
+	if u == "" {
+		return false
+	}
 	if len(running) > 0 {
 		if _, ok := running[an]; !ok {
 			return false
 		}
-	} else {
-		// ни один оркестратор не онлайн — не показываем баны
+	} else if len(clients) == 0 {
+		// совсем нет орков — не показываем
 		return false
 	}
-	u := strings.TrimSpace(b.Username)
-	if u == "" {
-		return false
+	// roster пуст (ещё не пришёл presence) — всё равно покажем бан живой анки
+	if len(roster) == 0 {
+		return true
 	}
 	return roster.nickOnAnarchy(an, u)
 }
