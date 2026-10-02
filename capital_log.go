@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-// classic_book_2026_10 — NormalSales + книжные рельсы (live).
+// stock_corridor_v9 — inventory+market (+book2 на relist) ← live
 // Переключатель production-политики:
-//   capitalPolicyClassicBook — classic + book rails ← live
-//   capitalPolicyV9      — inventory+market (+book2 на relist)
+//   capitalPolicyV9          — inventory+market (+book2) ← live
+//   capitalPolicyClassicBook — classic + book rails (откат утром)
 //   capitalPolicyStockNorm — july11 норма стока (без nac/experiments; book = рычаг)
 //   capitalPolicyClassic — Feb22 NormalSales (до *-1.21 / enoughItems)
 //   capitalPolicyV4      — inventory corridor Jul peak
 //   capitalPolicyV8af    — late-v8 corridor
-const capitalPolicy = capitalPolicyClassicBook
+const capitalPolicy = capitalPolicyV9
 const capitalForwardCycles = 3
 
 // capitalPendingForward — ждём 3 следующих окна analysis_time и дописываем profit в capital_cycles.

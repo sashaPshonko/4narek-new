@@ -72,6 +72,14 @@ p/h из observational compare на полном `capital_cycles` (14.09.2026).
 
 Правило: при каждой смене pricing — `full_compare_all.py`, % vs все baseline, строка сюда.
 
+### 2026-10-03 — prod ← откат на `stock_corridor_v9`
+
+**Решение Sasha:** classic_book за ~1.5ч в минус (мега ↑ при слабых продажах + закуп). Live снова v9. v10 rails в Go ещё нет (только sim +18% на synth) — утром разбор классики / v10.
+
+Код: `capitalPolicy = capitalPolicyV9`.
+
+Live classic окно UTC 20:00–21:32: Σ profit_now ≈ **−48M**, sell−buy cash ≈ **−74M** (мега ≈ −64M cash).
+
 ### 2026-10-03 — prod → `classic_book_2026_10`
 
 **Решение Sasha:** live с v9 на classic_book (NormalSales + книжные рельсы + grant/fleet; без buy10m-пола; лидер есть; пустой ↑ как Exact).
