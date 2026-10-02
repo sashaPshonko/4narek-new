@@ -254,19 +254,9 @@ func ingestBannedBotsFromPresence(raw []bannedBotView) {
 	if len(raw) == 0 {
 		return
 	}
-	// Не звать currentFleetRoster(): он делает mutex.RLock, а presence держит mutex.Lock → deadlock, /fleet Failed to fetch.
-	var roster funauthRoster
-	if skipFleetRosterReload {
-		roster = fleetNickRoster
-	} else {
-		roster = mergeClientOrchBotsLocked()
-		if len(roster) == 0 {
-			roster = loadFleetRunningNicks()
-		}
-		if len(roster) == 0 {
-			roster = fleetNickRoster
-		}
-	}
+	// Не звать currentFleetRoster(): mutex + live presence без забаненных.
+	// Для ingest/prune банов — только bots/*.json (banConfigRoster).
+	roster := banConfigRoster()
 	fleetPersistMu.Lock()
 	for _, b := range raw {
 		u := strings.TrimSpace(b.Username)

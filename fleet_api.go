@@ -320,7 +320,7 @@ func anarchyInt(v any) int {
 
 func buildFleetOverview() fleetOverview {
 	now := time.Now()
-	roster := currentFleetRoster()
+	roster := banConfigRoster()
 	prunePersistedBansNotInRoster(roster)
 	prunePersistedOwnerBansNotInConfig(currentClanOwnerRoster())
 

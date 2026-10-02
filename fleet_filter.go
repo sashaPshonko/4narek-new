@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// fleetNickRoster — ники запущенных аккаунтов (bots/*.json + владельцы), не весь funauth roster.
+// fleetNickRoster — ники для funauth (часто live presence с орка).
 var fleetNickRoster funauthRoster
 
 // skipFleetRosterReload — тесты подставляют roster в память, без чтения файла.
@@ -26,6 +26,19 @@ func currentFleetRoster() funauthRoster {
 	}
 	if r := loadFleetRunningNicks(); len(r) > 0 {
 		fleetNickRoster = r
+		return r
+	}
+	return fleetNickRoster
+}
+
+// banConfigRoster — ники из bots/*.json для фильтра/prune банов.
+// Live presence с орка сюда нельзя: забаненных там часто уже нет → UI пустой
+// при persisted>0, плюс prune сносит fleet_bans.json.
+func banConfigRoster() funauthRoster {
+	if skipFleetRosterReload {
+		return fleetNickRoster
+	}
+	if r := loadFleetRunningNicks(); len(r) > 0 {
 		return r
 	}
 	return fleetNickRoster
