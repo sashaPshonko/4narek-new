@@ -116,12 +116,16 @@ func isBannedVisibleInFleet(b bannedBotView, running map[int]struct{}, roster fu
 	if u == "" {
 		return false
 	}
+	// Живой presence уже прислал этот бан — показываем всегда.
+	// Иначе при пустом clientOrchestratorAnarchy было total=0 при banned=3.
+	if banLiveOnConnectedOrch(u) {
+		return true
+	}
 	if len(running) > 0 {
 		if _, ok := running[an]; !ok {
 			return false
 		}
 	} else if len(clients) == 0 {
-		// совсем нет орков — не показываем
 		return false
 	}
 	// roster пуст (ещё не пришёл presence) — всё равно покажем бан живой анки
@@ -129,6 +133,24 @@ func isBannedVisibleInFleet(b bannedBotView, running map[int]struct{}, roster fu
 		return true
 	}
 	return roster.nickOnAnarchy(an, u)
+}
+
+func banLiveOnConnectedOrch(username string) bool {
+	key := banUserKey(username)
+	if key == "" {
+		return false
+	}
+	for ws, list := range clientBannedBots {
+		if _, ok := clients[ws]; !ok {
+			continue
+		}
+		for _, b := range list {
+			if banUserKey(b.Username) == key {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func filterBannedForFleet(all []bannedBotView, running map[int]struct{}, roster funauthRoster) []bannedBotView {
