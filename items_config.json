@@ -269,21 +269,6 @@
     "nacenka": 300000,
     "num": 3
   },
-  "sword-bare-1.21": {
-    "base_price": 80019,
-    "normal_sales": 3,
-    "normal_count": 4,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
-    "effects": [],
-    "exact_effects": true,
-    "nacenka": 300000,
-    "num": 0,
-    "book_mid_q": 0.20,
-    "book_floor_q": 0.05
-  },
   "sword-sharp5-1.21": {
     "base_price": 200015,
     "normal_sales": 3,

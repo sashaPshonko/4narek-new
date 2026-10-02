@@ -126,7 +126,6 @@ func TestStockNormBookMidQForItem(t *testing.T) {
 		{"pochti-megasword-1.21", 0.25},
 		{"megasword-1.21", 0.25},
 		{"megasword-яд3-1.21", 0.10},
-		{"sword-bare-1.21", 0.25},
 		{"sword-sharp5-loot5-1.21", 0.25},
 		{"штаны-1.21", 0.50},
 	}
