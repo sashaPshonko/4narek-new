@@ -38,6 +38,9 @@ type CatalogItemOut struct {
 	MaxEffects       []ItemEffect `json:"max_effects,omitempty"`
 	ExactEffects     bool         `json:"exact_effects,omitempty"`
 	LoreMatch        string       `json:"lore_match,omitempty"`
+	// BookFloor / BookMid — перцентили книги (sell-шкала) для фильтра FunTime min/max на боте.
+	BookFloor int `json:"bookFloor,omitempty"`
+	BookMid   int `json:"bookMid,omitempty"`
 }
 
 type ItemEffect struct {
@@ -325,10 +328,44 @@ func buildCatalogOut() []CatalogItemOut {
 	return out
 }
 
+// enrichCatalogBookBounds — пол/потолок книги в каталог (вне data-mutex: ah_book на mlDB).
+func enrichCatalogBookBounds(p *PriceUpdate) {
+	if p == nil || len(p.Catalog) == 0 {
+		return
+	}
+	now := time.Now()
+	floorSince := now.Add(-ahBookRaiseWindow)
+	midSince := now.Add(-ahBook2Window)
+
+	mutex.RLock()
+	cfgs := make(map[string]ItemConfig, len(p.Catalog))
+	for _, it := range p.Catalog {
+		if cfg, ok := itemsConfig[it.ID]; ok {
+			cfgs[it.ID] = cfg
+		}
+	}
+	mutex.RUnlock()
+
+	for i := range p.Catalog {
+		cfg, ok := cfgs[p.Catalog[i].ID]
+		if !ok {
+			continue
+		}
+		if floor, _, fok := stockNormBookCatchupFloor(cfg, floorSince); fok && floor > 0 {
+			p.Catalog[i].BookFloor = floor
+		}
+		if mid, _, mok := stockNormBookMid(cfg, midSince); mok && mid > 0 {
+			p.Catalog[i].BookMid = mid
+		}
+	}
+}
+
 func initialPricePayload() PriceUpdate {
 	mutex.RLock()
-	defer mutex.RUnlock()
-	return priceUpdatePayloadLocked()
+	p := priceUpdatePayloadLocked()
+	mutex.RUnlock()
+	enrichCatalogBookBounds(&p)
+	return p
 }
 
 func typesMapFromSlice(list []string) map[string]struct{} {

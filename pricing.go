@@ -289,8 +289,10 @@ func priceUpdatePayloadLocked() PriceUpdate {
 
 func priceUpdatePayload() PriceUpdate {
 	mutex.RLock()
-	defer mutex.RUnlock()
-	return priceUpdatePayloadLocked()
+	p := priceUpdatePayloadLocked()
+	mutex.RUnlock()
+	enrichCatalogBookBounds(&p)
+	return p
 }
 
 // publishPriceUpdate — только без mutex.Lock в этой горутине (иначе дедлок RWMutex).
@@ -298,6 +300,7 @@ func publishPriceUpdate() {
 	mutex.RLock()
 	payload := priceUpdatePayloadLocked()
 	mutex.RUnlock()
+	enrichCatalogBookBounds(&payload)
 	select {
 	case broadcast <- payload:
 	default:
@@ -600,13 +603,25 @@ func corridorUpArmCooldown(action string) bool {
 
 // serverFunTimeRaiseAnomalous — set_min: не поднимать каталог.
 // Закупаем не меньше, чем продаём (≥2 buy за 3 цикла) — не ↑.
-// Иначе не выше p10 книги + наценка (не сырой min: дампы).
+// Иначе не выше потолка книги (book mid); fallback — p10+наценка.
 func serverFunTimeRaiseAnomalous(ours, proposed int, item string, cycle time.Duration, now time.Time) bool {
 	if proposed <= ours {
 		return false
 	}
 	if serverMinBuyBlocksUp(item, cycle, now) {
 		return true
+	}
+	mutex.RLock()
+	cfg, ok := itemsConfig[item]
+	mutex.RUnlock()
+	if ok {
+		if mid, _, mok := stockNormBookMid(cfg, now.Add(-ahBook2Window)); mok && mid > 0 {
+			// небольшой slack: mid — потолок ↑, min FunTime чуть выше ещё ок
+			if proposed > mid+cfg.PriceStep {
+				return true
+			}
+			return false
+		}
 	}
 	since := now.Add(-ahBookRaiseWindow)
 	p10, n, ok := ahBookP10Since(item, since)
