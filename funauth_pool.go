@@ -510,27 +510,14 @@ func (p *funauthPool) syncAnarchyRosterFull(anarchy int) {
 	}
 }
 
-// syncAccountRosterFull — ферма 1 MC = 1 TG; овнер не закрывает слот (следующий овнер той же анки).
+// syncAccountRosterFull — Full только после ответа FunAuthBot «много привязанных»
+// (markFull). Не закрываем TG из‑за одного farm-ника: на анке часто 1 TG → 3 MC.
 func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	acc := p.accounts[accountID]
 	if acc == nil {
 		return false
-	}
-	hasFarm := p.accountHasFarmNickLocked(accountID)
-	complete := hasFarm || acc.meta.Full
-	if acc.meta.Full != complete {
-		was := acc.meta.Full
-		acc.meta.Full = complete
-		if err := p.saveMeta(acc.meta); err != nil {
-			log.Printf("[funauth] save meta %s: %v", accountID, err)
-		}
-		if complete {
-			log.Printf("[funauth] TG %s → full (ферма привязана)", accountID)
-		} else if was {
-			log.Printf("[funauth] TG %s → not full", accountID)
-		}
 	}
 	return acc.meta.Full
 }
@@ -742,6 +729,11 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 		if p.accountBoundCountLocked(acc.meta.ID) > 0 {
 			if ownerJob && !p.accountHasFarmNickLocked(acc.meta.ID) &&
 				(acc.meta.Anarchy == 0 || acc.meta.Anarchy == anarchy) {
+				ownerReuse = append(ownerReuse, acc)
+				continue
+			}
+			// Та же анка: FunTime пускает несколько MC на один TG (у нас часто 1 TG на слот).
+			if anarchy > 0 && acc.meta.Anarchy == anarchy && !acc.meta.Full {
 				ownerReuse = append(ownerReuse, acc)
 				continue
 			}
