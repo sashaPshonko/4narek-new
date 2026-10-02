@@ -1,7 +1,7 @@
 {
   "pochti-megasword-1.21": {
     "base_price": 3000002,
-    "normal_sales": 5,
+    "normal_sales": 7,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
@@ -98,7 +98,7 @@
   },
   "megasword-яд3-1.21": {
     "base_price": 4000007,
-    "normal_sales": 5,
+    "normal_sales": 3,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
@@ -284,7 +284,7 @@
   },
   "sword-sharp5-1.21": {
     "base_price": 200015,
-    "normal_sales": 5,
+    "normal_sales": 3,
     "normal_count": 4,
     "price_step": 50000,
     "analysis_minutes": 10,
@@ -303,7 +303,7 @@
   },
   "sword-sharp6-1.21": {
     "base_price": 300016,
-    "normal_sales": 5,
+    "normal_sales": 3,
     "normal_count": 4,
     "price_step": 50000,
     "analysis_minutes": 10,

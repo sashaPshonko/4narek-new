@@ -1167,6 +1167,22 @@ func actionReasonRU(action string) string {
 		return "classic_2026_02_22: нет сигнала"
 	case "classic_hold_buy_floor":
 		return "classic_2026_02_22: ↓ упёрся в самую дешёвую покупку за 10м"
+	case "classic_book_price_up":
+		return "classic_book: sales<N ∧ stock<N×3 → +1 (≤ mid)"
+	case "classic_book_price_down_ah":
+		return "classic_book: AH раздут ∧ sales<N → −1 (≥ book floor)"
+	case "classic_book_price_down_buys":
+		return "classic_book: buys>sales×2 ∧ stock>N → −1"
+	case "classic_book_price_down_leader":
+		return "classic_book: лидер типа ∧ stock>salesLeader×3.5 → −1"
+	case "classic_book_floor_jump":
+		return "classic_book: цена < пола книги → прыжок к полу"
+	case "classic_book_mid_jump":
+		return "classic_book: цена > потолка книги → прыжок к mid"
+	case "classic_book_hold", "classic_book_hold_at_mid", "classic_book_hold_at_floor":
+		return "classic_book: нет сигнала / у рельса"
+	case "classic_book_hold_above_market":
+		return "classic_book: sales<N, но ratio≥1.05 → ↑ запрещён"
 	case "corridor_hold_v9_no_signal", "corridor_hold_v9_band":
 		return "corridor_v9: нет сигнала UP/DOWN"
 	case "corridor_hold_v9_low_stock_down_veto":
@@ -1586,6 +1602,19 @@ func adjustPrice(item string) AdjustReport {
 			underbuyOK, tryRatio, stockLoad,
 			onlineForCap, onlineMaxForML,
 			ahCounts,
+		)
+	}
+
+	if isPricingPolicyClassicBook() {
+		return adjustPriceClassicBook(
+			item, cfg, now, lastUpdate,
+			sales, buys, trySells, profitNow,
+			state,
+			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
+			onAH, invCount, heldForCorridor, share, free, need, stockNorm,
+			underbuyOK, tryRatio, stockLoad,
+			onlineForCap, onlineMaxForML,
+			ahCounts, invCounts,
 		)
 	}
 

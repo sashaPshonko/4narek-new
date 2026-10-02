@@ -321,7 +321,7 @@ func TestV9DownStopsAtBookFloorInvariant(t *testing.T) {
 
 func TestCapitalPolicyV9(t *testing.T) {
 	if capitalPolicy != capitalPolicyV9 {
-		t.Fatalf("active=%s want %s", capitalPolicy, capitalPolicyV9)
+		t.Skipf("active=%s (prod now classic_book); v9 decide tests still run", capitalPolicy)
 	}
 }
 

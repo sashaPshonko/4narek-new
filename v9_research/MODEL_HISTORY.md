@@ -72,6 +72,66 @@ p/h из observational compare на полном `capital_cycles` (14.09.2026).
 
 Правило: при каждой смене pricing — `full_compare_all.py`, % vs все baseline, строка сюда.
 
+### 2026-10-03 — prod → `classic_book_2026_10`
+
+**Решение Sasha:** live с v9 на classic_book (NormalSales + книжные рельсы + grant/fleet; без buy10m-пола; лидер есть; пустой ↑ как Exact).
+
+Код: `pricing_classic_book.go`, `capitalPolicy = capitalPolicyClassicBook`.
+
+N мечей в `items_config.json`: sword7=5, остр5/6=3, mega=5, pochti=7, яд3=3. Броня без смены (5).
+
+Откат: `capitalPolicy = capitalPolicyV9`.
+
+Якорь сравнения: live snapshot v9 02.10 (~+166M / 427 sells к 17:34Z).
+
+### 2026-10-02 — live snapshot `stock_corridor_v9` (до возможного classic_book)
+
+Источник: локальный `ml_data/pricing.db` / `trade_events`, срез **02.10.2026 17:34 UTC** (день ещё не закрыт; ночь 00–05Z почти нулевая).
+
+**Policy live:** `capitalPolicy = stock_corridor_v9` (`capital_log.go`). Циклов за сутки UTC: **413**.
+
+| Окно | sells | buys | sell | buy | profit (sell−buy) |
+|------|------:|-----:|-----:|----:|------------------:|
+| сегодня UTC (с 00Z) | 427 | 397 | 963.3M | 797.5M | **+165.7M** |
+| последние 24ч | 671 | 759 | — | — | +199.8M |
+
+Темп: ~**24 sales/h** если делить на часы с полуночи; по активным часам (~06–17Z) ближе к **~35–40 sales/h**. Ночь мёртвая (1 sell до 06Z).
+
+По sku сегодня UTC (profit):
+
+| item | sells | buys | profit |
+|------|------:|-----:|-------:|
+| pochti-megasword-1.21 | 146 | 155 | **+71.8M** |
+| megasword-1.21 | 94 | 99 | **+55.9M** |
+| sword7-1.21 | 79 | 73 | **+32.3M** |
+| sword-sharp6-1.21 | 30 | 4 | +8.1M |
+| sword-sharp5-1.21 | 25 | 1 | +5.4M |
+| megasword-яд3-1.21 | 53 | 64 | **−7.7M** |
+
+Часы (profit_M, UTC): 06 +19 / 07−23 / 08−17 (утро закуп) → с 09Z плюс; 15Z −6 (яд3/закуп).
+
+Контекст для сравнения с classic_book позже: флот мечей ~3 pricing; рельсы mid/floor как в конфиге (мега 25%, яд3 10%, остр5 35%, остр6 25%, sword7 45%); capital keep top2 — отдельный деплой azalea, на sell-policy не влияет.
+
+### 2026-10-02 — v10 rails + CF grey vs baselines (`compare_v10_vs_v9.py`)
+
+Окно Jul15–Sep03, FOCUS+sharp5/6, 3 OOS folds, DemandModel. Рельсы в sim = **синтетика** 0.75–1.05×mkt (не живая книга).
+
+| модель | mean profit | vs v9 | p/h vs v9 | under |
+|--|--:|--:|--:|--:|
+| **v10_rails** (без CF) | 13115M | **+18.3%** | +18.8% | 0.059 |
+| v10_cf (↓≥0.55, ↑cal) | 13085M | +18.0% | +18.6% | 0.075 |
+| v10_cf_cal (↓≈0.3) | 13081M | +18.0% | +18.4% | 0.089 |
+| hold | 11380M | +2.7% | +3.1% | 0.156 |
+| **v9** | 11085M | 0 | 0 | 0.182 |
+| ekb | 9511M | −14.2% | −14.7% | 0.000 |
+| corridor_v5/v6 | 9042M | −18.4% | −19.0% | 0.358 |
+| corridor_v4 / v8_late | 9013M | −18.7% | −19.3% | 0.355 |
+| classic_ns | 8780M | −20.8% | −21.4% | 0.100 |
+
+Вывод: выигрыш почти весь от **каркаса rails** (цель по стоку + пол/потолок), не от CF. CF в серой зоне ≈ нейтрален / чуть хуже rails-only. **Не prod** — synth mkt + sim bias; следующий шаг = те же правила на живых floor/mid из книги.
+
+Артефакты: `v10_cf_scorers.py`, `policy_v10_rails.make_sim_policy`, `compare_v10_vs_v9.py`, `results_v10_vs_v9.json`.
+
 ### 2026-10-02 — v9: пол/потолок = жёсткие рельсы-прыжки
 - `price < floor` → прыжок к полу (всегда, не только empty).
 - `price > mid` → прыжок к потолку (всегда, не только demand ↑).
