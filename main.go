@@ -198,8 +198,9 @@ var (
 	lastPriceUpdate = make(map[string]time.Time)
 
 	// Когда go-тип впервые появился в active_types; сбрасывается, если ботов типа нет.
-	typeActiveSince  = make(map[string]time.Time)
-	lastTypePresence = make(map[string]time.Time)
+	typeActiveSince   = make(map[string]time.Time)
+	typeInactiveSince = make(map[string]time.Time)
+	lastTypePresence  = make(map[string]time.Time)
 
 	// Новый: канал рассылки
 	broadcast = make(chan interface{}, 1000)
@@ -421,7 +422,9 @@ func setClientActiveTypes(ws *websocket.Conn, activeTypes []string) {
 	clientActiveTypes[ws] = typesMapFromSlice(activeTypes)
 }
 
-// updateTypeFleetActivityLocked — после presence: фиксируем, с какого момента тип в флоте онлайн.
+// updateTypeFleetActivityLocked — после presence: с какого момента тип в флоте.
+// Короткий 0 (вылет / хаб / рестарт / «пошёл кормить мавру») НЕ сбрасывает since —
+// иначе окно анализа ломается на каждом единичном реконекте.
 func updateTypeFleetActivityLocked() {
 	now := time.Now()
 	active := make(map[string]struct{})
@@ -435,11 +438,19 @@ func updateTypeFleetActivityLocked() {
 		if typeActiveSince[t].IsZero() {
 			typeActiveSince[t] = now
 		}
+		delete(typeInactiveSince, t)
 	}
 	for t := range typeActiveSince {
-		if _, ok := active[t]; !ok {
+		if _, ok := active[t]; ok {
+			continue
+		}
+		if typeInactiveSince[t].IsZero() {
+			typeInactiveSince[t] = now
+		}
+		if now.Sub(typeInactiveSince[t]) >= fleetPresenceGrace {
 			delete(typeActiveSince, t)
 			delete(lastTypePresence, t)
+			delete(typeInactiveSince, t)
 		}
 	}
 }

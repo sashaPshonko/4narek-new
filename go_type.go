@@ -19,9 +19,9 @@ func catalogTypeActiveIn(activeTypes map[string]struct{}, catalogType string) bo
 	return false
 }
 
-// botsForGoTypeLocked — живые боты на go-типе; merged armor и piece-типы считают вместе.
-// Каталог брони = netherite_armor-1.21 (шлем/нагрудник/штаны/ботинки); орк может слать
-// либо merged, либо piece (508/509) — share/bots_category должны видеть весь флот брони.
+// botsForGoTypeLocked — боты на go-типе для share/ёмкости.
+// Берём sticky (не схлопываем долю от разового вылета); live=0 → 0.
+// Merged armor и piece-типы считают вместе.
 func botsForGoTypeLocked(goType string) int {
 	totals := aggregateBotsPerTypeLocked()
 	n := totals[goType]
@@ -29,12 +29,13 @@ func botsForGoTypeLocked(goType string) int {
 		for piece := range pieceGoTypeToName {
 			n += totals[piece]
 		}
-		return n
+		return stickyBotsForGoType(goType, n)
 	}
 	if _, isPiece := pieceGoTypeToName[goType]; isPiece {
-		return n + totals[netheriteArmorGoType]
+		n = n + totals[netheriteArmorGoType]
+		return stickyBotsForGoType(goType, n)
 	}
-	return n
+	return stickyBotsForGoType(goType, n)
 }
 
 func itemConfigActiveIn(activeTypes map[string]struct{}, cfg ItemConfig) bool {

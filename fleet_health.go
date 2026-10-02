@@ -8,12 +8,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Флот для ценообразования:
-//   OK        — норма
-//   Degraded  — часть ботов мертва/в хабе, но ≥1 pricing → цены крутим на оставшихся
-//   Outage    — 0 pricing при недавнем пике ≥2 → пауза adjust (не dump «в пустоту»)
-//
-// Хаб / вылет режет orch (on_anarchy / success). Здесь — режим типа + лог.
+// Флот:
+//   - разовый вылет/хаб/рестарт → НЕ сужаем share и НЕ сбрасываем «онлайн с …»
+//   - хронический флап → orch помечает unstable (вне bots_per_type)
+//   - полный 0 дольше grace → OUTAGE (пауза цен); короткий 0 (кормёжка мавры) — тихо SKIP
 
 type fleetMode int
 
@@ -26,16 +24,23 @@ const (
 type fleetTypeHealth struct {
 	peakPricing   int
 	peakAt        time.Time
+	stickyBots    int // для share: не падает от коротких дыр
+	stickyBelowAt time.Time
 	lastPricing   int
 	lastMode      fleetMode
-	outageSince   time.Time
+	zeroSince     time.Time
+	outageLogged  bool
 	degradedSince time.Time
 }
 
 var (
-	fleetHealthMu   sync.Mutex
-	fleetTypeState  = map[string]*fleetTypeHealth{}
-	fleetPeakWindow = 45 * time.Minute
+	fleetHealthMu sync.Mutex
+	fleetTypeState = map[string]*fleetTypeHealth{}
+
+	fleetPeakWindow   = 45 * time.Minute
+	fleetStickyHold   = 12 * time.Minute // сколько держим старый N ботов для share
+	fleetOutageGrace  = 90 * time.Second // полный 0 короче — не орём OUTAGE
+	fleetPresenceGrace = 3 * time.Minute // typeActiveSince не сбрасываем сразу
 )
 
 func noteFleetPresenceLocked(botsPerType map[string]int, fleetStats map[string]int) {
@@ -48,13 +53,11 @@ func noteFleetPresenceLocked(botsPerType map[string]int, fleetStats map[string]i
 		seen[t] = struct{}{}
 		updateFleetTypeLocked(t, n, now)
 	}
-	// Типы, которые пропали из bots_per_type целиком.
-	for t, st := range fleetTypeState {
+	for t := range fleetTypeState {
 		if _, ok := seen[t]; ok {
 			continue
 		}
 		updateFleetTypeLocked(t, 0, now)
-		_ = st
 	}
 
 	if len(fleetStats) > 0 {
@@ -62,7 +65,7 @@ func noteFleetPresenceLocked(botsPerType map[string]int, fleetStats map[string]i
 		pricing := fleetStats["pricing"]
 		hub := fleetStats["hub"]
 		unstable := fleetStats["unstable"]
-		if live > 0 || pricing > 0 || hub > 0 {
+		if hub > 0 || unstable > 0 || (live > 0 && pricing == 0) {
 			log.Printf("[FLEET] presence live=%d pricing=%d hub=%d unstable=%d", live, pricing, hub, unstable)
 		}
 	}
@@ -74,20 +77,48 @@ func updateFleetTypeLocked(goType string, pricing int, now time.Time) {
 		st = &fleetTypeHealth{}
 		fleetTypeState[goType] = st
 	}
-	// Пик: максимум за окно; если окно протухло — сбрасываем к текущему.
+
 	if st.peakAt.IsZero() || now.Sub(st.peakAt) > fleetPeakWindow {
-		st.peakPricing = pricing
-		st.peakAt = now
+		if pricing > 0 {
+			st.peakPricing = pricing
+			st.peakAt = now
+		}
 	} else if pricing > st.peakPricing {
 		st.peakPricing = pricing
 		st.peakAt = now
 	}
 
+	// Sticky для share: растёт сразу, падает только после fleetStickyHold ниже пика.
+	if pricing > st.stickyBots {
+		st.stickyBots = pricing
+		st.stickyBelowAt = time.Time{}
+	} else if pricing > 0 && pricing < st.stickyBots {
+		if st.stickyBelowAt.IsZero() {
+			st.stickyBelowAt = now
+		} else if now.Sub(st.stickyBelowAt) >= fleetStickyHold {
+			st.stickyBots = pricing
+			st.stickyBelowAt = time.Time{}
+		}
+	}
+	// pricing==0: sticky не трогаем (вернутся — share тот же)
+
+	if pricing == 0 {
+		if st.zeroSince.IsZero() {
+			st.zeroSince = now
+		}
+	} else {
+		st.zeroSince = time.Time{}
+		st.outageLogged = false
+	}
+
 	mode := fleetOK
-	peakFresh := now.Sub(st.peakAt) <= fleetPeakWindow && st.peakPricing >= 2
+	peakFresh := !st.peakAt.IsZero() && now.Sub(st.peakAt) <= fleetPeakWindow && st.peakPricing >= 2
+	zeroLong := pricing == 0 && !st.zeroSince.IsZero() && now.Sub(st.zeroSince) >= fleetOutageGrace
 	switch {
-	case pricing == 0:
+	case pricing == 0 && zeroLong:
 		mode = fleetOutage
+	case pricing == 0:
+		mode = fleetOutage // для skip; лог только после grace
 	case peakFresh && st.peakPricing >= 3 && pricing == 1:
 		mode = fleetDegraded
 	case peakFresh && pricing*2 < st.peakPricing:
@@ -97,33 +128,32 @@ func updateFleetTypeLocked(goType string, pricing int, now time.Time) {
 	if mode != st.lastMode || pricing != st.lastPricing {
 		switch mode {
 		case fleetOutage:
-			if st.outageSince.IsZero() {
-				st.outageSince = now
-			}
-			if peakFresh {
-				log.Printf("[FLEET] OUTAGE type=%s pricing=%d peak=%d (за %s) — adjust на паузе",
-					goType, pricing, st.peakPricing, fleetPeakWindow)
+			if zeroLong && peakFresh && !st.outageLogged {
+				st.outageLogged = true
+				log.Printf("[FLEET] OUTAGE type=%s pricing=0 peak=%d >%s — adjust на паузе",
+					goType, st.peakPricing, fleetOutageGrace)
 			}
 		case fleetDegraded:
 			if st.degradedSince.IsZero() {
 				st.degradedSince = now
 			}
-			st.outageSince = time.Time{}
-			log.Printf("[FLEET] DEGRADED type=%s pricing=%d peak=%d — частичный вылет, цены на оставшихся",
-				goType, pricing, st.peakPricing)
-		default:
-			if st.lastMode != fleetOK && st.lastMode != 0 {
-				log.Printf("[FLEET] OK type=%s pricing=%d", goType, pricing)
+			// Не орём на каждый presence: разовый вылет ≠ проблема.
+			if now.Sub(st.degradedSince) >= 2*time.Minute && (st.lastMode != fleetDegraded || pricing != st.lastPricing) {
+				log.Printf("[FLEET] DEGRADED type=%s pricing=%d sticky=%d peak=%d — частичный простой",
+					goType, pricing, st.stickyBots, st.peakPricing)
 			}
-			st.outageSince = time.Time{}
+		default:
+			if st.lastMode == fleetOutage || st.lastMode == fleetDegraded {
+				log.Printf("[FLEET] OK type=%s pricing=%d sticky=%d", goType, pricing, st.stickyBots)
+			}
 			st.degradedSince = time.Time{}
+			st.outageLogged = false
 		}
 		st.lastMode = mode
 		st.lastPricing = pricing
 	}
 }
 
-// fleetModeForGoTypeLocked — для логов / будущего soft-hold. Outage ≡ нет active (уже SKIP).
 func fleetModeForGoTypeLocked(goType string) fleetMode {
 	fleetHealthMu.Lock()
 	defer fleetHealthMu.Unlock()
@@ -134,7 +164,21 @@ func fleetModeForGoTypeLocked(goType string) fleetMode {
 	return st.lastMode
 }
 
-// applyPresenceFleetStats — вызывать под mutex после setClientBotsPerType.
+// stickyBotsForGoType — N для share/ёмкости: не схлопывается от короткого вылета одного бота.
+// При current==0 → 0 (тип неактивен, adjust и так SKIP).
+func stickyBotsForGoType(goType string, current int) int {
+	if current <= 0 {
+		return 0
+	}
+	fleetHealthMu.Lock()
+	defer fleetHealthMu.Unlock()
+	st := fleetTypeState[goType]
+	if st == nil || st.stickyBots <= current {
+		return current
+	}
+	return st.stickyBots
+}
+
 func applyPresenceFleetStats(ws *websocket.Conn, botsPerType map[string]int, fleetStats map[string]int) {
 	_ = ws
 	noteFleetPresenceLocked(botsPerType, fleetStats)
