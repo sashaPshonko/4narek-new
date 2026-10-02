@@ -58,7 +58,7 @@ func TestFleetOutageLogOnlyAfterGrace(t *testing.T) {
 	if st.outageLogged {
 		t.Fatal("OUTAGE must not log within grace")
 	}
-	updateFleetTypeLocked("netherite_sword-1.21", 0, now.Add(fleetOutageGrace+5*time.Second))
+	updateFleetTypeLocked("netherite_sword-1.21", 0, now.Add(10*time.Second+fleetOutageGrace+5*time.Second))
 	if !st.outageLogged {
 		t.Fatal("OUTAGE should log after grace")
 	}

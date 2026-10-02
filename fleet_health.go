@@ -128,16 +128,11 @@ func updateFleetTypeLocked(goType string, pricing int, now time.Time) {
 	if mode != st.lastMode || pricing != st.lastPricing {
 		switch mode {
 		case fleetOutage:
-			if zeroLong && peakFresh && !st.outageLogged {
-				st.outageLogged = true
-				log.Printf("[FLEET] OUTAGE type=%s pricing=0 peak=%d >%s — adjust на паузе",
-					goType, st.peakPricing, fleetOutageGrace)
-			}
+			// лог ниже по zeroLong
 		case fleetDegraded:
 			if st.degradedSince.IsZero() {
 				st.degradedSince = now
 			}
-			// Не орём на каждый presence: разовый вылет ≠ проблема.
 			if now.Sub(st.degradedSince) >= 2*time.Minute && (st.lastMode != fleetDegraded || pricing != st.lastPricing) {
 				log.Printf("[FLEET] DEGRADED type=%s pricing=%d sticky=%d peak=%d — частичный простой",
 					goType, pricing, st.stickyBots, st.peakPricing)
@@ -151,6 +146,11 @@ func updateFleetTypeLocked(goType string, pricing int, now time.Time) {
 		}
 		st.lastMode = mode
 		st.lastPricing = pricing
+	}
+	if mode == fleetOutage && zeroLong && peakFresh && !st.outageLogged {
+		st.outageLogged = true
+		log.Printf("[FLEET] OUTAGE type=%s pricing=0 peak=%d >%s — adjust на паузе",
+			goType, st.peakPricing, fleetOutageGrace)
 	}
 }
 
