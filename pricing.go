@@ -1164,6 +1164,18 @@ func actionReasonRU(action string) string {
 		return "corridor_v9: цена > потолка книги → прыжок к потолку"
 	case "corridor_price_down_v9_soft", "corridor_price_down_v9_over", "corridor_price_down_v9_dump":
 		return "corridor_v9: excess held → ↓ (не ниже пола книги)"
+	case "corridor_price_up_v10":
+		return "corridor_v10: пусто/недобор → ↑ к цели по загрузке (≤ потолка книги)"
+	case "corridor_price_up_v10_book_floor":
+		return "corridor_v10: цена < пола книги → прыжок к полу"
+	case "corridor_price_down_v10_book_mid":
+		return "corridor_v10: цена > потолка книги → прыжок к потолку"
+	case "corridor_price_down_v10":
+		return "corridor_v10: затар ∧ слабый слив → ↓ к цели"
+	case "corridor_hold_v10_deadband", "corridor_hold_v10", "corridor_hold_v10_no_signal",
+		"corridor_hold_v10_sellthrough", "corridor_hold_v10_no_excess", "corridor_hold_v10_no_up",
+		"corridor_hold_v10_up_veto", "corridor_hold_v10_book_mid", "corridor_hold_v10_book_floor":
+		return "corridor_v10: hold (цель/рельс/veto/слив ок)"
 	case "corridor_price_up_v4_demand":
 		return "corridor_v4: understock ∧ sales≥3 (ночь≥4) ∧ sales>buys → +1"
 	case "corridor_price_down_v4_soft", "corridor_price_down_v4_over", "corridor_price_down_v4_dump":
@@ -1655,6 +1667,19 @@ func adjustPrice(item string) AdjustReport {
 			onAH, invCount, heldForCorridor, share, free, need, stockNorm,
 			underbuyOK, tryRatio, stockLoad,
 			onlineForCap, onlineMaxForML,
+		)
+	}
+
+	if isPricingPolicyV10() {
+		return adjustPriceV10(
+			item, cfg, now, lastUpdate,
+			sales, buys, trySells, profitNow,
+			state,
+			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
+			onAH, invCount, heldForCorridor, share, free, need, stockNorm,
+			underbuyOK, tryRatio, stockLoad,
+			onlineForCap, onlineMaxForML,
+			ahCounts,
 		)
 	}
 

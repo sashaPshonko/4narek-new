@@ -2,6 +2,14 @@
 
 Источник: `PRICING_EXPERIMENTS.md`, комментарии `pricing.go`, `capitalPolicy` в БД.
 
+## 2026-10-04 — prod → `stock_corridor_v10` (+↑ при пустом)
+
+- Live: `capitalPolicy = stock_corridor_v10` (откат → `stock_corridor_v9`).
+- Каркас из `policy_v10_rails.py`: цель в [пол, потолок] по загрузке стока; ↓ при затаре+слабом сливе; **↑ при held=0 / недоборе** (без sales≥3 как в v9).
+- Пустой idle: +1 шаг к цели; у потолка + try без продаж — veto ↑.
+- Sim compare 02.10: v10_rails **+18% к v9** (synth floor/mid); на живых рельсах смотреть сутки.
+- Не full_compare_all в этом коммите — явный запрос Саши «ебанем v10» + empty↑.
+
 ## 2026-10-04 — шлем-починка mid p25
 
 - Книга шлема плоская у 5.0M (p10≈p15); mid **0.25** (~5.2M). Остальная починка остаётся p10.
