@@ -119,8 +119,14 @@ type ItemConfig struct {
 	BookMidQ float64
 	// BookFloorQ — перцентиль порога empty catchup «мы слишком дёшевы» (0 = дефолт).
 	BookFloorQ float64
-	// RiskCut — минус к цене рельс книги (пол/потолок), ₽. Для рисковых SKU (починка/крушитель/яд3).
+	// RiskCut — минус к цене (book_peg: от перцентиля; иначе от пол/потолка рельс), ₽.
 	RiskCut int
+	// PriceMode — "" = коридор; "book_peg" = sell = book_peg_q − risk_cut.
+	PriceMode string
+	// BookPegQ — перцентиль книги для book_peg (0 → 0.10).
+	BookPegQ float64
+	// BookPegMinSellers — минимум продавцов, иначе hold (0 → 3).
+	BookPegMinSellers int
 	Effects          []ItemEffect
 	ForbiddenEffects []ItemEffect
 	MaxEffects       []ItemEffect
@@ -351,6 +357,13 @@ func enrichCatalogBookBounds(p *PriceUpdate) {
 	for i := range p.Catalog {
 		cfg, ok := cfgs[p.Catalog[i].ID]
 		if !ok {
+			continue
+		}
+		if isBookPegConfig(cfg) {
+			if tgt, _, _, _, ok := bookPegTarget(cfg, midSince); ok && tgt > 0 {
+				p.Catalog[i].BookMid = tgt
+				p.Catalog[i].BookFloor = tgt
+			}
 			continue
 		}
 		if floor, _, fok := stockNormBookCatchupFloor(cfg, floorSince); fok && floor > 0 {

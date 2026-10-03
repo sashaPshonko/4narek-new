@@ -130,7 +130,10 @@
     "num": 7,
     "book_mid_q": 0.35,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   },
   "штаны-1.21": {
     "base_price": 600005,
@@ -274,7 +277,10 @@
     "num": 3,
     "book_mid_q": 0.15,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   },
   "нагрудник-починка-1.21": {
     "base_price": 610007,
@@ -302,7 +308,10 @@
     "num": 3,
     "book_mid_q": 0.15,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   },
   "ботинки-починка-1.21": {
     "base_price": 610009,
@@ -330,7 +339,10 @@
     "num": 3,
     "book_mid_q": 0.15,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   },
   "шлем-починка-1.21": {
     "base_price": 610011,
@@ -358,7 +370,10 @@
     "num": 3,
     "book_mid_q": 0.15,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   },
   "sword-sharp5-1.21": {
     "base_price": 200015,
@@ -670,7 +685,10 @@
     "num": 10,
     "book_mid_q": 0.1,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   },
   "шлем-крушитель-1.21": {
     "base_price": 10000031,
@@ -718,7 +736,10 @@
     "num": 8,
     "book_mid_q": 0.1,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   },
   "нагрудник-крушитель-1.21": {
     "base_price": 10000032,
@@ -758,7 +779,10 @@
     "num": 8,
     "book_mid_q": 0.1,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   },
   "штаны-крушитель-1.21": {
     "base_price": 10000033,
@@ -798,7 +822,10 @@
     "num": 8,
     "book_mid_q": 0.1,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   },
   "ботинки-крушитель-1.21": {
     "base_price": 10000034,
@@ -842,6 +869,9 @@
     "num": 8,
     "book_mid_q": 0.1,
     "book_floor_q": 0.005,
-    "risk_cut": 200000
+    "risk_cut": 200000,
+    "price_mode": "book_peg",
+    "book_peg_q": 0.1,
+    "book_peg_min_sellers": 3
   }
 }

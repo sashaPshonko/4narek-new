@@ -3,6 +3,12 @@
 Источник: `PRICING_EXPERIMENTS.md`, комментарии `pricing.go`, `capitalPolicy` в БД.
 
 
+## 2026-10-04 — `book_peg` для лютых SKU
+
+- `price_mode=book_peg`: sell = `book_peg_q` (p10) − `risk_cut` (200k). Без коридора v10.
+- Починка + крушитель + яд3. Мало продавцов (`book_peg_min_sellers=3`) → hold.
+- Остальное по-прежнему `stock_corridor_v10`.
+
 ## 2026-10-04 — `risk_cut` для рисковых SKU
 
 - Поле `risk_cut` в `items_config.json`: минус к полу/потолку книги после перцентиля.

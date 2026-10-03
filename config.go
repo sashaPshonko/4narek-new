@@ -35,6 +35,9 @@ type itemConfigJSON struct {
 	BookMidQ          float64          `json:"book_mid_q,omitempty"`
 	BookFloorQ        float64          `json:"book_floor_q,omitempty"`
 	RiskCut           int              `json:"risk_cut,omitempty"`
+	PriceMode         string           `json:"price_mode,omitempty"`
+	BookPegQ          float64          `json:"book_peg_q,omitempty"`
+	BookPegMinSellers int              `json:"book_peg_min_sellers,omitempty"`
 }
 
 func loadItemsConfig() error {
@@ -93,9 +96,12 @@ func loadItemsConfig() error {
 			MaxEffects:       maxEffects,
 			ExactEffects:     entry.ExactEffects,
 			LoreMatch:        entry.LoreMatch,
-			BookMidQ:         entry.BookMidQ,
-			BookFloorQ:       entry.BookFloorQ,
-			RiskCut:          entry.RiskCut,
+			BookMidQ:          entry.BookMidQ,
+			BookFloorQ:        entry.BookFloorQ,
+			RiskCut:           entry.RiskCut,
+			PriceMode:         entry.PriceMode,
+			BookPegQ:          entry.BookPegQ,
+			BookPegMinSellers: entry.BookPegMinSellers,
 		}
 		itemsNacenkaBase[id] = entry.Nacenka
 	}

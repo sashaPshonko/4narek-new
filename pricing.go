@@ -1184,6 +1184,12 @@ func actionReasonRU(action string) string {
 		"corridor_hold_v10_sellthrough", "corridor_hold_v10_no_excess", "corridor_hold_v10_no_up",
 		"corridor_hold_v10_up_veto", "corridor_hold_v10_book_mid", "corridor_hold_v10_book_floor":
 		return "corridor_v10: hold (цель/рельс/veto/слив ок)"
+	case "book_peg_price_up", "book_peg_price_down":
+		return "book_peg: цена = перцентиль книги − risk_cut"
+	case "book_peg_hold":
+		return "book_peg: уже на якоре книги"
+	case "book_peg_hold_thin":
+		return "book_peg: мало продавцов в книге → hold"
 	case "corridor_price_up_v4_demand":
 		return "corridor_v4: understock ∧ sales≥3 (ночь≥4) ∧ sales>buys → +1"
 	case "corridor_price_down_v4_soft", "corridor_price_down_v4_over", "corridor_price_down_v4_dump":
@@ -1626,6 +1632,20 @@ func adjustPrice(item string) AdjustReport {
 	action := ""
 	var notes []string
 	var experimentTG *experimentTelegramEvent
+
+	// Per-SKU статика с книги — раньше глобальной политики.
+	if isBookPegConfig(cfg) {
+		return adjustPriceBookPeg(
+			item, cfg, now, lastUpdate,
+			sales, buys, trySells, profitNow,
+			state,
+			priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor,
+			onAH, invCount, heldForCorridor, share, free, need, stockNorm,
+			underbuyOK, tryRatio, stockLoad,
+			onlineForCap, onlineMaxForML,
+			ahCounts,
+		)
+	}
 
 	if isPricingPolicyStockNorm() {
 		return adjustPriceStockNorm(
