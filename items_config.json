@@ -272,7 +272,7 @@
     ],
     "nacenka": 300000,
     "num": 3,
-    "book_mid_q": 0.3,
+    "book_mid_q": 0.15,
     "book_floor_q": 0.005,
     "risk_cut": 200000
   },
@@ -300,7 +300,7 @@
     ],
     "nacenka": 300000,
     "num": 3,
-    "book_mid_q": 0.25,
+    "book_mid_q": 0.15,
     "book_floor_q": 0.005,
     "risk_cut": 200000
   },
@@ -328,7 +328,7 @@
     ],
     "nacenka": 300000,
     "num": 3,
-    "book_mid_q": 0.3,
+    "book_mid_q": 0.15,
     "book_floor_q": 0.005,
     "risk_cut": 200000
   },
@@ -356,7 +356,7 @@
     ],
     "nacenka": 300000,
     "num": 3,
-    "book_mid_q": 0.35,
+    "book_mid_q": 0.15,
     "book_floor_q": 0.005,
     "risk_cut": 200000
   },
@@ -668,7 +668,7 @@
     ],
     "nacenka": 300000,
     "num": 10,
-    "book_mid_q": 0.2,
+    "book_mid_q": 0.1,
     "book_floor_q": 0.005,
     "risk_cut": 200000
   },
@@ -716,7 +716,7 @@
     ],
     "nacenka": 300000,
     "num": 8,
-    "book_mid_q": 0.2,
+    "book_mid_q": 0.1,
     "book_floor_q": 0.005,
     "risk_cut": 200000
   },
@@ -756,7 +756,7 @@
     ],
     "nacenka": 300000,
     "num": 8,
-    "book_mid_q": 0.2,
+    "book_mid_q": 0.1,
     "book_floor_q": 0.005,
     "risk_cut": 200000
   },
@@ -796,7 +796,7 @@
     ],
     "nacenka": 300000,
     "num": 8,
-    "book_mid_q": 0.2,
+    "book_mid_q": 0.1,
     "book_floor_q": 0.005,
     "risk_cut": 200000
   },
@@ -840,7 +840,7 @@
     ],
     "nacenka": 300000,
     "num": 8,
-    "book_mid_q": 0.2,
+    "book_mid_q": 0.1,
     "book_floor_q": 0.005,
     "risk_cut": 200000
   }
