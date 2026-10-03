@@ -39,44 +39,13 @@ func TestV10EmptyUpTowardTargetNotPastMid(t *testing.T) {
 }
 
 func TestV10MidJump(t *testing.T) {
-	// наличие в норме → жёсткий потолок
 	d := v10Decide(v10Input{
-		Held: 4, Price: 3_500_000, Step: 100_000, Share: 12,
-		Nacenka: 300_000,
+		Held: 0, Price: 3_500_000, Step: 100_000, Share: 12,
 		BookMid: 3_000_000, BookMidOK: true,
 		MultiFloor: 1_500_000, MultiFloorOK: true,
 	})
 	if d.Action != "corridor_price_down_v10_book_mid" || d.NewPrice != 3_000_000 {
 		t.Fatalf("got %s %d", d.Action, d.NewPrice)
-	}
-}
-
-func TestV10FillModeRelaxesMid(t *testing.T) {
-	// пусто: до mid+nac не прибиваем; цель/↑ могут идти выше mid
-	d := v10Decide(v10Input{
-		Held: 0, Sales: 0, Buys: 0, TrySells: 0,
-		Price: 3_100_000, Step: 100_000, Share: 12,
-		Nacenka: 300_000,
-		BookMid: 3_000_000, BookMidOK: true,
-		MultiFloor: 1_500_000, MultiFloorOK: true,
-	})
-	if d.Action == "corridor_price_down_v10_book_mid" && d.Reason == "above_mid" {
-		t.Fatalf("empty must not hard-snap to book mid: %s/%s %d", d.Action, d.Reason, d.NewPrice)
-	}
-	if d.NewPrice < 3_100_000 && d.Action == "corridor_price_down_v10_book_mid" {
-		t.Fatalf("unexpected crush below fill cap: %d", d.NewPrice)
-	}
-}
-
-func TestV10FillModeStillCapsExtreme(t *testing.T) {
-	d := v10Decide(v10Input{
-		Held: 0, Price: 4_000_000, Step: 100_000, Share: 12,
-		Nacenka: 300_000,
-		BookMid: 3_000_000, BookMidOK: true,
-		MultiFloor: 1_500_000, MultiFloorOK: true,
-	})
-	if d.Action != "corridor_price_down_v10_book_mid" || d.NewPrice != 3_300_000 {
-		t.Fatalf("got %s/%s %d want snap to mid+nac", d.Action, d.Reason, d.NewPrice)
 	}
 }
 

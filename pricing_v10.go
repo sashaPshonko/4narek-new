@@ -27,7 +27,6 @@ func isPricingPolicyV10() bool {
 type v10Input struct {
 	Held, Sales, Buys, TrySells int
 	Price, Step, Share          int
-	Nacenka                     int // для режима забивки: потолок sell ≈ bookMid+nac
 	MultiFloor                  int
 	MultiFloorOK                bool
 	BookMid                     int
@@ -104,8 +103,6 @@ func v10Turn(sales, held int) float64 {
 }
 
 // v10Decide — ядро: рельсы → цель по load → ↓ при затаре+слабом сливе / ↑ при недоборе/пустоте.
-// Режим забивки (held < lo): потолок не прибиваем к bookMid — держим до bookMid+nacenka,
-// чтобы закуп (=sell−nac) доставал до рынка. Ночь отдельно не трогаем: день/ночь душат одинаково.
 func v10Decide(in v10Input) v10Decision {
 	band := in.Band
 	if band.hi == 0 {
@@ -130,35 +127,20 @@ func v10Decide(in v10Input) v10Decision {
 		Reason:   "no_signal",
 	}
 
-	fillMode := in.Held < lo
-	capMid := in.BookMid
-	if fillMode && in.BookMidOK && in.BookMid > 0 && in.Nacenka > 0 {
-		capMid = in.BookMid + in.Nacenka
-	}
-
 	if !in.BlockUp && in.MultiFloorOK && in.MultiFloor > 0 && price < in.MultiFloor {
 		out.Action = "corridor_price_up_v10_book_floor"
 		out.NewPrice = in.MultiFloor
 		out.Reason = "below_floor"
 		return out
 	}
-	if !in.BlockDown && in.BookMidOK && capMid > 0 && price > capMid {
+	if !in.BlockDown && in.BookMidOK && in.BookMid > 0 && price > in.BookMid {
 		out.Action = "corridor_price_down_v10_book_mid"
-		out.NewPrice = capMid
-		if fillMode {
-			out.Reason = "above_fill_cap"
-		} else {
-			out.Reason = "above_mid"
-		}
+		out.NewPrice = in.BookMid
+		out.Reason = "above_mid"
 		return out
 	}
 
-	railMid := in.BookMid
-	railMidOK := in.BookMidOK
-	if fillMode && in.BookMidOK && in.BookMid > 0 && in.Nacenka > 0 {
-		railMid = capMid
-	}
-	floor, mid := v10RailSpan(price, step, in.MultiFloor, in.MultiFloorOK, railMid, railMidOK)
+	floor, mid := v10RailSpan(price, step, in.MultiFloor, in.MultiFloorOK, in.BookMid, in.BookMidOK)
 	load := 0.0
 	if in.Share > 0 {
 		load = float64(in.Held) / float64(in.Share)
@@ -339,7 +321,6 @@ func adjustPriceV10(
 		Price:        priceBefore,
 		Step:         step,
 		Share:        share,
-		Nacenka:      nacenka,
 		MultiFloor:   multiFloor,
 		MultiFloorOK: multiFloorOK,
 		BookMid:      bookMid,
