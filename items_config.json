@@ -352,7 +352,7 @@
     ],
     "nacenka": 300000,
     "num": 3,
-    "book_mid_q": 0.1,
+    "book_mid_q": 0.25,
     "book_floor_q": 0.005
   },
   "sword-sharp5-1.21": {

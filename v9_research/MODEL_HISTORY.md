@@ -2,6 +2,10 @@
 
 Источник: `PRICING_EXPERIMENTS.md`, комментарии `pricing.go`, `capitalPolicy` в БД.
 
+## 2026-10-04 — шлем-починка mid p25
+
+- Книга шлема плоская у 5.0M (p10≈p15); mid **0.25** (~5.2M). Остальная починка остаётся p10.
+
 ## 2026-10-03 — armor mending SKUs (яд3-style low mid)
 
 - `шлем/нагрудник/штаны/ботинки-починка-1.21`: prot5+unb4+mending, `num=3`, nac **300k**, mid **p10** / floor **p0.5** (как megasword-яд3 — рынок завален).
