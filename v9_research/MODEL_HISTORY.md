@@ -2,11 +2,16 @@
 
 Источник: `PRICING_EXPERIMENTS.md`, комментарии `pricing.go`, `capitalPolicy` в БД.
 
+## 2026-10-03 — pozor crush to p05 (opportunistic only)
+
+- Позор: `book_mid_q=0.05` / `book_floor_q=0.02` — опасный сток, только не отказывать выгодным офферам; не доля продаж.
+- Ориентир по книге ~p05: шлем **~610k**, ботинки **~240k**, штаны **~220k**; sell вручную под mid.
+
 ## 2026-10-03 — pozor in armor category (sharp5/6-style)
 
-- Позорные SKU: `type=netherite_armor-1.21` (504 торгует), `book_mid_q=0.15` / `book_floor_q=0.05`, `normal_count=3`, `num=1` (prot4; обычная prot5 остаётся num=2).
+- Позорные SKU: `type=netherite_armor-1.21` (504 торгует), mid было `0.15` / floor `0.05`, `normal_count=3`, `num=1` (prot4; обычная prot5 остаётся num=2).
 - Добавлен `нагрудник-позор-1.21`. Полоса стока позора (lo/hi тоньше) — по id `позор`, без отдельного goType.
-- Сейчас по книге ~p15: шлем **700k**, ботинки **300k**, штаны **260k** (нагрудник-позор — накопит книгу).
+- Тогда по книге ~p15: шлем **700k**, ботинки **300k**, штаны **260k**.
 
 ## 2026-10-03 — armor rails per-SKU (core only)
 
