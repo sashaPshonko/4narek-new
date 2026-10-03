@@ -128,7 +128,7 @@
     ],
     "nacenka": 300000,
     "num": 7,
-    "book_mid_q": 0.10,
+    "book_mid_q": 0.1,
     "book_floor_q": 0.005
   },
   "штаны-1.21": {
@@ -150,7 +150,9 @@
       }
     ],
     "nacenka": 300000,
-    "num": 2
+    "num": 2,
+    "book_mid_q": 0.3,
+    "book_floor_q": 0.08
   },
   "нагрудник-1.21": {
     "base_price": 600007,
@@ -171,7 +173,9 @@
       }
     ],
     "nacenka": 300000,
-    "num": 2
+    "num": 2,
+    "book_mid_q": 0.3,
+    "book_floor_q": 0.08
   },
   "ботинки-1.21": {
     "base_price": 600009,
@@ -192,32 +196,9 @@
       }
     ],
     "nacenka": 300000,
-    "num": 2
-  },
-  "ботинки-крутые-1.21": {
-    "base_price": 600016,
-    "normal_sales": 5,
-    "normal_count": 6,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_boots",
-    "type": "netherite_armor-1.21",
-    "effects": [
-      {
-        "name": "minecraft:unbreaking",
-        "lvl": 4
-      },
-      {
-        "name": "minecraft:protection",
-        "lvl": 5
-      },
-      {
-        "name": "minecraft:depth_strider",
-        "lvl": 3
-      }
-    ],
-    "nacenka": 300000,
-    "num": 3
+    "num": 2,
+    "book_mid_q": 0.3,
+    "book_floor_q": 0.08
   },
   "шлем-1.21": {
     "base_price": 600011,
@@ -238,36 +219,9 @@
       }
     ],
     "nacenka": 300000,
-    "num": 2
-  },
-  "шлем-крутой-1.21": {
-    "base_price": 600015,
-    "normal_sales": 5,
-    "normal_count": 7,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_helmet",
-    "type": "netherite_armor-1.21",
-    "effects": [
-      {
-        "name": "minecraft:unbreaking",
-        "lvl": 4
-      },
-      {
-        "name": "minecraft:protection",
-        "lvl": 5
-      },
-      {
-        "name": "minecraft:respiration",
-        "lvl": 3
-      },
-      {
-        "name": "minecraft:aqua_affinity",
-        "lvl": 1
-      }
-    ],
-    "nacenka": 300000,
-    "num": 3
+    "num": 2,
+    "book_mid_q": 0.3,
+    "book_floor_q": 0.08
   },
   "sword-sharp5-1.21": {
     "base_price": 200015,
@@ -444,7 +398,9 @@
       }
     ],
     "nacenka": 200000,
-    "num": 1
+    "num": 1,
+    "book_mid_q": 0.35,
+    "book_floor_q": 0.1
   },
   "штаны-позор-1.21": {
     "base_price": 500014,
@@ -465,7 +421,9 @@
       }
     ],
     "nacenka": 200000,
-    "num": 1
+    "num": 1,
+    "book_mid_q": 0.35,
+    "book_floor_q": 0.1
   },
   "ботинки-позор-1.21": {
     "base_price": 500010,
@@ -486,6 +444,8 @@
       }
     ],
     "nacenka": 200000,
-    "num": 1
+    "num": 1,
+    "book_mid_q": 0.35,
+    "book_floor_q": 0.1
   }
 }

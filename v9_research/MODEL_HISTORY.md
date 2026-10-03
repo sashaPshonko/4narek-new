@@ -2,6 +2,13 @@
 
 Источник: `PRICING_EXPERIMENTS.md`, комментарии `pricing.go`, `capitalPolicy` в БД.
 
+## 2026-10-03 — armor book rails + drop cool SKUs
+
+- Core armor (`штаны/нагрудник/ботинки/шлем-1.21`): `book_mid_q=0.30`, `book_floor_q=0.08` (was default mid p50 — book often above our clears).
+- Позор: mid `0.35` / floor `0.10`.
+- Removed `шлем-крутой-1.21` and `ботинки-крутые-1.21`: 30d cash/sell 0.13M / 0.03M vs base ~0.35–0.38M; cool boots buys≫sells. Extra enchants still match base SKU (subset match).
+- Not a full policy swap — no OOS re-rank vs EKB/v5; rails only.
+
 ## Эпохи (live policy string → окно в БД)
 
 | Policy | Окно (UTC) | Циклов | Σ profit | p/h (М) |
