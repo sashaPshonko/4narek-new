@@ -34,6 +34,7 @@ type itemConfigJSON struct {
 	LoreMatch         string           `json:"lore_match,omitempty"`
 	BookMidQ          float64          `json:"book_mid_q,omitempty"`
 	BookFloorQ        float64          `json:"book_floor_q,omitempty"`
+	RiskCut           int              `json:"risk_cut,omitempty"`
 }
 
 func loadItemsConfig() error {
@@ -94,6 +95,7 @@ func loadItemsConfig() error {
 			LoreMatch:        entry.LoreMatch,
 			BookMidQ:         entry.BookMidQ,
 			BookFloorQ:       entry.BookFloorQ,
+			RiskCut:          entry.RiskCut,
 		}
 		itemsNacenkaBase[id] = entry.Nacenka
 	}

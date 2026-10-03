@@ -250,17 +250,35 @@ func stockNormBookPercentileSince(item string, since time.Time, q float64) (px i
 	return px, true
 }
 
+// applyRiskCut — минус к цене рельс (risk_cut из items_config). 0 = без сдвига.
+func applyRiskCut(px int, cfg ItemConfig) int {
+	if px <= 0 || cfg.RiskCut <= 0 {
+		return px
+	}
+	out := px - cfg.RiskCut
+	if out < 1 {
+		return 1
+	}
+	return out
+}
+
 // stockNormBookMid — потолок ↑ из мульти-селлеров (fallback: все селлеры, тот же %).
-// Только блокирует ↑; ↓/overstock не трогает.
+// Только блокирует ↑; ↓/overstock не трогает. risk_cut сдвигает потолок вниз.
 func stockNormBookMid(cfg ItemConfig, since time.Time) (mid int, q float64, ok bool) {
 	q = stockNormBookMidQForConfig(cfg)
 	mid, ok = stockNormBookPercentileSince(cfg.ID, since, q)
+	if ok {
+		mid = applyRiskCut(mid, cfg)
+	}
 	return mid, q, ok
 }
 
 func stockNormBookCatchupFloor(cfg ItemConfig, since time.Time) (floor int, q float64, ok bool) {
 	q = stockNormBookFloorQForConfig(cfg)
 	floor, ok = stockNormBookPercentileSince(cfg.ID, since, q)
+	if ok {
+		floor = applyRiskCut(floor, cfg)
+	}
 	return floor, q, ok
 }
 

@@ -129,7 +129,8 @@
     "nacenka": 300000,
     "num": 7,
     "book_mid_q": 0.35,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   },
   "штаны-1.21": {
     "base_price": 600005,
@@ -272,7 +273,8 @@
     "nacenka": 300000,
     "num": 3,
     "book_mid_q": 0.3,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   },
   "нагрудник-починка-1.21": {
     "base_price": 610007,
@@ -299,7 +301,8 @@
     "nacenka": 300000,
     "num": 3,
     "book_mid_q": 0.25,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   },
   "ботинки-починка-1.21": {
     "base_price": 610009,
@@ -326,7 +329,8 @@
     "nacenka": 300000,
     "num": 3,
     "book_mid_q": 0.3,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   },
   "шлем-починка-1.21": {
     "base_price": 610011,
@@ -353,7 +357,8 @@
     "nacenka": 300000,
     "num": 3,
     "book_mid_q": 0.35,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   },
   "sword-sharp5-1.21": {
     "base_price": 200015,
@@ -664,7 +669,8 @@
     "nacenka": 300000,
     "num": 10,
     "book_mid_q": 0.2,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   },
   "шлем-крушитель-1.21": {
     "base_price": 10000031,
@@ -711,7 +717,8 @@
     "nacenka": 300000,
     "num": 8,
     "book_mid_q": 0.2,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   },
   "нагрудник-крушитель-1.21": {
     "base_price": 10000032,
@@ -750,7 +757,8 @@
     "nacenka": 300000,
     "num": 8,
     "book_mid_q": 0.2,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   },
   "штаны-крушитель-1.21": {
     "base_price": 10000033,
@@ -789,7 +797,8 @@
     "nacenka": 300000,
     "num": 8,
     "book_mid_q": 0.2,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   },
   "ботинки-крушитель-1.21": {
     "base_price": 10000034,
@@ -832,6 +841,7 @@
     "nacenka": 300000,
     "num": 8,
     "book_mid_q": 0.2,
-    "book_floor_q": 0.005
+    "book_floor_q": 0.005,
+    "risk_cut": 200000
   }
 }

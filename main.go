@@ -119,6 +119,8 @@ type ItemConfig struct {
 	BookMidQ float64
 	// BookFloorQ — перцентиль порога empty catchup «мы слишком дёшевы» (0 = дефолт).
 	BookFloorQ float64
+	// RiskCut — минус к цене рельс книги (пол/потолок), ₽. Для рисковых SKU (починка/крушитель/яд3).
+	RiskCut int
 	Effects          []ItemEffect
 	ForbiddenEffects []ItemEffect
 	MaxEffects       []ItemEffect
