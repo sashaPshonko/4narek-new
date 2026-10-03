@@ -152,7 +152,13 @@
     "nacenka": 300000,
     "num": 2,
     "book_mid_q": 0.35,
-    "book_floor_q": 0.1
+    "book_floor_q": 0.1,
+    "forbidden_effects": [
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ]
   },
   "нагрудник-1.21": {
     "base_price": 600007,
@@ -175,7 +181,13 @@
     "nacenka": 300000,
     "num": 2,
     "book_mid_q": 0.2,
-    "book_floor_q": 0.05
+    "book_floor_q": 0.05,
+    "forbidden_effects": [
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ]
   },
   "ботинки-1.21": {
     "base_price": 600009,
@@ -198,7 +210,13 @@
     "nacenka": 300000,
     "num": 2,
     "book_mid_q": 0.35,
-    "book_floor_q": 0.1
+    "book_floor_q": 0.1,
+    "forbidden_effects": [
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ]
   },
   "шлем-1.21": {
     "base_price": 600011,
@@ -221,7 +239,121 @@
     "nacenka": 300000,
     "num": 2,
     "book_mid_q": 0.35,
-    "book_floor_q": 0.05
+    "book_floor_q": 0.05,
+    "forbidden_effects": [
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ]
+  },
+  "штаны-починка-1.21": {
+    "base_price": 610005,
+    "normal_sales": 3,
+    "normal_count": 4,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_leggings",
+    "type": "netherite_armor-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 3,
+    "book_mid_q": 0.1,
+    "book_floor_q": 0.005
+  },
+  "нагрудник-починка-1.21": {
+    "base_price": 610007,
+    "normal_sales": 3,
+    "normal_count": 4,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_chestplate",
+    "type": "netherite_armor-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 3,
+    "book_mid_q": 0.1,
+    "book_floor_q": 0.005
+  },
+  "ботинки-починка-1.21": {
+    "base_price": 610009,
+    "normal_sales": 3,
+    "normal_count": 4,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_boots",
+    "type": "netherite_armor-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 3,
+    "book_mid_q": 0.1,
+    "book_floor_q": 0.005
+  },
+  "шлем-починка-1.21": {
+    "base_price": 610011,
+    "normal_sales": 3,
+    "normal_count": 4,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_helmet",
+    "type": "netherite_armor-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 3,
+    "book_mid_q": 0.1,
+    "book_floor_q": 0.005
   },
   "sword-sharp5-1.21": {
     "base_price": 200015,
@@ -400,7 +532,13 @@
     "nacenka": 300000,
     "num": 1,
     "book_mid_q": 0.15,
-    "book_floor_q": 0.05
+    "book_floor_q": 0.05,
+    "forbidden_effects": [
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ]
   },
   "нагрудник-позор-1.21": {
     "base_price": 500016,
@@ -423,7 +561,13 @@
     "nacenka": 300000,
     "num": 1,
     "book_mid_q": 0.15,
-    "book_floor_q": 0.05
+    "book_floor_q": 0.05,
+    "forbidden_effects": [
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ]
   },
   "штаны-позор-1.21": {
     "base_price": 500014,
@@ -446,7 +590,13 @@
     "nacenka": 300000,
     "num": 1,
     "book_mid_q": 0.15,
-    "book_floor_q": 0.05
+    "book_floor_q": 0.05,
+    "forbidden_effects": [
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ]
   },
   "ботинки-позор-1.21": {
     "base_price": 500010,
@@ -469,6 +619,12 @@
     "nacenka": 300000,
     "num": 1,
     "book_mid_q": 0.15,
-    "book_floor_q": 0.05
+    "book_floor_q": 0.05,
+    "forbidden_effects": [
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ]
   }
 }

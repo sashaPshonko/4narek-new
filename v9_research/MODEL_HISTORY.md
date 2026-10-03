@@ -2,6 +2,12 @@
 
 Источник: `PRICING_EXPERIMENTS.md`, комментарии `pricing.go`, `capitalPolicy` в БД.
 
+## 2026-10-03 — armor mending SKUs (яд3-style low mid)
+
+- `шлем/нагрудник/штаны/ботинки-починка-1.21`: prot5+unb4+mending, `num=3`, nac **300k**, mid **p10** / floor **p0.5** (как megasword-яд3 — рынок завален).
+- Base + позор: `forbidden_effects` mending, чтобы не схлопывались в обычный SKU.
+- Azalea: больше не skip mending в AH book.
+
 ## 2026-10-03 — pozor rails = plain percentiles (revert dump+300k)
 
 - Наценка **300k**. Потолок/пол только перцентили: `book_mid_q=0.15`, `book_floor_q=0.05`. Без mid=дно+nac.
