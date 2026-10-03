@@ -3,11 +3,16 @@
 Источник: `PRICING_EXPERIMENTS.md`, комментарии `pricing.go`, `capitalPolicy` в БД.
 
 
+## 2026-10-04 — prod → `classic_book` + `book_peg` на лютых
+
+- Live: `capitalPolicy = classic_book_2026_10` (откат → `stock_corridor_v10` / v9).
+- Починка / крушитель / яд3: `price_mode=book_peg` (p10 − 200k), classic их не крутит.
+- Остальное: NormalSales + книжные рельсы (как classic_book).
+
 ## 2026-10-04 — `book_peg` для лютых SKU
 
 - `price_mode=book_peg`: sell = `book_peg_q` (p10) − `risk_cut` (200k). Без коридора v10.
 - Починка + крушитель + яд3. Мало продавцов (`book_peg_min_sellers=3`) → hold.
-- Остальное по-прежнему `stock_corridor_v10`.
 
 ## 2026-10-04 — `risk_cut` для рисковых SKU
 

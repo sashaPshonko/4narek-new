@@ -5,16 +5,17 @@ import (
 	"time"
 )
 
-// stock_corridor_v10 — rails + цель по загрузке; ↑ при пустом/тонком стоке ← live
+// classic_book + per-SKU book_peg (починка/круш/яд3) ← live
 // Переключатель production-политики:
-//   capitalPolicyV10         — v10 rails (+↑ empty) ← live
+//   capitalPolicyV10         — v10 rails (+↑ empty)
 //   capitalPolicyV9          — inventory+market (+book2)
-//   capitalPolicyClassicBook — classic + book rails
+//   capitalPolicyClassicBook — classic + book rails ← live
 //   capitalPolicyStockNorm — july11 норма стока
 //   capitalPolicyClassic — Feb22 NormalSales
 //   capitalPolicyV4      — inventory corridor Jul peak
 //   capitalPolicyV8af    — late-v8 corridor
-const capitalPolicy = capitalPolicyV10
+// Рисковые SKU с price_mode=book_peg не ходят в коридор/classic — статика p10−cut.
+const capitalPolicy = capitalPolicyClassicBook
 const capitalForwardCycles = 3
 
 // capitalPendingForward — ждём 3 следующих окна analysis_time и дописываем profit в capital_cycles.
