@@ -455,6 +455,35 @@ func (p *funauthPool) nickVerified(nick string) bool {
 	return ok
 }
 
+func (p *funauthPool) forgetVerified(nick string) bool {
+	key := strings.ToLower(strings.TrimSpace(nick))
+	if key == "" {
+		return false
+	}
+	p.mu.Lock()
+	if !p.verified[key] {
+		p.mu.Unlock()
+		return false
+	}
+	delete(p.verified, key)
+	snapshot := make(map[string]bool, len(p.verified))
+	for k, v := range p.verified {
+		if v {
+			snapshot[k] = true
+		}
+	}
+	p.mu.Unlock()
+	raw, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return true
+	}
+	if err := os.WriteFile(p.verifiedPath(), raw, 0o600); err != nil {
+		log.Printf("[funauth] save verified: %v", err)
+	}
+	log.Printf("[funauth] forgot game-verified %s (нужен bind)", nick)
+	return true
+}
+
 func (p *funauthPool) rememberVerified(nick string, anarchy int) bool {
 	key := strings.ToLower(strings.TrimSpace(nick))
 	if key == "" {

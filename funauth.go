@@ -486,6 +486,11 @@ func funauthMarkNeedBind(nick string, anarchy int) {
 		At:      time.Now().UTC().Format(time.RFC3339),
 	}
 	funauthNeedBindMu.Unlock()
+	// FunTime уже просит /tg — ложный game-verified с прошлой сессии не должен
+	// держать roster «закрытым» и прятать ник на фронте.
+	if funauthPoolInst != nil {
+		funauthPoolInst.forgetVerified(nick)
+	}
 }
 
 func funauthClearNeedBind(nick string) {
@@ -496,6 +501,17 @@ func funauthClearNeedBind(nick string) {
 	funauthNeedBindMu.Lock()
 	delete(funauthNeedBind, key)
 	funauthNeedBindMu.Unlock()
+}
+
+func funauthHasNeedBind(nick string) bool {
+	key := funauthNickKey(nick)
+	if key == "" {
+		return false
+	}
+	funauthNeedBindMu.Lock()
+	defer funauthNeedBindMu.Unlock()
+	_, ok := funauthNeedBind[key]
+	return ok
 }
 
 func funauthListNeedBind() []funauthNeedBindRow {
@@ -645,7 +661,8 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 	})
 }
 
-// handleFunauthVerifiedWS — 5с на анке без «чтобы двигаться» → уже привязан в игре, TG bind не нужен.
+// handleFunauthVerifiedWS — 5с на анке без «чтобы двигаться» → в игре без запроса /tg.
+// Не снимает needsBind: иначе ложный verified (сразу после /an) прячет непривязанных на UI.
 func handleFunauthVerifiedWS(nick string, anarchy int) {
 	initFunauth()
 	nick = strings.TrimSpace(nick)
@@ -653,11 +670,15 @@ func handleFunauthVerifiedWS(nick string, anarchy int) {
 		log.Printf("[funauth] verified skip empty nick")
 		return
 	}
-	funauthClearNeedBind(nick)
+	if funauthHasNeedBind(nick) {
+		log.Printf("[funauth] verified ignore %s (FunTime просит привязку)", nick)
+		return
+	}
 	if funauthPoolInst == nil {
 		return
 	}
 	if funauthPoolInst.nickBound(nick) {
+		funauthClearNeedBind(nick)
 		log.Printf("[funauth] verified skip %s (nicks.json)", nick)
 		return
 	}
