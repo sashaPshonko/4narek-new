@@ -399,7 +399,7 @@
     ],
     "nacenka": 300000,
     "num": 1,
-    "book_mid_q": 0.05,
+    "book_mid_q": 0.55,
     "book_floor_q": 0.02
   },
   "нагрудник-позор-1.21": {
@@ -422,7 +422,7 @@
     ],
     "nacenka": 300000,
     "num": 1,
-    "book_mid_q": 0.05,
+    "book_mid_q": 0.85,
     "book_floor_q": 0.02
   },
   "штаны-позор-1.21": {
@@ -445,7 +445,7 @@
     ],
     "nacenka": 300000,
     "num": 1,
-    "book_mid_q": 0.05,
+    "book_mid_q": 0.75,
     "book_floor_q": 0.02
   },
   "ботинки-позор-1.21": {
@@ -468,7 +468,7 @@
     ],
     "nacenka": 300000,
     "num": 1,
-    "book_mid_q": 0.05,
+    "book_mid_q": 0.60,
     "book_floor_q": 0.02
   }
 }
