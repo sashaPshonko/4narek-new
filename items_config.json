@@ -151,8 +151,8 @@
     ],
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.3,
-    "book_floor_q": 0.08
+    "book_mid_q": 0.35,
+    "book_floor_q": 0.1
   },
   "нагрудник-1.21": {
     "base_price": 600007,
@@ -174,8 +174,8 @@
     ],
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.3,
-    "book_floor_q": 0.08
+    "book_mid_q": 0.2,
+    "book_floor_q": 0.05
   },
   "ботинки-1.21": {
     "base_price": 600009,
@@ -197,8 +197,8 @@
     ],
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.3,
-    "book_floor_q": 0.08
+    "book_mid_q": 0.35,
+    "book_floor_q": 0.1
   },
   "шлем-1.21": {
     "base_price": 600011,
@@ -220,8 +220,8 @@
     ],
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.3,
-    "book_floor_q": 0.08
+    "book_mid_q": 0.35,
+    "book_floor_q": 0.05
   },
   "sword-sharp5-1.21": {
     "base_price": 200015,

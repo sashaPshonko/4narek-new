@@ -2,6 +2,11 @@
 
 Источник: `PRICING_EXPERIMENTS.md`, комментарии `pricing.go`, `capitalPolicy` в БД.
 
+## 2026-10-03 — armor rails per-SKU (core only)
+
+- `шлем` mid **0.35** / floor **0.05**; `ботинки`/`штаны` mid **0.35** / floor **0.10**; `нагрудник` mid **0.20** / floor **0.05** (book above clears).
+- Позор не трогаем — 504 ею не торгует.
+
 ## 2026-10-03 — armor book rails + drop cool SKUs
 
 - Core armor (`штаны/нагрудник/ботинки/шлем-1.21`): `book_mid_q=0.30`, `book_floor_q=0.08` (was default mid p50 — book often above our clears).
