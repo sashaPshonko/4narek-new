@@ -381,12 +381,12 @@
   },
   "шлем-позор-1.21": {
     "base_price": 500012,
-    "normal_sales": 5,
-    "normal_count": 5,
+    "normal_sales": 3,
+    "normal_count": 3,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
-    "type": "позорная-броня-1.21",
+    "type": "netherite_armor-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",
@@ -399,17 +399,40 @@
     ],
     "nacenka": 200000,
     "num": 1,
-    "book_mid_q": 0.35,
-    "book_floor_q": 0.1
+    "book_mid_q": 0.15,
+    "book_floor_q": 0.05
+  },
+  "нагрудник-позор-1.21": {
+    "base_price": 500016,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 50000,
+    "analysis_minutes": 10,
+    "name": "netherite_chestplate",
+    "type": "netherite_armor-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 4
+      }
+    ],
+    "nacenka": 200000,
+    "num": 1,
+    "book_mid_q": 0.15,
+    "book_floor_q": 0.05
   },
   "штаны-позор-1.21": {
     "base_price": 500014,
-    "normal_sales": 5,
-    "normal_count": 5,
+    "normal_sales": 3,
+    "normal_count": 3,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
-    "type": "позорная-броня-1.21",
+    "type": "netherite_armor-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",
@@ -422,17 +445,17 @@
     ],
     "nacenka": 200000,
     "num": 1,
-    "book_mid_q": 0.35,
-    "book_floor_q": 0.1
+    "book_mid_q": 0.15,
+    "book_floor_q": 0.05
   },
   "ботинки-позор-1.21": {
     "base_price": 500010,
-    "normal_sales": 5,
-    "normal_count": 6,
+    "normal_sales": 3,
+    "normal_count": 3,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
-    "type": "позорная-броня-1.21",
+    "type": "netherite_armor-1.21",
     "effects": [
       {
         "name": "minecraft:unbreaking",
@@ -445,7 +468,7 @@
     ],
     "nacenka": 200000,
     "num": 1,
-    "book_mid_q": 0.35,
-    "book_floor_q": 0.1
+    "book_mid_q": 0.15,
+    "book_floor_q": 0.05
   }
 }

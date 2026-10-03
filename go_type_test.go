@@ -37,9 +37,15 @@ func TestItemConfigActiveIn(t *testing.T) {
 		t.Fatal("netherite_armor active → merged armor catalog row")
 	}
 
-	pozor := ItemConfig{Name: "netherite_helmet", Type: "позорная-броня-1.21"}
-	if itemConfigActiveIn(bootsType, pozor) {
-		t.Fatal("pozor type separate from piece types")
+	// legacy отдельный тип — не матчит piece
+	pozorLegacy := ItemConfig{Name: "netherite_helmet", Type: "позорная-броня-1.21"}
+	if itemConfigActiveIn(bootsType, pozorLegacy) {
+		t.Fatal("legacy pozor type separate from piece types")
+	}
+	// позор в категории брони (как sharp5/6 у мечей) — type=netherite_armor
+	pozorArmor := ItemConfig{Name: "netherite_helmet", Type: netheriteArmorGoType}
+	if !itemConfigActiveIn(armorOnly, pozorArmor) {
+		t.Fatal("pozor SKU with armor type must activate on armor bots")
 	}
 }
 
