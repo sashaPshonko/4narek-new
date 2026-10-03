@@ -2,15 +2,9 @@
 
 Источник: `PRICING_EXPERIMENTS.md`, комментарии `pricing.go`, `capitalPolicy` в БД.
 
-## 2026-10-03 — pozor mid = dump+nac (keep 300k, catch floor only)
+## 2026-10-03 — pozor rails = plain percentiles (revert dump+300k)
 
-- Наценка **300k** жёстко (слот иначе лучше отдать обычной броне).
-- Потолок не «ниже чтобы реже брать», а **куда выставить после жирного входа**: mid ≈ дно мульти + 300k → buyMax ловит ~1 самый дешёвый селлер, не середину книги.
-- `book_mid_q`: шлем **0.55**, ботинки **0.60**, штаны **0.80**, нагрудник **0.90**; floor **0.02**.
-
-## 2026-10-03 — pozor crush to p05 (opportunistic only)
-
-- Позор: mid было `0.05` / floor `0.02` — с nac 300k buyMax ушёл ниже книги, упускали даже дно.
+- Наценка **300k**. Потолок/пол только перцентили: `book_mid_q=0.15`, `book_floor_q=0.05`. Без mid=дно+nac.
 
 ## 2026-10-03 — pozor in armor category (sharp5/6-style)
 
