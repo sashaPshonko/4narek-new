@@ -626,5 +626,212 @@
         "lvl": 1
       }
     ]
+  },
+  "меч-крушитель-1.21": {
+    "base_price": 12000030,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite_sword-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      },
+      {
+        "name": "poison",
+        "lvl": 3
+      },
+      {
+        "name": "detection",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:smite",
+        "lvl": 5
+      }
+    ],
+    "nacenka": 300000,
+    "num": 10,
+    "book_mid_q": 0.2,
+    "book_floor_q": 0.005
+  },
+  "шлем-крушитель-1.21": {
+    "base_price": 10000031,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_helmet",
+    "type": "netherite_armor-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:respiration",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:aqua_affinity",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 8,
+    "book_mid_q": 0.2,
+    "book_floor_q": 0.005
+  },
+  "нагрудник-крушитель-1.21": {
+    "base_price": 10000032,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_chestplate",
+    "type": "netherite_armor-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 8,
+    "book_mid_q": 0.2,
+    "book_floor_q": 0.005
+  },
+  "штаны-крушитель-1.21": {
+    "base_price": 10000033,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_leggings",
+    "type": "netherite_armor-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ],
+    "nacenka": 300000,
+    "num": 8,
+    "book_mid_q": 0.2,
+    "book_floor_q": 0.005
+  },
+  "ботинки-крушитель-1.21": {
+    "base_price": 10000034,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_boots",
+    "type": "netherite_armor-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:feather_falling",
+        "lvl": 4
+      }
+    ],
+    "nacenka": 300000,
+    "num": 8,
+    "book_mid_q": 0.2,
+    "book_floor_q": 0.005
   }
 }

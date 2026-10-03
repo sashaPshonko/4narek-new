@@ -366,8 +366,16 @@ func isPozorCategory(item string, cfg ItemConfig) bool {
 	return strings.Contains(cfg.Type, "позор")
 }
 
+// Крушитель — как позор: узкая полоса стока, не раздувать held.
+func isCrusherCategory(item string, cfg ItemConfig) bool {
+	if strings.Contains(item, "крушител") {
+		return true
+	}
+	return strings.Contains(cfg.Type, "крушител")
+}
+
 func stockBandFor(item string, cfg ItemConfig) stockBandFracs {
-	if isPozorCategory(item, cfg) {
+	if isPozorCategory(item, cfg) || isCrusherCategory(item, cfg) {
 		return stockBandFracs{
 			lo: pozorBandLoFrac, hi: pozorBandHiFrac, soft: pozorSoftDownFrac,
 			over: pozorOverFrac, dump: pozorDumpFrac,
