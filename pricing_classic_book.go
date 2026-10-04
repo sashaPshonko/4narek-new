@@ -8,8 +8,7 @@ import (
 )
 
 // classic_book_2026_10 — Exact NormalSales + книжные рельсы + grant/fleet-совместимые guards.
-// Без пола «не ниже самой дешёвой покупки». Rollback: capitalPolicy = capitalPolicyV9.
-
+// Без пола «не ниже самой дешёвой покупки».
 const capitalPolicyClassicBook = "classic_book_2026_10"
 
 func isPricingPolicyClassicBook() bool {
@@ -18,15 +17,18 @@ func isPricingPolicyClassicBook() bool {
 
 type classicBookInput struct {
 	Sales, Buys, OnAH, Inv, NormalSales, Price, Step int
-	ShareHi                                          int
-	BookFloor                                        int
-	BookFloorOK                                      bool
-	BookMid                                          int
-	BookMidOK                                        bool
-	P10                                              int
-	P10OK                                            bool
-	IsLeader                                         bool
-	BlockUp, BlockDown                               bool
+
+	ShareHi int
+
+	BookFloor   int
+	BookFloorOK bool
+
+	BookMid   int
+	BookMidOK bool
+
+	IsLeader bool
+
+	BlockUp, BlockDown bool
 }
 
 type classicBookDecision struct {
@@ -35,24 +37,29 @@ type classicBookDecision struct {
 	Reason   string
 }
 
-func classicBookDownFloor(in classicBookInput) int {
+func classicBookDownFloor(in *classicBookInput) int {
 	if in.BookFloorOK && in.BookFloor > 0 {
 		return in.BookFloor
 	}
+
 	return 0
 }
 
 // classicBookDecide — рельсы книги, затем classic NormalSales; ↓ только при stock > shareHi.
-func classicBookDecide(in classicBookInput) classicBookDecision {
+func classicBookDecide(in *classicBookInput) classicBookDecision {
 	price := in.Price
 	step := in.Step
+
 	if step <= 0 {
 		step = 1
 	}
+
 	n := in.NormalSales
+
 	if n <= 0 {
 		n = 5
 	}
+
 	stock := in.OnAH + in.Inv
 	floor := classicBookDownFloor(in)
 
@@ -63,44 +70,66 @@ func classicBookDecide(in classicBookInput) classicBookDecision {
 	}
 
 	// --- Рельсы книги (всегда первыми) ---
-	if !in.BlockUp && in.BookFloorOK && in.BookFloor > 0 && price < in.BookFloor {
+
+	if !in.BlockUp &&
+		in.BookFloorOK &&
+		in.BookFloor > 0 &&
+		price < in.BookFloor {
+
 		out.Action = "classic_book_floor_jump"
 		out.NewPrice = in.BookFloor
 		out.Reason = "below_book_floor_jump"
+
 		return out
 	}
-	if !in.BlockDown && in.BookMidOK && in.BookMid > 0 && price > in.BookMid {
+
+	if !in.BlockDown &&
+		in.BookMidOK &&
+		in.BookMid > 0 &&
+		price > in.BookMid {
+
 		out.Action = "classic_book_mid_jump"
 		out.NewPrice = in.BookMid
 		out.Reason = "above_book_mid_jump"
+
 		return out
 	}
 
 	// --- UP: sales < N ∧ stock < N*3 (пусто тоже ↑) ---
-	if !in.BlockUp && in.Sales < n && stock < n*1.5{
-		ratio, ratioOK := v9MarketRatio(price, in.P10, in.P10OK)
-		if ratioOK && ratio >= v9DemandMaxRatio {
-			out.Action = "classic_book_hold_above_market"
-			out.Reason = "above_market_no_up"
-			return out
-		}
+
+	if !in.BlockUp &&
+		in.Sales < n &&
+		stock < n*3 {
+
 		newP := price + step
-		if in.BookMidOK && in.BookMid > 0 && newP > in.BookMid {
+
+		if in.BookMidOK &&
+			in.BookMid > 0 &&
+			newP > in.BookMid {
+
 			newP = in.BookMid
 		}
+
 		if newP > price {
 			out.Action = "classic_book_price_up"
 			out.NewPrice = newP
 			out.Reason = "sales_below_normal"
+
 			return out
 		}
+
 		out.Action = "classic_book_hold_at_mid"
 		out.Reason = "at_book_mid"
+
 		return out
 	}
 
 	// --- DOWN только если сток уже не тонкий (grant) ---
-	if in.BlockDown || stock <= in.ShareHi || step <= 0 {
+
+	if in.BlockDown ||
+		stock <= in.ShareHi ||
+		step <= 0 {
+
 		return out
 	}
 
@@ -108,35 +137,78 @@ func classicBookDecide(in classicBookInput) classicBookDecision {
 		if floor > 0 && p < floor {
 			p = floor
 		}
+
 		return p
 	}
 
 	// 2a. АХ раздут + слабые продажи
-	if (in.OnAH > in.Sales && in.OnAH > n) && in.Sales < n {
+
+	if (in.OnAH > in.Sales &&
+		in.OnAH > n) &&
+		in.Sales < n {
+
 		newP := clampDown(price - step)
+
 		if newP < price {
 			out.Action = "classic_book_price_down_ah"
 			out.NewPrice = newP
 			out.Reason = "ah_bloated_weak_sales"
+
 			return out
 		}
+
 		out.Action = "classic_book_hold_at_floor"
 		out.Reason = "at_book_floor"
+
 		return out
 	}
 
 	// 2b. Закуп обогнал слив
-	if float64(in.Buys) > float64(in.Sales)*2 && stock > n {
+
+	if float64(in.Buys) > float64(in.Sales)*2 &&
+		stock > n {
+
 		newP := clampDown(price - step)
+
 		if newP < price {
 			out.Action = "classic_book_price_down_buys"
 			out.NewPrice = newP
 			out.Reason = "buy_excess"
+
 			return out
 		}
+
 		out.Action = "classic_book_hold_at_floor"
 		out.Reason = "at_book_floor"
+
 		return out
+	}
+
+	// 2c. Лидер типа
+
+	if in.IsLeader {
+		salesLeader := n
+
+		if in.Sales > n {
+			salesLeader = in.Sales
+		}
+
+		if float64(stock) > float64(salesLeader)*3.5 {
+			newP := clampDown(price - step)
+
+			if newP < price {
+				out.Action = "classic_book_price_down_leader"
+				out.NewPrice = newP
+				out.Reason = "leader_oversupply"
+
+				return out
+			}
+
+			out.Action = "classic_book_hold_at_floor"
+			out.Reason = "at_book_floor"
+
+			return out
+		}
 	}
 
 	return out
@@ -156,23 +228,33 @@ func adjustPriceClassicBook(
 	onlineForCap, onlineMaxForML int,
 	ahCounts, invCounts map[string]int,
 ) AdjustReport {
+
 	band := stockBandFor(item, cfg)
 	_, shareHi, _, _, _ := stockTargets(share, band)
-	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
-	treasuryCashBlocksUp := blockUpTreasuryCashShortLocked(cfg, totalHeld)
+
+	blockUp, blockDown :=
+		manualDirectionClampLocked(item, cfg.AnalysisTime)
+
+	treasuryCashBlocksUp :=
+		blockUpTreasuryCashShortLocked(cfg, totalHeld)
+
 	if treasuryCashBlocksUp {
 		blockUp = true
 	}
-	leaderID := classicTypeLeaderLocked(cfg.Type, ahCounts, invCounts)
+
+	leaderID :=
+		classicTypeLeaderLocked(cfg.Type, ahCounts, invCounts)
 
 	bookSince := now.Add(-ahBookRaiseWindow)
+
 	mutex.Unlock()
-	p10, p10N, p10OK := ahBookP10Since(item, bookSince)
-	if p10N < ahBookMinLotsInWindow || p10 <= 0 {
-		p10OK = false
-	}
-	multiFloor, multiFloorQ, multiFloorOK := stockNormBookCatchupFloor(cfg, bookSince)
-	bookMid, bookMidQ, bookMidOK := stockNormBookMid(cfg, now.Add(-ahBook2Window))
+
+	multiFloor, multiFloorQ, multiFloorOK :=
+		stockNormBookCatchupFloor(cfg, bookSince)
+
+	bookMid, bookMidQ, bookMidOK :=
+		stockNormBookMid(cfg, now.Add(-ahBook2Window))
+
 	mutex.Lock()
 
 	dec := classicBookDecide(classicBookInput{
@@ -184,54 +266,91 @@ func adjustPriceClassicBook(
 		Price:       priceBefore,
 		Step:        step,
 		ShareHi:     shareHi,
+
 		BookFloor:   multiFloor,
 		BookFloorOK: multiFloorOK,
-		BookMid:     bookMid,
-		BookMidOK:   bookMidOK,
-		P10:         p10,
-		P10OK:       p10OK,
-		IsLeader:    item == leaderID,
-		BlockUp:     blockUp,
-		BlockDown:   blockDown,
+
+		BookMid:   bookMid,
+		BookMidOK: bookMidOK,
+
+		IsLeader: item == leaderID,
+
+		BlockUp:   blockUp,
+		BlockDown: blockDown,
 	})
 
 	newPrice := dec.NewPrice
 	action := dec.Action
+
 	notes := []string{
-		fmt.Sprintf("classic_book reason=%s sales=%d N=%d onAH=%d inv=%d stock=%d shareHi=%d leader=%s p10=%d floor(p%.0f)=%d mid(p%.0f)=%d ratio=%s",
-			dec.Reason, sales, cfg.NormalSales, onAH, invCount, totalHeld, shareHi, leaderID, p10,
-			multiFloorQ*100, multiFloor, bookMidQ*100, bookMid,
-			v9RatioStr(priceBefore, p10, p10OK)),
+		fmt.Sprintf(
+			"classic_book reason=%s sales=%d N=%d onAH=%d inv=%d stock=%d shareHi=%d leader=%s floor(p%.0f)=%d mid(p%.0f)=%d",
+			dec.Reason,
+			sales,
+			cfg.NormalSales,
+			onAH,
+			invCount,
+			totalHeld,
+			shareHi,
+			leaderID,
+			multiFloorQ*100,
+			multiFloor,
+			bookMidQ*100,
+			bookMid,
+		),
 	}
+
 	if treasuryCashBlocksUp {
-		notes = append(notes, "treasury_empty + held>0 → ↑ gated")
+		notes = append(
+			notes,
+			"treasury_empty + held>0 → ↑ gated",
+		)
 	}
+
 	_ = priceFloor // buy10m/nac floor намеренно не используем
 
-	if blockDown && strings.Contains(action, "price_down") {
+	if blockDown &&
+		strings.Contains(action, "price_down") {
+
 		newPrice = priceBefore
 		action = "hold_manual_min"
+
 		if data.LastManualKind[item] == "set" {
 			action = "hold_manual_set"
 		}
-		notes = append(notes, "manual min/set → ↓ запрещён")
+
+		notes = append(
+			notes,
+			"manual min/set → ↓ запрещён",
+		)
 	}
-	if blockUp && (strings.Contains(action, "price_up") || strings.Contains(action, "floor_jump")) {
+
+	if blockUp &&
+		(strings.Contains(action, "price_up") ||
+			strings.Contains(action, "floor_jump")) {
+
 		newPrice = priceBefore
 		action = "hold_manual_max"
+
 		if data.LastManualKind[item] == "set" {
 			action = "hold_manual_set"
 		}
-		notes = append(notes, "manual max/set → ↑ запрещён")
+
+		notes = append(
+			notes,
+			"manual max/set → ↑ запрещён",
+		)
 	}
 
 	state.LastCycleSales = sales
 	state.LastCycleProfit = profitNow
 	state.LastCycleNacenkaSum = nacenkaSumNow
+
 	data.AdjustState[item] = state
 	dailyData.AdjustState[item] = state
 
 	changed := newPrice != priceBefore
+
 	if changed {
 		data.Prices[item] = newPrice
 		dailyData.Prices[item] = newPrice
@@ -239,24 +358,50 @@ func adjustPriceClassicBook(
 	}
 
 	reason := actionReasonRU(action)
+
 	if len(notes) > 0 {
 		reason = reason + " | " + strings.Join(notes, " · ")
 	}
 
 	dir := "HOLD"
-	if strings.Contains(action, "price_up") || strings.Contains(action, "floor_jump") {
+
+	if strings.Contains(action, "price_up") ||
+		strings.Contains(action, "floor_jump") {
+
 		dir = "UP"
-	} else if strings.Contains(action, "price_down") || strings.Contains(action, "mid_jump") {
+
+	} else if strings.Contains(action, "price_down") ||
+		strings.Contains(action, "mid_jump") {
+
 		dir = "DOWN"
 	}
-	log.Printf("[CLASSIC_BOOK] %s: %s reason=%s | цена %d→%d | onAH=%d inv=%d sales=%d/%d buys=%d | %s",
-		item, dir, dec.Reason, priceBefore, newPrice, onAH, invCount, sales, cfg.NormalSales, buys, action)
+
+	log.Printf(
+		"[CLASSIC_BOOK] %s: %s reason=%s | цена %d→%d | onAH=%d inv=%d sales=%d/%d buys=%d | %s",
+		item,
+		dir,
+		dec.Reason,
+		priceBefore,
+		newPrice,
+		onAH,
+		invCount,
+		sales,
+		cfg.NormalSales,
+		buys,
+		action,
+	)
 
 	queueMLDecisionLocked(
-		item, cfg, action,
-		priceBefore, newPrice, nacenkaBefore, nacenka,
+		item,
+		cfg,
+		action,
+		priceBefore,
+		newPrice,
+		nacenkaBefore,
+		nacenka,
 		now,
-		onlineForCap, onlineMaxForML,
+		onlineForCap,
+		onlineMaxForML,
 	)
 
 	capitalRow := CapitalCycleRow{
@@ -304,21 +449,30 @@ func adjustPriceClassicBook(
 	}
 
 	shadowSnap := mlAdjustSnapshot{}
+
 	if mlShadowEnabled() {
 		shadowSnap = mlAdjustSnapshot{
-			At: now, Item: item, CategoryType: cfg.Type, GoAction: action,
+			At:           now,
+			Item:         item,
+			CategoryType: cfg.Type,
+			GoAction:     action,
 		}
 	}
+
 	needBroadcast := changed
+
 	mutex.Unlock()
 
 	logCapitalCycle(capitalRow)
+
 	if mlShadowEnabled() {
 		runMLShadowAsync(shadowSnap)
 	}
+
 	if needBroadcast {
 		publishPriceUpdate()
 	}
+
 	saveDailyDataNoMessageUpdate()
 
 	return AdjustReport{
@@ -337,9 +491,9 @@ func adjustPriceClassicBook(
 		Held:          totalHeld,
 		NormalSales:   cfg.NormalSales,
 		Share:         share,
-		Free:          free,
-		Need:          need,
-		PriceFloor:    multiFloor,
-		Step:          step,
+		Free:           free,
+		Need:           need,
+		PriceFloor:     multiFloor,
+		Step:           step,
 	}
 }

@@ -199500,3 +199500,89 @@ Configuration OK.
 2026/10/05 01:56:39 [V9] нагрудник-1.21: HOLD reason=no_signal | цена 1104999→1104999 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
 2026/10/05 01:56:41 [online] ping mc.funtime.su:25565: timeout 3s
 2026/10/05 01:56:42 [V9] шлем-починка-1.21: HOLD reason=no_signal | цена 2680011→2680011 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:36 [SKIP] кирка-топ-1.21: тип netherite_pickaxe-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:37 [SKIP] кирка-мид-1.21: тип netherite_pickaxe-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:37 [ANALYSIS] штаны-крушитель-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [ANALYSIS] нагрудник-позор-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [ANALYSIS] нагрудник-крушитель-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [ANALYSIS] ботинки-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [ANALYSIS] шлем-крушитель-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [ANALYSIS] ботинки-крушитель-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [SKIP] pochti-megasword-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:37 [ANALYSIS] штаны-починка-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [SKIP] кирка-эфф7-1.21: тип netherite_pickaxe-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:37 [ANALYSIS] шлем-позор-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [ANALYSIS] штаны-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [ANALYSIS] нагрудник-починка-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [ANALYSIS] штаны-позор-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [SKIP] кирка-бульд-маг-1.21: тип netherite_pickaxe-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:37 [ANALYSIS] ботинки-позор-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:37 [ANALYSIS] ботинки-починка-1.21: анализ с 01:56:37 по 02:06:37
+2026/10/05 02:06:38 [SKIP] megasword-яд3-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:38 [SKIP] меч-крушитель-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:38 [SKIP] megasword-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:38 [V9] ботинки-крушитель-1.21: HOLD reason=no_signal | цена 10000034→10000034 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [V9] ботинки-1.21: HOLD reason=no_signal | цена 1500000→1500000 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [V9] нагрудник-позор-1.21: HOLD reason=no_signal | цена 499000→499000 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [V9] нагрудник-крушитель-1.21: HOLD reason=no_signal | цена 9700032→9700032 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [V9] штаны-крушитель-1.21: HOLD reason=no_signal | цена 9600033→9600033 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [V9] шлем-крушитель-1.21: HOLD reason=no_signal | цена 10000031→10000031 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [V9] штаны-починка-1.21: HOLD reason=no_signal | цена 610005→610005 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [V9] шлем-позор-1.21: HOLD reason=no_signal | цена 760000→760000 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [V9] штаны-1.21: HOLD reason=no_signal | цена 899999→899999 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [ANALYSIS] шлем-1.21: анализ с 01:56:38 по 02:06:38
+2026/10/05 02:06:38 [V9] нагрудник-починка-1.21: HOLD reason=no_signal | цена 610007→610007 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [V9] штаны-позор-1.21: HOLD reason=no_signal | цена 455250→455250 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [SKIP] sword7-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:38 [V9] ботинки-позор-1.21: HOLD reason=no_signal | цена 613889→613889 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [SKIP] sword-sharp6-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:38 [V9] ботинки-починка-1.21: HOLD reason=no_signal | цена 1430009→1430009 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:38 [ANALYSIS] нагрудник-1.21: анализ с 01:56:38 по 02:06:38
+2026/10/05 02:06:38 [ANALYSIS] шлем-починка-1.21: анализ с 01:56:38 по 02:06:38
+2026/10/05 02:06:39 [SKIP] sword-sharp5-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:06:39 [V9] шлем-1.21: HOLD reason=no_signal | цена 2396656→2396656 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:39 [V9] нагрудник-1.21: HOLD reason=no_signal | цена 1104999→1104999 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:06:39 [V9] шлем-починка-1.21: HOLD reason=no_signal | цена 2680011→2680011 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:36 [SKIP] кирка-топ-1.21: тип netherite_pickaxe-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:37 [SKIP] кирка-мид-1.21: тип netherite_pickaxe-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:37 [ANALYSIS] штаны-крушитель-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [ANALYSIS] нагрудник-позор-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [ANALYSIS] нагрудник-крушитель-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [ANALYSIS] ботинки-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [ANALYSIS] шлем-крушитель-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [ANALYSIS] ботинки-крушитель-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [SKIP] pochti-megasword-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:37 [ANALYSIS] штаны-починка-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [SKIP] кирка-эфф7-1.21: тип netherite_pickaxe-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:37 [ANALYSIS] шлем-позор-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [ANALYSIS] штаны-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [ANALYSIS] нагрудник-починка-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [ANALYSIS] штаны-позор-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [SKIP] кирка-бульд-маг-1.21: тип netherite_pickaxe-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:37 [ANALYSIS] ботинки-позор-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:37 [ANALYSIS] ботинки-починка-1.21: анализ с 02:06:37 по 02:16:37
+2026/10/05 02:16:38 [SKIP] megasword-яд3-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:38 [V9] ботинки-1.21: HOLD reason=no_signal | цена 1500000→1500000 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [V9] нагрудник-позор-1.21: HOLD reason=no_signal | цена 499000→499000 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [V9] штаны-крушитель-1.21: HOLD reason=no_signal | цена 9600033→9600033 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [V9] нагрудник-крушитель-1.21: HOLD reason=no_signal | цена 9700032→9700032 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [V9] шлем-крушитель-1.21: HOLD reason=no_signal | цена 10000031→10000031 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [SKIP] меч-крушитель-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:38 [V9] ботинки-крушитель-1.21: HOLD reason=no_signal | цена 10000034→10000034 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [V9] штаны-починка-1.21: HOLD reason=no_signal | цена 610005→610005 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [V9] шлем-позор-1.21: HOLD reason=no_signal | цена 760000→760000 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [V9] нагрудник-починка-1.21: HOLD reason=no_signal | цена 610007→610007 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [V9] штаны-1.21: HOLD reason=no_signal | цена 899999→899999 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [SKIP] megasword-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:38 [ANALYSIS] шлем-1.21: анализ с 02:06:38 по 02:16:38
+2026/10/05 02:16:38 [V9] штаны-позор-1.21: HOLD reason=no_signal | цена 455250→455250 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [V9] ботинки-позор-1.21: HOLD reason=no_signal | цена 613889→613889 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [SKIP] sword7-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:38 [V9] ботинки-починка-1.21: HOLD reason=no_signal | цена 1430009→1430009 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:38 [SKIP] sword-sharp6-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:38 [ANALYSIS] нагрудник-1.21: анализ с 02:06:38 по 02:16:38
+2026/10/05 02:16:38 [ANALYSIS] шлем-починка-1.21: анализ с 02:06:38 по 02:16:38
+2026/10/05 02:16:39 [SKIP] sword-sharp5-1.21: тип netherite_sword-1.21 — нет активных ботов на оркестраторах
+2026/10/05 02:16:39 [V9] шлем-1.21: HOLD reason=no_signal | цена 2396656→2396656 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:39 [V9] нагрудник-1.21: HOLD reason=no_signal | цена 1104999→1104999 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
+2026/10/05 02:16:39 [V9] шлем-починка-1.21: HOLD reason=no_signal | цена 2680011→2680011 | held 0/share 6 | sales=0 buys=0 | corridor_hold_v9_no_signal
