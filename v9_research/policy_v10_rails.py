@@ -33,6 +33,9 @@ class V10In:
     # optional model score P(DOWN better than HOLD); None = rules only
     p_down_better: float | None = None
     p_down_tau: float = 0.55
+    # optional P(UP better) — unused for gating (↑ on under/empty never model-blocked)
+    p_up_better: float | None = None
+    p_up_tau: float = 0.55
 
 
 @dataclass
@@ -143,7 +146,7 @@ def v10_decide(inp: V10In) -> V10Out:
     if target < price - dead and inp.held <= hi:
         return V10Out("hold_no_excess", price, "no_excess")
 
-    # ----- UP: understock — both strong AND weak sales -----
+    # ----- UP: understock — never model-blocked; clear cases always climb -----
     if target > price + dead:
         under = 0 < inp.held < lo
         empty = inp.held == 0
@@ -152,19 +155,91 @@ def v10_decide(inp: V10In) -> V10Out:
             return V10Out("hold_up_veto_dead_high", price, "dead_near_ceiling")
 
         if under or empty:
-            # default: climb toward high target (incl. weak sales)
+            # clear UP: empty, or any sales while thin, or strong demand, or high turn
+            strong = inp.sales >= 3 and inp.sales > inp.buys
+            hot_turn = turn >= inp.turn_high  # e.g. 1 sale / held=3
+            any_flow = inp.sales >= 1 and under
+            tag = (
+                "empty"
+                if empty
+                else (
+                    "under_strong"
+                    if strong
+                    else ("under_hot_turn" if hot_turn or any_flow else "under_weak")
+                )
+            )
+
+            # p_up_better ignored — Sasha: never block ↑ on under/empty
             delta = min(inp.max_steps * step, target - price)
             if empty and inp.sales == 0 and inp.buys == 0:
                 delta = min(step, delta)  # one step when totally idle
+            elif tag == "under_weak":
+                delta = min(step, delta)  # one step when thin + silent
             new_p = min(mid, min(target, price + delta))
             if new_p > price:
-                tag = "under_weak" if inp.sales < 2 else "under_strong"
                 return V10Out("price_up_v10", new_p, tag)
             return V10Out("hold_at_mid", price, "at_mid")
 
         return V10Out("hold_no_up", price, "no_understock")
 
     return V10Out("hold", price, "balanced")
+
+
+def make_sim_policy(scorers=None, floor_frac=0.75, mid_frac=1.05):
+    """Sim adapter: State+obs → (UP|DOWN|HOLD, price). scorers: CFScorers | None."""
+
+    def policy(st, obs, dm):
+        share = max(int(obs.get("share") or 12), 1)
+        step = max(int(obs.get("step") or 100_000), 1)
+        mkt = obs.get("mkt") or obs.get("p10") or st.price
+        floor = int(floor_frac * mkt)
+        mid = int(mid_frac * mkt)
+        sales = int(round(float(obs.get("sales") or 0)))
+        buys = int(round(float(obs.get("buys") or 0)))
+        try_s = int(obs.get("try_sells") or 0)
+        night = bool(obs.get("night"))
+        if "night" not in obs and obs.get("ts"):
+            try:
+                night = 0 <= int(obs["ts"][11:13]) < 6
+            except Exception:
+                night = False
+
+        p_down = p_up = None
+        down_tau = 0.55
+        up_tau = 0.55
+        if scorers is not None:
+            # only score when in potential grey / excess / under — cheap always-score OK
+            p_down = scorers.p_down(st.held, obs, price=st.price)
+            p_up = scorers.p_up(st.held, obs, price=st.price)
+            down_tau = scorers.down_tau
+            up_tau = scorers.up_tau
+
+        inp = V10In(
+            held=st.held,
+            sales=sales,
+            buys=buys,
+            price=st.price,
+            step=step,
+            share=share,
+            floor=floor,
+            floor_ok=True,
+            mid=mid,
+            mid_ok=True,
+            try_sells=try_s,
+            night=night,
+            p_down_better=p_down,
+            p_down_tau=down_tau,
+            p_up_better=p_up,
+            p_up_tau=up_tau,
+        )
+        out = v10_decide(inp)
+        if "down" in out.action:
+            return "DOWN", out.new_price
+        if "up" in out.action:
+            return "UP", out.new_price
+        return "HOLD", out.new_price
+
+    return policy
 
 
 def _selftest() -> None:
@@ -188,6 +263,25 @@ def _selftest() -> None:
 
     # under + strong → up
     o = v10_decide(V10In(8, 4, 1, 500, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True))
+    assert o.action == "price_up_v10", o
+
+    # 1 sale / held=3 (hot turn, under) → up
+    o = v10_decide(V10In(3, 1, 0, 500, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True))
+    assert o.action == "price_up_v10", o
+    assert o.reason in ("under_hot_turn", "under_strong", "under_weak"), o
+
+    # model must NOT block under UP
+    o = v10_decide(
+        V10In(
+            8, 0, 0, 500, 50, 100,
+            floor=400, floor_ok=True, mid=800, mid_ok=True,
+            p_up_better=0.01, p_up_tau=0.99,
+        )
+    )
+    assert o.action == "price_up_v10", o
+
+    # empty → up
+    o = v10_decide(V10In(0, 0, 0, 500, 50, 100, floor=400, floor_ok=True, mid=800, mid_ok=True))
     assert o.action == "price_up_v10", o
 
     print("policy_v10_rails rev2 selftest OK")

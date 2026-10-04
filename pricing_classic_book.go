@@ -77,7 +77,7 @@ func classicBookDecide(in classicBookInput) classicBookDecision {
 	}
 
 	// --- UP: sales < N ∧ stock < N*3 (пусто тоже ↑) ---
-	if !in.BlockUp && in.Sales < n && stock < n*3 {
+	if !in.BlockUp && in.Sales < n && stock < n*1.5{
 		ratio, ratioOK := v9MarketRatio(price, in.P10, in.P10OK)
 		if ratioOK && ratio >= v9DemandMaxRatio {
 			out.Action = "classic_book_hold_above_market"
@@ -137,26 +137,6 @@ func classicBookDecide(in classicBookInput) classicBookDecision {
 		out.Action = "classic_book_hold_at_floor"
 		out.Reason = "at_book_floor"
 		return out
-	}
-
-	// 2c. Лидер типа
-	if in.IsLeader {
-		salesLeader := n
-		if in.Sales > n {
-			salesLeader = in.Sales
-		}
-		if float64(stock) > float64(salesLeader)*3.5 {
-			newP := clampDown(price - step)
-			if newP < price {
-				out.Action = "classic_book_price_down_leader"
-				out.NewPrice = newP
-				out.Reason = "leader_oversupply"
-				return out
-			}
-			out.Action = "classic_book_hold_at_floor"
-			out.Reason = "at_book_floor"
-			return out
-		}
 	}
 
 	return out

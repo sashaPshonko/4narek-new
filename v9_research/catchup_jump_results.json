@@ -1,0 +1,138 @@
+{
+  "db": "/Users/sasha_pshonko/Documents/4narek/4narek-new/v9_research/../ml_data/pricing.db",
+  "n_cycles": 647,
+  "days": [
+    "2026-09-29",
+    "2026-09-30",
+    "2026-10-01"
+  ],
+  "multi_p5_coverage": 0.935,
+  "empty_gap_vs_multiP5": {
+    "n": 86,
+    "median_steps_below_p5": 3.8,
+    "p90_steps": 12.2,
+    "max_steps": 24.6,
+    "share_gap_ge_5": 0.407,
+    "share_gap_ge_10": 0.151
+  },
+  "folds": [],
+  "fold_jump_vs_step_%": [],
+  "late": {
+    "v9_step_+1": {
+      "profit_m": 26.22,
+      "under": 0.191,
+      "over": 0.418,
+      "catchup_ups": 1,
+      "avg_jump": 100000.0,
+      "per_sku_m": {
+        "sword7-1.21": 12.7,
+        "megasword-1.21": 9.0,
+        "pochti-megasword-1.21": 4.6
+      }
+    },
+    "v9_jump_multiP5": {
+      "profit_m": 18.82,
+      "under": 0.107,
+      "over": 0.597,
+      "catchup_ups": 1,
+      "avg_jump": 1899995.0,
+      "per_sku_m": {
+        "sword7-1.21": 12.7,
+        "pochti-megasword-1.21": 4.6,
+        "megasword-1.21": 1.6
+      }
+    },
+    "v9_jump_cap5": {
+      "profit_m": 26.04,
+      "under": 0.158,
+      "over": 0.449,
+      "catchup_ups": 1,
+      "avg_jump": 500000.0,
+      "per_sku_m": {
+        "sword7-1.21": 12.7,
+        "megasword-1.21": 8.8,
+        "pochti-megasword-1.21": 4.6
+      }
+    },
+    "v9_jump_cap3": {
+      "profit_m": 25.05,
+      "under": 0.168,
+      "over": 0.421,
+      "catchup_ups": 1,
+      "avg_jump": 300000.0,
+      "per_sku_m": {
+        "sword7-1.21": 12.7,
+        "megasword-1.21": 7.8,
+        "pochti-megasword-1.21": 4.6
+      }
+    },
+    "v9_no_catchup": {
+      "profit_m": 27.72,
+      "under": 0.196,
+      "over": 0.418,
+      "catchup_ups": 0,
+      "avg_jump": 0,
+      "per_sku_m": {
+        "sword7-1.21": 12.7,
+        "megasword-1.21": 10.5,
+        "pochti-megasword-1.21": 4.6
+      }
+    }
+  },
+  "ranking": [
+    {
+      "name": "v9_no_catchup",
+      "late_m": 27.72,
+      "vs_step_%": 5.72,
+      "under": 0.196,
+      "over": 0.418,
+      "catchup_ups": 0,
+      "avg_jump": 0
+    },
+    {
+      "name": "v9_step_+1",
+      "late_m": 26.22,
+      "vs_step_%": 0.0,
+      "under": 0.191,
+      "over": 0.418,
+      "catchup_ups": 1,
+      "avg_jump": 100000.0
+    },
+    {
+      "name": "v9_jump_cap5",
+      "late_m": 26.04,
+      "vs_step_%": -0.69,
+      "under": 0.158,
+      "over": 0.449,
+      "catchup_ups": 1,
+      "avg_jump": 500000.0
+    },
+    {
+      "name": "v9_jump_cap3",
+      "late_m": 25.05,
+      "vs_step_%": -4.46,
+      "under": 0.168,
+      "over": 0.421,
+      "catchup_ups": 1,
+      "avg_jump": 300000.0
+    },
+    {
+      "name": "v9_jump_multiP5",
+      "late_m": 18.82,
+      "vs_step_%": -28.22,
+      "under": 0.107,
+      "over": 0.597,
+      "catchup_ups": 1,
+      "avg_jump": 1899995.0
+    }
+  ],
+  "verdict": "hurt",
+  "detail": "полный прыжок -28.22% к step — портит",
+  "cap5_vs_step_%": -0.69,
+  "elapsed_s": 6.9,
+  "limits": [
+    "панель локальная ~3 суток (29.09–01.10) — шум большой",
+    "sim demand ≠ FunTime; bookMid UP-cap в скрипте не наложен",
+    "прыжок к multi p5, не к p10/середине книги"
+  ]
+}

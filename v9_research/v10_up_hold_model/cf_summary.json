@@ -1,0 +1,105 @@
+{
+  "generated": "2026-10-01T20:53:53.374857+00:00",
+  "db": "/Users/sasha_pshonko/Documents/4narek/4narek-ml/data/pricing.db",
+  "focus": [
+    "штаны-1.21",
+    "ботинки-1.21",
+    "шлем-1.21",
+    "нагрудник-1.21",
+    "фарм-1.21",
+    "sword7-1.21",
+    "pochti-megasword-1.21",
+    "megasword-1.21",
+    "кирка-эфф7-1.21",
+    "кирка-бульд-маг-1.21",
+    "sword-sharp5-1.21",
+    "sword-sharp6-1.21"
+  ],
+  "cf": {
+    "n_train": 3862,
+    "n_val": 966,
+    "n_test": 2385,
+    "up_better_rate_train": 0.253495598135681,
+    "up_better_rate_test": 0.27253668763102723,
+    "auc_val": 0.8226031710404081,
+    "auc_test": 0.7533988029261804,
+    "tau": 0.42,
+    "test_mean_cf_hold": 2366404.6170491828,
+    "test_mean_cf_oracle": 2419763.740988975,
+    "test_mean_cf_always_up": 2337981.689485278,
+    "test_mean_cf_rule": 2340241.165667504,
+    "test_mean_cf_model": 2355176.838392291,
+    "model_vs_hold_pct": -0.4744657179925671,
+    "always_vs_hold_pct": -1.2011017625272902,
+    "rule_vs_hold_pct": -1.105620365730331,
+    "oracle_vs_hold_pct": 2.2548605405583233,
+    "model_vs_always_pct": 0.7354697850862513
+  },
+  "cf_weak_sales": {
+    "n": 1244,
+    "up_better_rate": 0.2797427652733119,
+    "hold": 1478583.7137865194,
+    "oracle": 1518665.3475145963,
+    "always_up": 1455611.4624266247,
+    "rule": 1454863.8149722924,
+    "model": 1471312.1255635368,
+    "model_vs_hold_pct": -0.49179415106370694,
+    "always_vs_hold_pct": -1.5536659267715525,
+    "rule_vs_hold_pct": -1.604231034946435,
+    "oracle_vs_hold_pct": 2.7108126076562433,
+    "model_vs_always_pct": 1.0786300837956952
+  },
+  "trajectory_test": {
+    "hold": {
+      "profit": 12113215952.37755,
+      "profit_per_cycle": 769924.1055347073,
+      "ups": 0,
+      "downs": 0,
+      "cycles": 15733,
+      "under_frac": 0.0873323587364139,
+      "over_frac": 0.35473209178160553,
+      "x_v9": 1.0171977728384498
+    },
+    "v9_core": {
+      "profit": 11908417690.078209,
+      "profit_per_cycle": 756906.9910429168,
+      "ups": 68,
+      "downs": 35,
+      "cycles": 15733,
+      "under_frac": 0.15654992690523103,
+      "over_frac": 0.4744168308650607,
+      "x_v9": 1.0
+    },
+    "always_up_under": {
+      "profit": 12568109207.219353,
+      "profit_per_cycle": 798837.4249805729,
+      "ups": 1201,
+      "downs": 20,
+      "cycles": 15733,
+      "under_frac": 0.06203521261043666,
+      "over_frac": 0.15432530350219284,
+      "x_v9": 1.0553970757752964
+    },
+    "cf_up_model": {
+      "profit": 12422209998.569466,
+      "profit_per_cycle": 789563.9737220788,
+      "ups": 814,
+      "downs": 16,
+      "cycles": 15733,
+      "under_frac": 0.13246043348376024,
+      "over_frac": 0.219474988876883,
+      "x_v9": 1.0431453045957009
+    },
+    "v10_rails_synth": {
+      "profit": 12646819482.410742,
+      "profit_per_cycle": 803840.3027020112,
+      "ups": 830,
+      "downs": 853,
+      "cycles": 15733,
+      "under_frac": 0.045064514078688105,
+      "over_frac": 0.0,
+      "x_v9": 1.0620067091657148
+    }
+  },
+  "note": "CF UP vs HOLD on understock (load<0.18). Weak = sales<2. Synth rails 0.75–1.05×mkt."
+}
