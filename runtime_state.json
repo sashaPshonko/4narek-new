@@ -1,5 +1,5 @@
 {
-  "saved_at": "2026-10-05T02:16:39.624574+05:00",
+  "saved_at": "2026-10-05T02:26:41.007375+05:00",
   "last_cycle_at": {
     "megasword-1.21": "2026-10-04T20:26:38.220425+05:00",
     "megasword-яд3-1.21": "2026-10-04T20:26:37.904442+05:00",
@@ -7,23 +7,23 @@
     "sword-sharp5-1.21": "2026-10-04T20:26:38.939414+05:00",
     "sword-sharp6-1.21": "2026-10-04T20:26:38.600598+05:00",
     "sword7-1.21": "2026-10-04T20:26:38.48942+05:00",
-    "ботинки-1.21": "2026-10-05T02:16:37.321689+05:00",
-    "ботинки-крушитель-1.21": "2026-10-05T02:16:37.347172+05:00",
-    "ботинки-позор-1.21": "2026-10-05T02:16:37.826317+05:00",
-    "ботинки-починка-1.21": "2026-10-05T02:16:37.910169+05:00",
+    "ботинки-1.21": "2026-10-05T02:26:37.324151+05:00",
+    "ботинки-крушитель-1.21": "2026-10-05T02:26:37.349956+05:00",
+    "ботинки-позор-1.21": "2026-10-05T02:26:37.8281+05:00",
+    "ботинки-починка-1.21": "2026-10-05T02:26:37.912734+05:00",
     "меч-крушитель-1.21": "2026-10-04T20:26:38.022834+05:00",
-    "нагрудник-1.21": "2026-10-05T02:16:38.808347+05:00",
-    "нагрудник-крушитель-1.21": "2026-10-05T02:16:37.320878+05:00",
-    "нагрудник-позор-1.21": "2026-10-05T02:16:37.319287+05:00",
-    "нагрудник-починка-1.21": "2026-10-05T02:16:37.610606+05:00",
-    "шлем-1.21": "2026-10-05T02:16:38.4255+05:00",
-    "шлем-крушитель-1.21": "2026-10-05T02:16:37.33764+05:00",
-    "шлем-позор-1.21": "2026-10-05T02:16:37.520423+05:00",
-    "шлем-починка-1.21": "2026-10-05T02:16:38.919325+05:00",
-    "штаны-1.21": "2026-10-05T02:16:37.608795+05:00",
-    "штаны-крушитель-1.21": "2026-10-05T02:16:37.318346+05:00",
-    "штаны-позор-1.21": "2026-10-05T02:16:37.744403+05:00",
-    "штаны-починка-1.21": "2026-10-05T02:16:37.509508+05:00"
+    "нагрудник-1.21": "2026-10-05T02:26:38.810946+05:00",
+    "нагрудник-крушитель-1.21": "2026-10-05T02:26:37.323381+05:00",
+    "нагрудник-позор-1.21": "2026-10-05T02:26:37.321652+05:00",
+    "нагрудник-починка-1.21": "2026-10-05T02:26:37.612987+05:00",
+    "шлем-1.21": "2026-10-05T02:26:38.42829+05:00",
+    "шлем-крушитель-1.21": "2026-10-05T02:26:37.339725+05:00",
+    "шлем-позор-1.21": "2026-10-05T02:26:37.523036+05:00",
+    "шлем-починка-1.21": "2026-10-05T02:26:38.921713+05:00",
+    "штаны-1.21": "2026-10-05T02:26:37.611852+05:00",
+    "штаны-крушитель-1.21": "2026-10-05T02:26:37.321309+05:00",
+    "штаны-позор-1.21": "2026-10-05T02:26:37.74644+05:00",
+    "штаны-починка-1.21": "2026-10-05T02:26:37.512533+05:00"
   },
   "last_manual_update": {
     "megasword-1.21": "2026-10-01T22:49:48.318581+05:00",
@@ -1187,7 +1187,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 600009,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "ботинки-крушитель-1.21": {
       "good_streak": 0,
@@ -1213,7 +1213,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 10000034,
-      "empty_market_gap_streak": 44
+      "empty_market_gap_streak": 45
     },
     "ботинки-позор-1.21": {
       "good_streak": 0,
@@ -1239,7 +1239,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 500010,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "ботинки-починка-1.21": {
       "good_streak": 0,
@@ -1265,7 +1265,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 610009,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "кирка-бульд-маг-1.21": {
       "good_streak": 0,
@@ -1421,7 +1421,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 600007,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "нагрудник-крушитель-1.21": {
       "good_streak": 0,
@@ -1447,7 +1447,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 10000032,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "нагрудник-позор-1.21": {
       "good_streak": 0,
@@ -1473,7 +1473,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 500016,
-      "empty_market_gap_streak": 42
+      "empty_market_gap_streak": 43
     },
     "нагрудник-починка-1.21": {
       "good_streak": 0,
@@ -1499,7 +1499,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 610007,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "шлем-1.21": {
       "good_streak": 0,
@@ -1525,7 +1525,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 600011,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "шлем-крушитель-1.21": {
       "good_streak": 0,
@@ -1551,7 +1551,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 10000031,
-      "empty_market_gap_streak": 39
+      "empty_market_gap_streak": 40
     },
     "шлем-позор-1.21": {
       "good_streak": 0,
@@ -1577,7 +1577,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 500012,
-      "empty_market_gap_streak": 42
+      "empty_market_gap_streak": 43
     },
     "шлем-починка-1.21": {
       "good_streak": 0,
@@ -1603,7 +1603,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 610011,
-      "empty_market_gap_streak": 39
+      "empty_market_gap_streak": 40
     },
     "штаны-1.21": {
       "good_streak": 0,
@@ -1629,7 +1629,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 600005,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "штаны-крушитель-1.21": {
       "good_streak": 0,
@@ -1655,7 +1655,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 10000033,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "штаны-позор-1.21": {
       "good_streak": 0,
@@ -1681,7 +1681,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 500014,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     },
     "штаны-починка-1.21": {
       "good_streak": 0,
@@ -1707,7 +1707,7 @@
       "price_exploration_cycles": 0,
       "price_origin_kind": "base_seed",
       "price_origin_price": 610005,
-      "empty_market_gap_streak": 38
+      "empty_market_gap_streak": 39
     }
   },
   "buy_surge_count": {},

@@ -418,7 +418,12 @@
         <div class="chg ${cls}">${signed(delta)}</div>
         <div class="path">${fmt(d.price_before)} → ${fmt(d.price_after)}</div>
         <div class="reason">${esc(d.reason_ru || d.action || "—")}</div>
-        <div class="stats">${salesWarn ? "sales↓ " : ""}${d.sales}/${d.normal_sales} · buy ${d.buys} · AH ${d.on_ah}</div>
+        <div class="stats">
+  ${salesWarn ? "sales↓ " : ""}
+  ${d.sales}/${d.normal_sales} · buy ${d.buys} ·
+  stock ${Number(d.on_ah || 0) + Number(d.inv || 0)}
+  [${d.on_ah || 0} AH + ${d.inv || 0} INV]
+</div>
         <details>
           <summary>детали · ${clock(d.ts)}</summary>
           <div class="grid">
