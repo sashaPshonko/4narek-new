@@ -257,7 +257,7 @@ func adjustPriceClassicBook(
 
 	mutex.Lock()
 
-	dec := classicBookDecide(classicBookInput{
+	dec := classicBookDecide(&classicBookInput{
 		Sales:       sales,
 		Buys:        buys,
 		OnAH:        onAH,
