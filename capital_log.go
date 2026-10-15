@@ -15,7 +15,7 @@ import (
 //   capitalPolicyV4      — inventory corridor Jul peak
 //   capitalPolicyV8af    — late-v8 corridor
 // Рисковые SKU с price_mode=book_peg не ходят в коридор/classic — статика p10−cut.
-const capitalPolicy = capitalPolicyClassicBook
+const capitalPolicy = capitalPolicyPridumalnahuy
 const capitalForwardCycles = 3
 
 // capitalPendingForward — ждём 3 следующих окна analysis_time и дописываем profit в capital_cycles.

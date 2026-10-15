@@ -14,20 +14,25 @@
       --ink: #101a14;
       --muted: #5a6b62;
       --faint: #84948c;
-      --line: rgba(16, 26, 20, 0.1);
+      --line: rgba(16, 26, 20, 0.12);
       --surface: #ffffff;
       --surface-soft: rgba(255,255,255,.72);
+
       --up: #0f766e;
-      --up-bg: rgba(15,118,110,.12);
+      --up-bg: rgba(15,118,110,.14);
       --down: #c2410c;
-      --down-bg: rgba(194,65,12,.1);
+      --down-bg: rgba(194,65,12,.12);
+      --freeze: #1d4ed8;
+      --freeze-bg: rgba(29,78,216,.12);
       --hold: #64748b;
       --hold-bg: rgba(100,116,139,.1);
-      --warn: #a16207;
-      --warn-bg: rgba(161,98,7,.1);
-      --ok: #15803d;
-      --shadow: 0 1px 0 rgba(255,255,255,.65) inset, 0 14px 36px rgba(16,26,20,.06);
-      --radius: 18px;
+      --manual: #a16207;
+      --manual-bg: rgba(161,98,7,.12);
+      --book: #7c3aed;
+      --book-bg: rgba(124,58,237,.12);
+
+      --shadow: 0 1px 0 rgba(255,255,255,.65) inset, 0 10px 28px rgba(16,26,20,.05);
+      --radius: 14px;
       --font: "IBM Plex Sans", system-ui, sans-serif;
       --display: "Syne", "IBM Plex Sans", sans-serif;
       --mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -36,208 +41,245 @@
     html, body { min-height: 100%; }
     body {
       margin: 0; color: var(--ink); font-family: var(--font); line-height: 1.4;
-      background:
-        radial-gradient(900px 420px at 6% -10%, rgba(15,118,110,.16), transparent 55%),
-        radial-gradient(700px 380px at 100% 0%, rgba(194,65,12,.08), transparent 50%),
-        linear-gradient(180deg, #eef3ef 0%, var(--bg) 42%, var(--bg-deep) 100%);
+      background: linear-gradient(180deg, #eef3ef 0%, var(--bg) 42%, var(--bg-deep) 100%);
       background-attachment: fixed;
       -webkit-font-smoothing: antialiased;
     }
-    .wrap { max-width: 1380px; margin: 0 auto; padding: 28px 20px 80px; }
+    .wrap { max-width: 1520px; margin: 0 auto; padding: 24px 18px 60px; }
 
     .brand {
-      font-family: var(--display); font-weight: 800; margin: 0 0 6px;
-      font-size: clamp(34px, 5vw, 56px); letter-spacing: -.04em; line-height: .95;
+      font-family: var(--display); font-weight: 800; margin: 0 0 4px;
+      font-size: clamp(28px, 4vw, 44px); letter-spacing: -.04em; line-height: .95;
     }
     .brand span { color: var(--up); }
-    .lede { margin: 0 0 14px; color: var(--muted); max-width: 52em; font-weight: 500; }
+    .lede { margin: 0 0 12px; color: var(--muted); max-width: 62em; font-size: 14px; }
 
-    .nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
     .nav a {
-      text-decoration: none; color: var(--muted); font-size: 13px; font-weight: 600;
-      padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+      text-decoration: none; color: var(--muted); font-size: 12.5px; font-weight: 600;
+      padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
     }
     .nav a.active, .nav a:hover { color: var(--ink); background: var(--up-bg); border-color: rgba(15,118,110,.28); }
 
     .bar {
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 18px;
-      padding: 10px 12px; border-radius: 14px; background: var(--surface-soft);
-      border: 1px solid var(--line); position: sticky; top: 8px; z-index: 20;
-      backdrop-filter: blur(12px); box-shadow: 0 8px 24px rgba(16,26,20,.04);
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px;
+      padding: 10px 12px; border-radius: 12px; background: var(--surface-soft);
+      border: 1px solid var(--line); position: sticky; top: 6px; z-index: 20;
+      backdrop-filter: blur(12px);
     }
     .bar select, .bar button {
-      font: inherit; border: 1px solid var(--line); border-radius: 10px;
-      padding: 8px 12px; background: #fff; color: var(--ink);
+      font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 8px;
+      padding: 7px 12px; background: #fff; color: var(--ink);
     }
     .bar button { cursor: pointer; font-weight: 700; }
     .bar button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
     .chip-clear {
       border: 1px dashed var(--line); background: transparent; border-radius: 999px;
-      padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer;
+      padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: var(--muted); cursor: pointer;
     }
     .chip-clear.on { color: var(--down); border-color: rgba(194,65,12,.35); background: var(--down-bg); }
-    .meta { margin-left: auto; color: var(--faint); font-size: 12px; font-family: var(--mono); }
+    .meta { margin-left: auto; color: var(--faint); font-size: 12.5px; font-family: var(--mono); }
 
-    .kpis {
-      display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; margin-bottom: 18px;
-    }
+    .kpis { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
     .kpi {
-      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-      padding: 14px 16px; box-shadow: var(--shadow); min-height: 92px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: 10px 16px; box-shadow: var(--shadow); display: flex; align-items: baseline; gap: 10px;
+      border-left: 4px solid var(--hold);
     }
-    .kpi .lab {
-      font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-      color: var(--muted); margin-bottom: 8px;
-    }
-    .kpi .num {
-      font-family: var(--display); font-weight: 800; font-size: 34px; letter-spacing: -.03em; line-height: 1;
-    }
-    .kpi .sub { margin-top: 6px; font-size: 12px; color: var(--faint); font-family: var(--mono); }
-    .kpi.up .num { color: var(--up); }
-    .kpi.down .num { color: var(--down); }
-    .kpi.hold .num { color: var(--hold); }
+    .kpi.k-up { border-left-color: var(--up); }
+    .kpi.k-down { border-left-color: var(--down); }
+    .kpi.k-freeze { border-left-color: var(--freeze); }
+    .kpi.k-hold { border-left-color: var(--hold); }
+    .kpi .lab { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .kpi .num { font-family: var(--display); font-weight: 800; font-size: 26px; letter-spacing: -.02em; }
+    .kpi.k-up .num { color: var(--up); }
+    .kpi.k-down .num { color: var(--down); }
+    .kpi.k-freeze .num { color: var(--freeze); }
+    .kpi.k-hold .num { color: var(--hold); }
+    .kpi .sub { font-size: 12px; color: var(--faint); font-family: var(--mono); }
 
-    .section-h {
-      display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-      margin: 8px 0 12px;
-    }
+    .section-h { margin: 18px 0 10px; }
     .section-h h2 {
-      margin: 0; font-family: var(--display); font-size: 22px; letter-spacing: -.02em; font-weight: 800;
+      margin: 0; font-family: var(--display); font-size: 20px; letter-spacing: -.02em; font-weight: 800;
     }
-    .section-h p { margin: 0; color: var(--muted); font-size: 13px; }
+    .section-h p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
 
+    /* доска sku */
     .board {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 12px; margin-bottom: 28px;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 10px; margin-bottom: 20px;
     }
     .card {
-      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-      padding: 14px 14px 12px; box-shadow: var(--shadow); cursor: pointer;
-      transition: border-color .15s, transform .15s; position: relative; overflow: hidden;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      padding: 14px 16px; box-shadow: var(--shadow); cursor: pointer;
+      transition: border-color .12s, transform .12s;
+      border-left: 5px solid var(--hold);
     }
-    .card:hover { border-color: rgba(15,118,110,.35); transform: translateY(-1px); }
-    .card.active { border-color: rgba(15,118,110,.55); outline: 2px solid var(--up-bg); }
-    .card .top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .card .name {
-      font-weight: 800; font-size: 15px; letter-spacing: -.02em; white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis;
-    }
+    .card.c-up { border-left-color: var(--up); }
+    .card.c-down { border-left-color: var(--down); }
+    .card.c-freeze { border-left-color: var(--freeze); }
+    .card.c-hold { border-left-color: var(--hold); }
+    .card.c-manual { border-left-color: var(--manual); }
+    .card.c-book { border-left-color: var(--book); }
+    .card:hover { transform: translateY(-1px); }
+    .card.active { outline: 2px solid var(--up-bg); }
+
+    .card .top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .card .name { font-weight: 800; font-size: 16px; letter-spacing: -.01em; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .badge {
-      font-size: 11px; font-weight: 800; letter-spacing: .04em; padding: 3px 8px;
-      border-radius: 999px; text-transform: uppercase;
+      font-size: 11px; font-weight: 800; letter-spacing: .05em; padding: 3px 9px;
+      border-radius: 999px; text-transform: uppercase; white-space: nowrap;
     }
-    .badge.UP { color: var(--up); background: var(--up-bg); }
-    .badge.DOWN { color: var(--down); background: var(--down-bg); }
-    .badge.HOLD { color: var(--hold); background: var(--hold-bg); }
+    .badge.b-up { color: var(--up); background: var(--up-bg); }
+    .badge.b-down { color: var(--down); background: var(--down-bg); }
+    .badge.b-freeze { color: var(--freeze); background: var(--freeze-bg); }
+    .badge.b-hold { color: var(--hold); background: var(--hold-bg); }
+    .badge.b-manual { color: var(--manual); background: var(--manual-bg); }
+    .badge.b-book { color: var(--book); background: var(--book-bg); }
+
+    .card .price-line {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 10px; margin-bottom: 10px;
+    }
     .card .price {
-      font-family: var(--display); font-weight: 800; font-size: 28px; letter-spacing: -.03em;
-      line-height: 1; margin-bottom: 4px;
+      font-family: var(--display); font-weight: 800; font-size: 26px;
+      letter-spacing: -.03em; line-height: 1;
     }
-    .card .delta {
-      font-family: var(--mono); font-size: 13px; font-weight: 600; margin-bottom: 10px;
-    }
+    .card .delta { font-family: var(--mono); font-size: 13px; font-weight: 700; }
     .card .delta.pos { color: var(--up); }
     .card .delta.neg { color: var(--down); }
     .card .delta.flat { color: var(--faint); }
-    .spark { width: 100%; height: 44px; display: block; margin-bottom: 10px; }
-    .card .foot {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px;
-      font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px;
-    }
-    .card .foot b { color: var(--ink); font-weight: 700; }
-    .card .why {
-      grid-column: 1 / -1; font-size: 12px; color: var(--ink); line-height: 1.35;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    }
 
+    .card .stats {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px;
+      font-family: var(--mono); font-size: 12.5px;
+    }
+    .card .stats .kv { display: flex; justify-content: space-between; align-items: baseline; }
+    .card .stats .k { color: var(--faint); font-size: 11px; }
+    .card .stats .v { color: var(--ink); font-weight: 700; }
+    .card .stats .v.warn { color: var(--down); }
+    .card .stats .v.ok { color: var(--up); }
+
+    /* лента */
     .feed { display: flex; flex-direction: column; gap: 8px; }
+
     .row {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: 12px 16px;
+      border-left: 5px solid var(--hold);
+      box-shadow: var(--shadow);
+    }
+    .row.r-up { border-left-color: var(--up); }
+    .row.r-down { border-left-color: var(--down); }
+    .row.r-freeze { border-left-color: var(--freeze); }
+    .row.r-hold { border-left-color: var(--hold); }
+    .row.r-manual { border-left-color: var(--manual); }
+    .row.r-book { border-left-color: var(--book); }
+
+    /* шапка строки: время, действие, item, цена крупно, дельта */
+    .row .head {
       display: grid;
-      grid-template-columns: 72px 100px 68px 88px minmax(140px, 1fr) minmax(180px, 1.2fr) auto;
-      gap: 8px 10px; align-items: center;
-      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
-      padding: 10px 12px; box-shadow: 0 6px 18px rgba(16,26,20,.03);
-      border-left: 4px solid var(--hold);
+      grid-template-columns: 60px 90px minmax(120px, 180px) minmax(240px, 1fr) 120px;
+      gap: 10px 14px; align-items: center;
+      padding-bottom: 10px; margin-bottom: 10px;
+      border-bottom: 1px solid var(--line);
     }
-    .row.UP { border-left-color: var(--up); }
-    .row.DOWN { border-left-color: var(--down); }
-    .row.HOLD { border-left-color: var(--hold); }
-    .row .t { font-family: var(--mono); font-size: 12px; color: var(--faint); }
-    .row .sku { font-weight: 800; font-size: 13px; letter-spacing: -.01em; }
-    .row .sku button { all: unset; cursor: pointer; color: inherit; }
-    .row .sku button:hover { color: var(--up); }
-    .row .chg {
-      font-family: var(--mono); font-weight: 700; font-size: 13px; white-space: nowrap;
+    .row .head .t { font-family: var(--mono); font-size: 13px; color: var(--muted); font-weight: 600; }
+    .row .head .act {
+      font-family: var(--mono); font-weight: 800; font-size: 13px;
+      padding: 4px 10px; border-radius: 999px; text-align: center;
+      letter-spacing: .04em;
     }
-    .row .chg.pos { color: var(--up); }
-    .row .chg.neg { color: var(--down); }
-    .row .chg.flat { color: var(--faint); }
-    .row .path {
-      font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis;
+    .row.r-up .head .act { color: var(--up); background: var(--up-bg); }
+    .row.r-down .head .act { color: var(--down); background: var(--down-bg); }
+    .row.r-freeze .head .act { color: var(--freeze); background: var(--freeze-bg); }
+    .row.r-hold .head .act { color: var(--hold); background: var(--hold-bg); }
+    .row.r-manual .head .act { color: var(--manual); background: var(--manual-bg); }
+    .row.r-book .head .act { color: var(--book); background: var(--book-bg); }
+
+    .row .head .sku { font-weight: 800; font-size: 16px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row .head .prices {
+      display: flex; align-items: baseline; gap: 14px;
     }
-    .row .reason { font-size: 13px; font-weight: 600; line-height: 1.3; }
+    .row .head .prices .from { font-family: var(--mono); font-size: 14px; color: var(--faint); }
+    .row .head .prices .arrow { color: var(--faint); font-size: 14px; }
+    .row .head .prices .to {
+      font-family: var(--display); font-weight: 800; font-size: 24px;
+      letter-spacing: -.03em; line-height: 1;
+    }
+    .row .head .chg { font-family: var(--mono); font-weight: 800; font-size: 15px; text-align: right; white-space: nowrap; }
+    .row .head .chg.pos { color: var(--up); }
+    .row .head .chg.neg { color: var(--down); }
+    .row .head .chg.flat { color: var(--faint); }
+
+    /* reason */
+    .row .reason {
+      font-size: 13.5px; font-weight: 500; color: var(--ink);
+      margin-bottom: 10px; padding: 8px 10px;
+      background: rgba(16,26,20,.035); border-radius: 8px;
+      line-height: 1.35;
+    }
+    .row .reason .prefix { color: var(--faint); font-family: var(--mono); font-size: 12px; margin-right: 6px; }
+
+    /* цифры — в столбик, 3 колонки */
     .row .stats {
-      font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: right;
-      white-space: nowrap;
+      display: grid; grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 6px 24px;
+      font-family: var(--mono); font-size: 14px;
     }
-    .row details { grid-column: 1 / -1; }
-    .row summary {
-      cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600;
-      list-style: none; width: fit-content;
+    .row .stats .kv {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 4px 0;
+      border-bottom: 1px dashed var(--line);
     }
-    .row summary::-webkit-details-marker { display: none; }
-    .row .detail {
-      margin-top: 8px; padding: 10px; border-radius: 10px; background: rgba(16,26,20,.035);
-      font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: pre-wrap;
-      word-break: break-word; line-height: 1.45;
+    .row .stats .k { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; }
+    .row .stats .v { color: var(--ink); font-weight: 700; font-size: 14.5px; }
+    .row .stats .v.warn { color: var(--down); }
+    .row .stats .v.ok { color: var(--up); }
+
+    .row .meta-line {
+      margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line);
+      display: flex; flex-wrap: wrap; gap: 4px 16px;
+      font-family: var(--mono); font-size: 11.5px; color: var(--faint);
     }
-    .row .grid {
-      display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-top: 8px;
-      font-size: 12px;
-    }
-    .row .grid .cell {
-      background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
-    }
-    .row .grid .cell .l { color: var(--faint); font-size: 11px; margin-bottom: 2px; }
-    .row .grid .cell .v { font-weight: 700; font-family: var(--mono); font-size: 12px; }
+    .row .meta-line span b { color: var(--muted); font-weight: 600; }
 
     .empty {
-      text-align: center; color: var(--muted); padding: 48px 12px;
+      text-align: center; color: var(--muted); padding: 40px 12px;
       background: var(--surface-soft); border-radius: var(--radius); border: 1px dashed var(--line);
     }
 
     @media (max-width: 1100px) {
-      .kpis { grid-template-columns: repeat(3, 1fr); }
-      .row {
-        grid-template-columns: 64px 1fr auto;
-        gap: 6px 8px;
+      .row .head {
+        grid-template-columns: 56px 76px 1fr auto;
       }
-      .row .t { grid-row: span 3; align-self: start; padding-top: 2px; }
-      .row .sku { font-size: 14px; }
-      .row .badge { justify-self: end; }
-      .row .chg { grid-column: 2; }
-      .row .path { grid-column: 2 / -1; }
-      .row .reason { grid-column: 2 / -1; }
-      .row .stats { grid-column: 2 / -1; text-align: left; }
+      .row .head .prices { grid-column: 3; }
+      .row .head .chg { grid-column: 4; grid-row: 1 / span 2; }
+      .row .stats { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 720px) {
-      .kpis { grid-template-columns: repeat(2, 1fr); }
       .meta { width: 100%; margin-left: 0; }
-      .row .grid { grid-template-columns: 1fr 1fr; }
+      .row .head {
+        grid-template-columns: 1fr auto;
+      }
+      .row .head .t, .row .head .sku { grid-column: 1; }
+      .row .head .act { grid-column: 2; grid-row: 1; }
+      .row .head .prices { grid-column: 1 / -1; }
+      .row .head .chg { grid-column: 1 / -1; text-align: left; grid-row: auto; }
+      .row .stats { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1 class="brand">4narek <span>Цены</span></h1>
-    <nav class="nav" aria-label="Разделы">
+    <nav class="nav">
       <a href="/pricing/" class="active">Цены</a>
       <a href="/sales/">Продажи</a>
       <a href="/funauth/">FunAuth</a>
       <a href="/fleet/">Баны</a>
     </nav>
-    <p class="lede">Живая доска: куда уехала цена за период, кто сильнее всех прыгнул, и лента решений — сначала смысл глазами, детали по клику.</p>
+    <p class="lede">Цвет рамки = <b>действие системы</b>: UP / DOWN / FREEZE / HOLD / MANUAL / BOOK. Все цифры видны сразу.</p>
 
     <div class="bar">
       <select id="period" title="Период">
@@ -248,12 +290,16 @@
         <option value="7d">7 дней</option>
         <option value="all">Всё</option>
       </select>
+      <select id="category" title="Категория"><option value="">Все категории</option></select>
       <select id="item" title="Предмет"><option value="">Все предметы</option></select>
-      <select id="dir" title="Направление">
-        <option value="">Все решения</option>
-        <option value="UP">Только ↑</option>
-        <option value="DOWN">Только ↓</option>
-        <option value="HOLD">Только hold</option>
+      <select id="action" title="Действие">
+        <option value="">Все действия</option>
+        <option value="UP">UP</option>
+        <option value="DOWN">DOWN</option>
+        <option value="FREEZE">FREEZE</option>
+        <option value="HOLD">HOLD</option>
+        <option value="MANUAL">MANUAL</option>
+        <option value="BOOK">BOOK</option>
       </select>
       <button type="button" class="primary" id="refresh">Обновить</button>
       <button type="button" class="chip-clear" id="clearItem" hidden>Сбросить предмет</button>
@@ -264,7 +310,7 @@
 
     <div class="section-h">
       <h2>Доска sku</h2>
-      <p>Клик по карточке — фильтр ленты. Цвет дельты = за выбранный период.</p>
+      <p>Клик по карточке — фильтр ленты по предмету.</p>
     </div>
     <div class="board" id="board"><div class="empty">Загрузка…</div></div>
 
@@ -288,8 +334,6 @@
       "sword7-1.21": "sword7",
       "sword-sharp5-1.21": "остр5",
       "sword-sharp6-1.21": "остр6",
-      "sword-sharp5-loot5-1.21": "остр5+loot",
-      "sword-sharp6-loot5-1.21": "остр6+loot",
     };
     const shortName = (id) => SHORT[id] || String(id || "").replace(/-1\.21$/, "");
 
@@ -301,18 +345,12 @@
       return x.toLocaleString("ru-RU");
     };
     const fmtFull = (n) => (n == null || Number.isNaN(+n)) ? "—" : Number(n).toLocaleString("ru-RU");
-    const fmtPct = (p) => {
-      if (p == null || Number.isNaN(+p)) return "";
-      const s = (p >= 0 ? "+" : "") + Number(p).toFixed(1) + "%";
-      return s;
-    };
+    const fmtPct = (p) => (p == null || Number.isNaN(+p)) ? "" : (p >= 0 ? "+" : "") + Number(p).toFixed(1) + "%";
     const clock = (iso) => {
       if (!iso) return "—";
       const d = new Date(iso);
       if (Number.isNaN(d.getTime())) return esc(iso);
-      return d.toLocaleString("ru-RU", {
-        day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-      });
+      return d.toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     };
     const clockShort = (iso) => {
       if (!iso) return "—";
@@ -321,124 +359,120 @@
       return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
     };
 
-    function sparkSVG(points, dirHint) {
-      const xs = (points || []).filter((n) => Number.isFinite(+n) && +n > 0).map(Number);
-      if (xs.length < 2) {
-        return `<svg class="spark" viewBox="0 0 120 44" preserveAspectRatio="none"><line x1="0" y1="22" x2="120" y2="22" stroke="rgba(16,26,20,.12)" stroke-width="2"/></svg>`;
-      }
-      const min = Math.min(...xs), max = Math.max(...xs);
-      const span = Math.max(1, max - min);
-      const w = 120, h = 44, pad = 3;
-      const coords = xs.map((v, i) => {
-        const x = pad + (i / (xs.length - 1)) * (w - pad * 2);
-        const y = pad + (1 - (v - min) / span) * (h - pad * 2);
-        return [x, y];
-      });
-      const line = coords.map(([x, y], i) => (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1)).join(" ");
-      const area = line + ` L${coords[coords.length-1][0].toFixed(1)} ${h} L${coords[0][0].toFixed(1)} ${h} Z`;
-      const last = xs[xs.length - 1], first = xs[0];
-      const stroke = last > first ? "var(--up)" : last < first ? "var(--down)" : "var(--hold)";
-      const fill = last > first ? "rgba(15,118,110,.14)" : last < first ? "rgba(194,65,12,.12)" : "rgba(100,116,139,.1)";
-      return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
-        <path d="${area}" fill="${fill}"></path>
-        <path d="${line}" fill="none" stroke="${stroke}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
-      </svg>`;
+    function actionKind(action) {
+      const a = String(action || "").toLowerCase();
+      if (a.startsWith("book_peg")) return "book";
+      if (a.startsWith("hold_manual") || a.includes("manual")) return "manual";
+      if (a.includes("freeze")) return "freeze";
+      if (a.includes("price_up") || a.includes("floor_jump")) return "up";
+      if (a.includes("price_down") || a.includes("mid_jump")) return "down";
+      return "hold";
+    }
+    function kindLabel(kind) {
+      return { up: "UP", down: "DOWN", freeze: "FREEZE", hold: "HOLD", manual: "MANUAL", book: "BOOK" }[kind] || "HOLD";
+    }
+    function deltaClass(n) { return n > 0 ? "pos" : n < 0 ? "neg" : "flat"; }
+    function signed(n) { return n > 0 ? "+" + fmt(n) : fmt(n); }
+
+    function categoryOf(id) {
+      if (id.includes("helmet") || id.startsWith("шлем")) return "helmet";
+      if (id.includes("chestplate") || id.startsWith("нагрудник")) return "chestplate";
+      if (id.includes("leggings") || id.startsWith("штаны")) return "leggings";
+      if (id.includes("boots") || id.startsWith("ботинки")) return "boots";
+      if (id.includes("sword") || id.includes("mega") || id.includes("остр") || id.includes("яд") || id.includes("почти")) return "sword";
+      if (id.includes("pickaxe") || id.startsWith("кирка")) return "pickaxe";
+      return "";
     }
 
-    function deltaClass(n) {
-      if (n > 0) return "pos";
-      if (n < 0) return "neg";
-      return "flat";
+    function salesVal(sales, norm) {
+      if (!norm || norm <= 0) return `<span class="v">${sales}</span>`;
+      const cls = sales >= norm ? "ok" : "warn";
+      return `<span class="v ${cls}">${sales}/${norm}</span>`;
     }
-    function signed(n) {
-      if (n > 0) return "+" + fmt(n);
-      return fmt(n);
+    function tryVal(trySells, sales) {
+      const t = trySells ?? 0;
+      const s = sales ?? 0;
+      if (t === 0) return `<span class="v">0</span>`;
+      const warn = t > Math.max(s, 1) * 7;
+      return `<span class="v ${warn ? "warn" : ""}">${t}</span>`;
     }
 
     function renderKPIs(data) {
       const s = data.summary || {};
-      const up = data.top_up;
-      const down = data.top_down;
       const box = (cls, lab, num, sub) =>
         `<div class="kpi ${cls}"><div class="lab">${lab}</div><div class="num">${num}</div><div class="sub">${sub || ""}</div></div>`;
       $("kpis").innerHTML = [
-        box("up", "Подняли", s.ups ?? 0, "решений ↑"),
-        box("down", "Опустили", s.downs ?? 0, "решений ↓"),
-        box("hold", "Hold", s.holds ?? 0, "без сдвига"),
-        box("", "Циклов", s.cycles ?? 0, `${s.moves ?? 0} с движением`),
-        box(
-          up && (!down || Math.abs(up.net_pct) >= Math.abs(down.net_pct)) ? "up" : (down ? "down" : ""),
-          "Сильнее всех",
-          up || down
-            ? shortName((up && (!down || Math.abs(up.net_pct) >= Math.abs(down.net_pct))) ? up.id : down.id)
-            : "—",
-          up || down
-            ? (() => {
-                const m = (up && (!down || Math.abs(up.net_pct) >= Math.abs(down.net_pct))) ? up : down;
-                return `${signed(m.net)} · ${fmtPct(m.net_pct)}`;
-              })()
-            : "нет сдвигов"
-        ),
+        box("k-up", "UP", s.ups ?? 0, "вверх"),
+        box("k-down", "DOWN", s.downs ?? 0, "вниз"),
+        box("k-freeze", "FREEZE", s.freezes ?? 0, "заморожено"),
+        box("k-hold", "HOLD", s.holds ?? 0, "стоим"),
+        box("", "Циклов", s.cycles ?? 0, `${s.moves ?? 0} движ.`),
       ].join("");
     }
 
     function cardHTML(it, activeId) {
       const net = it.net || 0;
       const cls = deltaClass(net);
+      const kind = actionKind(it.last_action || "");
       const active = activeId === it.id ? " active" : "";
-      const last = it.last_dir || "HOLD";
-      const salesBit = it.last_norm
-        ? `продажи <b>${it.last_sales}/${it.last_norm}</b>`
-        : `продажи <b>${it.last_sales ?? "—"}</b>`;
-      return `<article class="card${active}" data-id="${esc(it.id)}" title="${esc(it.id)}">
+      return `<article class="card c-${kind}${active}" data-id="${esc(it.id)}" title="${esc(it.id)}">
         <div class="top">
           <div class="name">${esc(shortName(it.id))}</div>
-          <span class="badge ${esc(last)}">${esc(last)}</span>
+          <span class="badge b-${kind}">${kindLabel(kind)}</span>
         </div>
-        <div class="price">${fmt(it.price || it.close)}</div>
-        <div class="delta ${cls}">${net ? `${signed(net)} · ${fmtPct(it.net_pct)}` : "без сдвига за период"}</div>
-        ${sparkSVG(it.spark, last)}
-        <div class="foot">
-          <div>АХ/инв <b>${it.last_on_ah ?? 0}/${it.last_inv ?? 0}</b></div>
-          <div>${salesBit}</div>
-          <div class="why">${esc(it.last_reason || "ещё нет решения")}</div>
+        <div class="price-line">
+          <div class="price">${fmt(it.price || it.close)}</div>
+          <div class="delta ${cls}">${net ? `${signed(net)} · ${fmtPct(it.net_pct)}` : "—"}</div>
+        </div>
+        <div class="stats">
+          <div class="kv"><span class="k">sales</span>${salesVal(it.last_sales, it.last_norm)}</div>
+          <div class="kv"><span class="k">try</span>${tryVal(it.last_try_sells, it.last_sales)}</div>
+          <div class="kv"><span class="k">buy</span><span class="v">${it.last_buys ?? 0}</span></div>
+          <div class="kv"><span class="k">AH</span><span class="v">${it.last_on_ah ?? 0}</span></div>
+          <div class="kv"><span class="k">INV</span><span class="v">${it.last_inv ?? 0}</span></div>
+          <div class="kv"><span class="k">held</span><span class="v">${it.last_held ?? 0}</span></div>
         </div>
       </article>`;
     }
 
     function rowHTML(d) {
-      const dir = d.dir || "HOLD";
+      const kind = actionKind(d.action);
       const delta = d.delta != null ? d.delta : (d.price_after - d.price_before);
       const cls = deltaClass(delta);
-      const salesWarn = d.normal_sales > 0 && d.sales < d.normal_sales;
-      return `<article class="row ${esc(dir)}">
-        <div class="t">${clockShort(d.ts)}</div>
-        <div class="sku"><button type="button" data-pick="${esc(d.item)}">${esc(shortName(d.item))}</button></div>
-        <span class="badge ${esc(dir)}">${esc(dir)}</span>
-        <div class="chg ${cls}">${signed(delta)}</div>
-        <div class="path">${fmt(d.price_before)} → ${fmt(d.price_after)}</div>
-        <div class="reason">${esc(d.reason_ru || d.action || "—")}</div>
-        <div class="stats">
-  ${salesWarn ? "sales↓ " : ""}
-  ${d.sales}/${d.normal_sales} · buy ${d.buys} ·
-  stock ${Number(d.on_ah || 0) + Number(d.inv || 0)}
-  [${d.on_ah || 0} AH + ${d.inv || 0} INV]
-</div>
-        <details>
-          <summary>детали · ${clock(d.ts)}</summary>
-          <div class="grid">
-            <div class="cell"><div class="l">цена</div><div class="v">${fmtFull(d.price_before)} → ${fmtFull(d.price_after)}</div></div>
-            <div class="cell"><div class="l">наценка</div><div class="v">${fmtFull(d.nacenka_before)} → ${fmtFull(d.nacenka_after)}</div></div>
-            <div class="cell"><div class="l">АХ / инв / held</div><div class="v">${d.on_ah} / ${d.inv} / ${d.held}</div></div>
-            <div class="cell"><div class="l">share / free / need</div><div class="v">${d.share} / ${d.free} / ${d.need}</div></div>
-            <div class="cell"><div class="l">пол · step</div><div class="v">${fmtFull(d.price_floor)} · ${fmtFull(d.step)}</div></div>
-            <div class="cell"><div class="l">action</div><div class="v">${esc(d.action)}</div></div>
-            <div class="cell"><div class="l">policy</div><div class="v">${esc(d.policy || "—")}</div></div>
-            <div class="cell"><div class="l">online</div><div class="v">${d.players_online || "—"}</div></div>
+      return `<div class="row r-${kind}">
+        <div class="head">
+          <div class="t">${clockShort(d.ts)}</div>
+          <div class="act">${kindLabel(kind)}</div>
+          <div class="sku" title="${esc(d.item)}">${esc(shortName(d.item))}</div>
+          <div class="prices">
+            <span class="from">${fmt(d.price_before)}</span>
+            <span class="arrow">→</span>
+            <span class="to">${fmt(d.price_after)}</span>
           </div>
-          ${d.notes ? `<div class="detail">${esc(d.notes)}</div>` : ""}
-        </details>
-      </article>`;
+          <div class="chg ${cls}">${signed(delta)}</div>
+        </div>
+
+        <div class="reason"><span class="prefix">reason:</span>${esc(d.reason_ru || d.action || "—")}</div>
+
+        <div class="stats">
+          <div class="kv"><span class="k">sales</span>${salesVal(d.sales, d.normal_sales)}</div>
+          <div class="kv"><span class="k">try</span>${tryVal(d.try_sells, d.sales)}</div>
+          <div class="kv"><span class="k">buy</span><span class="v">${d.buys ?? 0}</span></div>
+          <div class="kv"><span class="k">AH</span><span class="v">${d.on_ah ?? 0}</span></div>
+          <div class="kv"><span class="k">INV</span><span class="v">${d.inv ?? 0}</span></div>
+          <div class="kv"><span class="k">held</span><span class="v">${d.held ?? 0}</span></div>
+          <div class="kv"><span class="k">nac</span><span class="v">${fmt(d.nacenka_after)}</span></div>
+          <div class="kv"><span class="k">floor</span><span class="v">${fmt(d.price_floor)}</span></div>
+          <div class="kv"><span class="k">step</span><span class="v">${fmt(d.step)}</span></div>
+        </div>
+
+        <div class="meta-line">
+          <span><b>action</b> ${esc(d.action)}</span>
+          <span><b>policy</b> ${esc(d.policy || "—")}</span>
+          <span><b>online</b> ${d.players_online || "—"}</span>
+          <span><b>id</b> ${d.id}</span>
+        </div>
+      </div>`;
     }
 
     async function fillItems(selected) {
@@ -454,6 +488,22 @@
         sel.appendChild(o);
       });
       if (keep) sel.value = keep;
+
+      const cats = new Set();
+      for (const id of (data.items || [])) {
+        const c = categoryOf(id);
+        if (c) cats.add(c);
+      }
+      const csel = $("category");
+      const ckeep = csel.value;
+      csel.innerHTML = `<option value="">Все категории</option>`;
+      Array.from(cats).sort().forEach((c) => {
+        const o = document.createElement("option");
+        o.value = c;
+        o.textContent = c;
+        csel.appendChild(o);
+      });
+      if (ckeep) csel.value = ckeep;
     }
 
     function setItemFilter(id) {
@@ -466,41 +516,45 @@
     async function load() {
       const period = $("period").value;
       const item = $("item").value;
-      const dir = $("dir").value;
+      const cat = $("category").value;
+      const act = $("action").value;
       $("clearItem").hidden = !item;
       $("clearItem").classList.toggle("on", !!item);
-      const q = new URLSearchParams({ period, limit: "160" });
+      const apiDir = (act === "UP" || act === "DOWN" || act === "HOLD") ? act : "";
+      const q = new URLSearchParams({ period, limit: "400" });
       if (item) q.set("item", item);
-      if (dir) q.set("dir", dir);
+      if (apiDir) q.set("dir", apiDir);
       $("meta").textContent = "загрузка…";
       try {
         const res = await fetch("/pricing/api/board?" + q.toString(), { cache: "no-store" });
         const data = await res.json();
         if (!data.ok) throw new Error("bad response");
-        const list = data.decisions || [];
-        const items = data.items || [];
-        $("meta").textContent = `${data.policy || "?"} · ${clock(data.updated_at)} · лента ${list.length}`;
+        let list = data.decisions || [];
+        if (cat) list = list.filter((d) => categoryOf(d.item) === cat);
+        if (act) list = list.filter((d) => kindLabel(actionKind(d.action)) === act);
+
+        const items = (data.items || []).filter((it) => {
+          if (cat && categoryOf(it.id) !== cat) return false;
+          return true;
+        });
+
+        $("meta").textContent = `${data.policy || "?"} · ${clock(data.updated_at)} · решений ${list.length}`;
         renderKPIs(data);
         $("board").innerHTML = items.length
           ? items.map((it) => cardHTML(it, item)).join("")
-          : `<div class="empty">За период нет движения по sku</div>`;
-        $("feedCap").textContent = item
-          ? `Фильтр: ${shortName(item)} · новые сверху`
-          : "Новые сверху";
+          : `<div class="empty">Нет данных</div>`;
         $("feed").innerHTML = list.length
           ? list.map(rowHTML).join("")
           : `<div class="empty">За период нет решений</div>`;
+        $("feedCap").textContent = item
+          ? `Фильтр: ${shortName(item)} · ${list.length} решений`
+          : `Новые сверху · ${list.length} решений`;
 
         $("board").onclick = (e) => {
           const card = e.target.closest(".card[data-id]");
           if (!card) return;
           const id = card.getAttribute("data-id");
           setItemFilter($("item").value === id ? "" : id);
-        };
-        $("feed").onclick = (e) => {
-          const btn = e.target.closest("button[data-pick]");
-          if (!btn) return;
-          setItemFilter(btn.getAttribute("data-pick"));
         };
       } catch (e) {
         $("board").innerHTML = `<div class="empty">Ошибка: ${esc(e.message)}</div>`;
@@ -511,8 +565,9 @@
 
     $("refresh").onclick = load;
     $("period").onchange = load;
+    $("category").onchange = load;
     $("item").onchange = () => setItemFilter($("item").value);
-    $("dir").onchange = load;
+    $("action").onchange = load;
     $("clearItem").onclick = () => setItemFilter("");
     fillItems().then(load);
     setInterval(load, 20000);
