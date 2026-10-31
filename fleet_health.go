@@ -10,6 +10,7 @@ import (
 
 // Флот:
 //   - разовый вылет/хаб/рестарт → НЕ сужаем share и НЕ сбрасываем «онлайн с …»
+//   - orch.fleet_stats.scheduled_off > 0 → сон по расписанию, липкий N = live сразу
 //   - хронический флап → orch помечает unstable (вне bots_per_type)
 //   - полный 0 дольше grace → OUTAGE (пауза цен); короткий 0 (кормёжка мавры) — тихо SKIP
 
@@ -48,16 +49,18 @@ func noteFleetPresenceLocked(botsPerType map[string]int, fleetStats map[string]i
 	fleetHealthMu.Lock()
 	defer fleetHealthMu.Unlock()
 
+	scheduleOff := fleetStats["scheduled_off"] > 0
+
 	seen := make(map[string]struct{})
 	for t, n := range botsPerType {
 		seen[t] = struct{}{}
-		updateFleetTypeLocked(t, n, now)
+		updateFleetTypeLocked(t, n, now, scheduleOff)
 	}
 	for t := range fleetTypeState {
 		if _, ok := seen[t]; ok {
 			continue
 		}
-		updateFleetTypeLocked(t, 0, now)
+		updateFleetTypeLocked(t, 0, now, false)
 	}
 
 	if len(fleetStats) > 0 {
@@ -65,13 +68,15 @@ func noteFleetPresenceLocked(botsPerType map[string]int, fleetStats map[string]i
 		pricing := fleetStats["pricing"]
 		hub := fleetStats["hub"]
 		unstable := fleetStats["unstable"]
-		if hub > 0 || unstable > 0 || (live > 0 && pricing == 0) {
-			log.Printf("[FLEET] presence live=%d pricing=%d hub=%d unstable=%d", live, pricing, hub, unstable)
+		scheduledOff := fleetStats["scheduled_off"]
+		if hub > 0 || unstable > 0 || scheduledOff > 0 || (live > 0 && pricing == 0) {
+			log.Printf("[FLEET] presence live=%d pricing=%d hub=%d unstable=%d scheduled_off=%d",
+				live, pricing, hub, unstable, scheduledOff)
 		}
 	}
 }
 
-func updateFleetTypeLocked(goType string, pricing int, now time.Time) {
+func updateFleetTypeLocked(goType string, pricing int, now time.Time, scheduleOff bool) {
 	st := fleetTypeState[goType]
 	if st == nil {
 		st = &fleetTypeHealth{}
@@ -89,7 +94,15 @@ func updateFleetTypeLocked(goType string, pricing int, now time.Time) {
 	}
 
 	// Sticky для share: растёт сразу, падает только после fleetStickyHold ниже пика.
-	if pricing > st.stickyBots {
+	// Сон по расписанию (orch.scheduled_off) — не дыра, сразу живой N.
+	if scheduleOff && pricing > 0 {
+		if st.stickyBots != pricing {
+			log.Printf("[FLEET] schedule off type=%s live=%d sticky %d→%d",
+				goType, pricing, st.stickyBots, pricing)
+		}
+		st.stickyBots = pricing
+		st.stickyBelowAt = time.Time{}
+	} else if pricing > st.stickyBots {
 		st.stickyBots = pricing
 		st.stickyBelowAt = time.Time{}
 	} else if pricing > 0 && pricing < st.stickyBots {

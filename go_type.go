@@ -20,7 +20,8 @@ func catalogTypeActiveIn(activeTypes map[string]struct{}, catalogType string) bo
 }
 
 // botsForGoTypeLocked — боты на go-типе для share/ёмкости.
-// Берём sticky (не схлопываем долю от разового вылета); live=0 → 0.
+// Берём sticky (не схлопываем долю от разового вылета); сон по расписанию
+// орк помечает scheduled_off — тогда sticky сразу = live; live=0 → 0.
 // Merged armor и piece-типы считают вместе.
 func botsForGoTypeLocked(goType string) int {
 	totals := aggregateBotsPerTypeLocked()
