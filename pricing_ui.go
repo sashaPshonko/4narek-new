@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,30 +15,33 @@ import (
 
 // pricingDecisionView — решение цикла в формате старых TG interval-stats.
 type pricingDecisionView struct {
-	ID            int64   `json:"id"`
-	TS            string  `json:"ts"`
-	Policy        string  `json:"policy"`
-	Item          string  `json:"item"`
-	Category      string  `json:"category"`
-	Action        string  `json:"action"`
-	ReasonRU      string  `json:"reason_ru"`
-	Dir           string  `json:"dir"` // UP | DOWN | HOLD
-	Sales         int     `json:"sales"`
-	Buys          int     `json:"buys"`
-	TrySells      int     `json:"try_sells"`
-	NormalSales   int     `json:"normal_sales"`
-	OnAH          int     `json:"on_ah"`
-	Inv           int     `json:"inv"`
-	Held          int     `json:"held"`
-	Share         int     `json:"share"`
-	Free          int     `json:"free"`
-	Need          int     `json:"need"`
-	PriceBefore   int     `json:"price_before"`
-	PriceAfter    int     `json:"price_after"`
-	Delta         int     `json:"delta"`
-	NacenkaBefore int     `json:"nacenka_before"`
-	NacenkaAfter  int     `json:"nacenka_after"`
-	PriceFloor    int     `json:"price_floor"`
+	ID            int64  `json:"id"`
+	TS            string `json:"ts"`
+	Policy        string `json:"policy"`
+	Item          string `json:"item"`
+	Category      string `json:"category"`
+	Action        string `json:"action"`
+	ReasonRU      string `json:"reason_ru"`
+	Dir           string `json:"dir"` // UP | DOWN | HOLD
+	Sales         int    `json:"sales"`
+	Buys          int    `json:"buys"`
+	TrySells      int    `json:"try_sells"`
+	NormalSales   int    `json:"normal_sales"`
+	OnAH          int    `json:"on_ah"`
+	Inv           int    `json:"inv"`
+	Held          int    `json:"held"`
+	Share         int    `json:"share"`
+	Free          int    `json:"free"`
+	Need          int    `json:"need"`
+	PriceBefore   int    `json:"price_before"`
+	PriceAfter    int    `json:"price_after"`
+	Delta         int    `json:"delta"`
+	NacenkaBefore int    `json:"nacenka_before"`
+	NacenkaAfter  int    `json:"nacenka_after"`
+	PriceFloor    int    `json:"price_floor"`
+	// PriceCeil — потолок книги на момент решения; берётся из заметок цикла (там он пишется как «потолок(pN)=…»,
+	// в старых записях «mid(pN)=…»). 0 — в записи его нет.
+	PriceCeil     int     `json:"price_ceil"`
 	Step          int     `json:"step"`
 	Notes         string  `json:"notes"`
 	ProfitNow     *int    `json:"profit_now,omitempty"`
@@ -175,7 +179,10 @@ func pricingItemList() []string {
 	mutex.RLock()
 	defer mutex.RUnlock()
 	out := make([]string, 0, len(itemsConfig))
-	for id := range itemsConfig {
+	for id, cfg := range itemsConfig {
+		if cfg.NoBuy {
+			continue
+		}
 		out = append(out, id)
 	}
 	sort.Strings(out)
@@ -273,6 +280,7 @@ WHERE 1=1`
 		}
 		d.Dir = pricingDirOf(d.PriceBefore, d.PriceAfter, d.Action)
 		d.Delta = d.PriceAfter - d.PriceBefore
+		d.PriceCeil = ceilFromNotes(d.Notes)
 		if dirFilter == "UP" || dirFilter == "DOWN" || dirFilter == "HOLD" {
 			if d.Dir != dirFilter {
 				continue
@@ -469,4 +477,19 @@ func downsampleInts(xs []int, max int) []int {
 		out = append(out, xs[idx])
 	}
 	return out
+}
+
+var ceilNotesRe = regexp.MustCompile(`(?:потолок|mid)\(p\d+\)=(\d+)`)
+
+// ceilFromNotes — потолок книги из заметок цикла (формат «потолок(p40)=1500000», у старых записей «mid(p40)=…»).
+func ceilFromNotes(notes string) int {
+	m := ceilNotesRe.FindStringSubmatch(notes)
+	if len(m) < 2 {
+		return 0
+	}
+	v, err := strconv.Atoi(m[1])
+	if err != nil || v <= 0 {
+		return 0
+	}
+	return v
 }

@@ -109,6 +109,9 @@ func TestPrunePersistedBansNotInRoster(t *testing.T) {
 	}
 	prunePersistedBansNotInRoster(funauthRoster{
 		503: {"keepme": {}},
+	})
+	// баны овнеров чистит отдельный prune по clan-owners.json, ростер ботов их не трогает
+	prunePersistedOwnerBansNotInConfig(funauthRoster{
 		504: {"eblivi1_r0t7": {}},
 	})
 	if _, ok := persistedBannedBots["oldghost"]; ok {

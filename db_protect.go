@@ -24,8 +24,8 @@ func mlOpenDSN(path string) string {
 		"&_pragma=synchronous(FULL)" +
 		"&_pragma=foreign_keys(ON)" +
 		"&_pragma=temp_store(MEMORY)" +
-		"&_pragma=mmap_size(67108864)" +
-		"&_pragma=cache_size(-8000)"
+		"&_pragma=mmap_size(536870912)" +
+		"&_pragma=cache_size(-200000)"
 }
 
 func mlBackupDir() string {

@@ -15,14 +15,22 @@ import (
 )
 
 const (
-	funauthBindReplyTimeout = 45 * time.Second
-	funauthJobTimeout       = 120 * time.Second
-	funauthHistoryLimit     = 120
+	// ↓ было 45s — теперь 15s: мёртвый TG отсеивается быстрее
+	funauthBindReplyTimeout = 15 * time.Second
+	// ↑ было 120s — теперь 180s: успеваем перебрать больше TG
+	funauthJobTimeout   = 180 * time.Second
+	funauthHistoryLimit = 120
+
+	// Сколько биндов/2FA могут идти одновременно. TG-логины идут отдельно
+	// (через funauthPool), их этот лимит не касается.
+	funauthMaxConcurrentJobs = 3
+
+	// Если все акки busy (TG-логин/чужой бинд) — ждём столько и пробуем снова.
+	funauthBusyRetryEvery = 5 * time.Second
 )
 
 var (
-	funauthBindOK = regexp.MustCompile(`(?i)был привязан`)
-	// «[Бот] У Вас уже много привязанных аккаунтов»
+	funauthBindOK          = regexp.MustCompile(`(?i)был привязан`)
 	funauthBindFull        = regexp.MustCompile(`(?i)у вас уже много привязанных|уже много привязанных|много привязанных аккаунт`)
 	funauthTwofaOK         = regexp.MustCompile(`(?i)выключено|Подтверждение входа`)
 	funauthHistoryBindHint = regexp.MustCompile(`(?i)(/bind\s+|был привязан|/2fa\s+|подтверждение входа|привязан)`)
@@ -45,6 +53,7 @@ func funauthRetryNextAccount(errStr string) bool {
 		"user_deactivated_ban",
 		"not authorized",
 		"account_offline",
+		"reply_timeout",
 	}
 	for _, n := range needles {
 		if strings.Contains(s, n) {
@@ -68,6 +77,7 @@ type funauthBindJob struct {
 	anarchy    int
 	mode       string // "bind" | "twofa"
 	enqueuedAt time.Time
+	startedAt  time.Time
 	result     chan funauthBindResult
 	cancelled  bool
 	mu         sync.Mutex
@@ -76,10 +86,10 @@ type funauthBindJob struct {
 type funauthBinder struct {
 	pool *funauthPool
 
-	mu      sync.Mutex
-	queue   []*funauthBindJob
-	current *funauthBindJob
-	running bool
+	mu       sync.Mutex
+	queue    []*funauthBindJob
+	currents []*funauthBindJob // было current *funauthBindJob — теперь N
+	running  int               // было bool — теперь счётчик
 }
 
 func newFunauthBinder(pool *funauthPool) *funauthBinder {
@@ -93,42 +103,64 @@ func (b *funauthBinder) status() map[string]any {
 	for _, j := range b.queue {
 		pending = append(pending, map[string]any{
 			"nick":       j.nick,
+			"mode":       j.mode,
 			"enqueuedAt": j.enqueuedAt.UnixMilli(),
 		})
 	}
-	var current any
-	if b.current != nil {
-		current = map[string]any{
-			"nick":       b.current.nick,
-			"enqueuedAt": b.current.enqueuedAt.UnixMilli(),
+	currents := make([]map[string]any, 0, len(b.currents))
+	for _, j := range b.currents {
+		startedAt := int64(0)
+		if !j.startedAt.IsZero() {
+			startedAt = j.startedAt.UnixMilli()
 		}
-	}
-	length := len(b.queue)
-	if b.running {
-		length++
+		currents = append(currents, map[string]any{
+			"nick":       j.nick,
+			"mode":       j.mode,
+			"enqueuedAt": j.enqueuedAt.UnixMilli(),
+			"startedAt":  startedAt,
+		})
 	}
 	return map[string]any{
-		"running": b.running,
-		"current": current,
-		"pending": pending,
-		"length":  length,
+		"running":  b.running,
+		"maxJobs":  funauthMaxConcurrentJobs,
+		"currents": currents,
+		"pending":  pending,
+		"length":   len(b.queue) + b.running,
 	}
 }
 
 func (b *funauthBinder) queueLen() int {
-	st := b.status()
-	if n, ok := st["length"].(int); ok {
-		return n
-	}
-	return 0
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.queue) + b.running
 }
 
-// Bind enqueues a job and waits up to ~120s for the result.
+// activeBindsCount — сколько сейчас выполняется bind/2FA (для /health).
+func (b *funauthBinder) activeBindsCount() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n := 0
+	for _, j := range b.currents {
+		if j != nil {
+			n++
+		}
+	}
+	return n
+}
+
+// activeTGCount — заглушка: TG-логины не идут через binder.
+// Если в funauthPool есть свой счётчик — можно вернуть его.
+func (b *funauthBinder) activeTGCount() int {
+	if b.pool == nil {
+		return 0
+	}
+	return b.pool.activeTGLoginCount()
+}
+
 func (b *funauthBinder) Bind(nick, password string, anarchy int) funauthBindResult {
 	return b.enqueue(nick, password, anarchy, "bind")
 }
 
-// TwoFA sends only `/2fa nick` from the TG account that already bound this nick.
 func (b *funauthBinder) TwoFA(nick string, anarchy int) funauthBindResult {
 	return b.enqueue(nick, "", anarchy, "twofa")
 }
@@ -175,19 +207,26 @@ func (b *funauthBinder) enqueue(nick, password string, anarchy int, mode string)
 				break
 			}
 		}
-		if !removed && b.current == job {
-			job.mu.Lock()
-			job.cancelled = true
-			job.mu.Unlock()
+		if !removed {
+			for _, j := range b.currents {
+				if j == job {
+					job.mu.Lock()
+					job.cancelled = true
+					job.mu.Unlock()
+					break
+				}
+			}
 		}
 		b.mu.Unlock()
-		return funauthBindResult{OK: false, Nick: n, Error: "timeout"}
+		// ВАЖНО: не "timeout" — это может быть «стоял в очереди, пока другие
+		// бинды шли». UI должен показать "busy" и попробовать позже.
+		return funauthBindResult{OK: false, Nick: n, Error: "busy"}
 	}
 }
 
 func (b *funauthBinder) pump() {
 	b.mu.Lock()
-	if b.running {
+	if b.running >= funauthMaxConcurrentJobs {
 		b.mu.Unlock()
 		return
 	}
@@ -197,8 +236,9 @@ func (b *funauthBinder) pump() {
 	}
 	job := b.queue[0]
 	b.queue = b.queue[1:]
-	b.running = true
-	b.current = job
+	b.running++
+	job.startedAt = time.Now()
+	b.currents = append(b.currents, job)
 	b.mu.Unlock()
 
 	defer func() {
@@ -206,9 +246,14 @@ func (b *funauthBinder) pump() {
 			logPanic("funauth:pump", recovered)
 		}
 		b.mu.Lock()
-		b.current = nil
-		b.running = false
-		more := len(b.queue) > 0
+		for i, j := range b.currents {
+			if j == job {
+				b.currents = append(b.currents[:i], b.currents[i+1:]...)
+				break
+			}
+		}
+		b.running--
+		more := len(b.queue) > 0 && b.running < funauthMaxConcurrentJobs
 		b.mu.Unlock()
 		if more {
 			goSafe("funauth:pump", b.pump)
@@ -238,13 +283,27 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		cancelled := job.cancelled
 		job.mu.Unlock()
 		if cancelled {
-			return funauthBindResult{OK: false, Nick: job.nick, Error: "timeout"}
+			return funauthBindResult{OK: false, Nick: job.nick, Error: "busy"}
 		}
 
 		acc, diag := b.pool.pickForAnarchyBindDiag(job.nick, job.anarchy, tried)
 		if acc == nil {
+			// ВАЖНО: если кто-то busy (TG-логин / чужой бинд) — ждём,
+			// а не возвращаем no_accounts. Иначе TG-логин блокирует все бинды.
+			if diag.Busy > 0 {
+				log.Printf(
+					"[funauth] %s: %d busy, wait %s",
+					job.nick, diag.Busy, funauthBusyRetryEvery,
+				)
+				select {
+				case <-time.After(funauthBusyRetryEvery):
+					continue
+				}
+			}
 			errCode := "no_accounts"
-			if diag.Busy > 0 && diag.Offline == 0 && diag.Full == 0 {
+			if diag.Offline == 0 && diag.Full == 0 && diag.Busy == 0 {
+				errCode = "no_accounts"
+			} else if diag.Full > 0 && diag.Offline == 0 && diag.Busy == 0 {
 				errCode = "all_accounts_busy"
 			}
 			log.Printf(
@@ -260,6 +319,12 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
 		result, retry := b.runOnAccount(ctx, acc, job)
 		cancel()
+		if wait := funauthFloodWait(result.Error); wait > 0 && !result.OK {
+			// Telegram просит подождать: этот аккаунт пропускаем на это время и пробуем другой
+			b.pool.markFlood(acc.meta.ID, wait)
+			log.Printf("[funauth] account %s FLOOD_WAIT %s — пропускаю, пробую следующий", phone, wait.Round(time.Minute))
+			continue
+		}
 		if retry {
 			why := "full"
 			if funauthRetryNextAccount(result.Error) {
@@ -271,6 +336,7 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		}
 		if result.OK {
 			b.pool.afterBindSuccess(job.nick, acc.meta.ID, job.anarchy)
+			b.pool.deleteTelegramAfterBind(acc, job.nick)
 		}
 		return result
 	}
@@ -299,14 +365,12 @@ func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
 		return nil
 	}
 
-	// 1) карта nick→tg
 	if preferred := b.pool.accountForNick(job.nick); preferred != nil {
 		if res := tryAcc(preferred, "nicks.json"); res != nil {
 			return *res
 		}
 	}
 
-	// 2) история чата с FunAuthBot (старые бинды без карты)
 	histCtx, histCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	fromHistory := b.findAccountsByBotHistory(histCtx, job.nick)
 	histCancel()
@@ -316,14 +380,13 @@ func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
 		}
 	}
 
-	// 3) остальные готовые
 	log.Printf("[funauth] 2fa %s: map/history пусто — перебор остальных", job.nick)
 	for {
 		job.mu.Lock()
 		cancelled := job.cancelled
 		job.mu.Unlock()
 		if cancelled {
-			return funauthBindResult{OK: false, Nick: job.nick, Error: "timeout"}
+			return funauthBindResult{OK: false, Nick: job.nick, Error: "busy"}
 		}
 		acc := b.pool.pickReadyAny(tried)
 		if acc == nil {
@@ -335,7 +398,6 @@ func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
 	}
 }
 
-// findAccountsByBotHistory — у кого в диалоге с FunAuthBot есть этот ник + bind/2fa след.
 func (b *funauthBinder) findAccountsByBotHistory(ctx context.Context, nick string) []*funauthAccount {
 	needle := strings.ToLower(strings.TrimSpace(nick))
 	if needle == "" {
@@ -386,13 +448,11 @@ func funauthHistoryHasNick(ctx context.Context, acc *funauthAccount, nickLower s
 		if !strings.Contains(text, nickLower) {
 			continue
 		}
-		// ник в диалоге + намёк на bind/2fa (или просто /bind|/2fa с ником)
 		if funauthHistoryBindHint.MatchString(text) ||
 			strings.Contains(text, "/bind") ||
 			strings.Contains(text, "/2fa") {
 			return true, nil
 		}
-		// исходящий `/bind nick …` / ответ бота с ником — тоже ок
 		return true, nil
 	}
 	return false, nil
@@ -438,7 +498,6 @@ func funauthExtractMessages(hist tg.MessagesMessagesClass) []string {
 	case *tg.MessagesChannelMessages:
 		add(h.Messages)
 	case *tg.MessagesMessagesNotModified:
-		// nothing
 	}
 	return out
 }
@@ -467,7 +526,6 @@ func (b *funauthBinder) runTwoFAOnAccount(ctx context.Context, acc *funauthAccou
 		time.Sleep(800 * time.Millisecond)
 	}
 
-	// любое ответное сообщение бота — чтобы быстро отсеять чужой акк
 	reply, err := funauthSendAndWait(ctx, sender, acc, "/2fa "+nick, func(text string) bool {
 		return strings.TrimSpace(text) != ""
 	})
@@ -530,7 +588,7 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 		if errStr == "reply_timeout" {
 			return funauthBindResult{
 				OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: "reply_timeout",
-			}, false
+			}, true
 		}
 		return funauthBindResult{
 			OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: errStr,
@@ -559,7 +617,7 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 		if errStr == "reply_timeout" {
 			return funauthBindResult{
 				OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: "reply_timeout",
-			}, false
+			}, true
 		}
 		return funauthBindResult{
 			OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: errStr,
@@ -592,7 +650,6 @@ func funauthSendAndWait(
 	text string,
 	match func(string) bool,
 ) (string, error) {
-	// Drain stale bot messages.
 drain:
 	for {
 		select {
@@ -627,4 +684,22 @@ func truncateRunes(s string, max int) string {
 		return s
 	}
 	return string(r[:max])
+}
+
+// isBusy — только для конкретного ника. Не смотрит на общую очередь.
+func (b *funauthBinder) isBusy(nick string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	key := funauthNickKey(nick)
+	for _, j := range b.currents {
+		if j != nil && funauthNickKey(j.nick) == key {
+			return true
+		}
+	}
+	for _, j := range b.queue {
+		if funauthNickKey(j.nick) == key {
+			return true
+		}
+	}
+	return false
 }

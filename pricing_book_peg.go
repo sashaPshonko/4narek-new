@@ -8,13 +8,13 @@ import (
 )
 
 // book_peg — статика с книги: sell = percentile(book_peg_q) − risk_cut.
-// Для рисковых SKU (починка / крушитель / яд3). Коридор v10 не трогает.
+// Для рисковых SKU (починка / крушитель / яд3). Основная политика их не трогает.
 
 const (
-	bookPegModeName        = "book_peg"
-	bookPegDefaultQ        = 0.10
-	bookPegDefaultMinSell  = 3
-	bookPegMultiMinLots    = 2
+	bookPegModeName       = "book_peg"
+	bookPegDefaultQ       = 0.10
+	bookPegDefaultMinSell = 3
+	bookPegMultiMinLots   = 2
 )
 
 func isBookPegConfig(cfg ItemConfig) bool {
@@ -270,3 +270,58 @@ func adjustPriceBookPeg(
 		Step:          step,
 	}
 }
+
+// book2 — цены целиком из живой книги.
+// Окно 30м.
+//
+// Дешёвые / volume (sword5/7 и т.п.):
+//   sell = max(seller-p40, buyEdge+nac); buyEdge = seller-p10; nac ≥ softMin.
+//   buyMax ≤ buyEdge − 200k — не закупать у самого края (затар sword7).
+//   Если buyEdge+nac > p40 — поднимаем sell (место под наценку).
+//
+// Дорогие (mega/pochti/яд / sell≥volume ceiling):
+//   sell = самое дно мульти-селлеров (≥3 лота одного SKU), не наши покупки и не p40;
+//   buyMax = sell − nac; sell НЕ поднимаем под buyEdge+nac.
+// SKU не баним.
+
+const (
+	ahBook2Window     = 30 * time.Minute
+	book2VolumeP10Max = 2_500_000 // sword7/фарм часто ~1.2–2.0M — не путать с mega
+)
+
+type bookCatMult struct {
+	Sell float64
+	Buy  float64
+}
+
+var bookProfitMultByType = map[string]bookCatMult{
+	"netherite_sword-1.21":   {Sell: 1.00, Buy: 0.85},
+	"netherite_armor-1.21":   {Sell: 1.05, Buy: 1.00},
+	"netherite_pickaxe-1.21": {Sell: 1.00, Buy: 0.95},
+	"позорная-броня-1.21":    {Sell: 1.20, Buy: 1.00},
+}
+
+var bookProfitMultDefault = bookCatMult{Sell: 1.00, Buy: 0.85}
+
+// book2ExpensiveSKU — мега/почти/яд и любой каталог ≥ volume ceiling.
+func book2ExpensiveSKU(item string, sellPrice int) bool {
+	if sellPrice >= book2VolumeP10Max {
+		return true
+	}
+	id := strings.ToLower(item)
+	return strings.Contains(id, "megasword") || strings.Contains(id, "pochti")
+}
+
+type book2FloorPlan struct {
+	FloorByItem map[string]int
+	GlobalMarg  int
+	GlobalOn    bool
+	FullCap     int
+	Free        int
+	NCands      int
+	At          time.Time
+	Note        string
+	OK          bool
+}
+
+var book2FloorPlanCache = map[string]book2FloorPlan{}

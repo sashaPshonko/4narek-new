@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -77,43 +76,6 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 	_ = mlDB.QueryRow(`SELECT held FROM stock_snapshot_rows WHERE item_id='c'`).Scan(&held)
 	if held != 4 {
 		t.Fatalf("held c=%d want 4", held)
-	}
-}
-
-func TestCompactMLDecisionGzipRoundtrip(t *testing.T) {
-	defer withTempMLDB(t)()
-	_, err := mlDB.Exec(`
-CREATE TABLE ml_decisions (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	logged_ts TEXT NOT NULL,
-	payload_json TEXT NOT NULL
-)`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ensureCompactSchemaLocked()
-	raw := `{"schema_version":8,"lookback":{"x":1},"pad":"` + strings.Repeat("x", 400) + `"}`
-	_, err = mlDB.Exec(`INSERT INTO ml_decisions (logged_ts, payload_json) VALUES (?,?)`, "2026-09-01T12:00:00Z", raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n := compactMLDecisionPayloads(10); n != 1 {
-		t.Fatalf("gzip %d want 1", n)
-	}
-	var jsonText string
-	var gz []byte
-	if err := mlDB.QueryRow(`SELECT payload_json, payload_gz FROM ml_decisions WHERE id=1`).Scan(&jsonText, &gz); err != nil {
-		t.Fatal(err)
-	}
-	if jsonText != "" {
-		t.Fatalf("payload_json still %q", jsonText)
-	}
-	out, err := gunzipBytes(gz)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(out) != raw {
-		t.Fatal("gzip roundtrip mismatch")
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -36,19 +35,6 @@ type tgQueuedMsg struct {
 }
 
 var tgOutbox chan tgQueuedMsg
-
-// experimentTelegramEvent — лог эксперимента в TG (после unlock adjustPrice).
-type experimentTelegramEvent struct {
-	Item           string
-	Action         string
-	PriceBefore    int
-	PriceAfter     int
-	NacenkaBefore  int
-	NacenkaAfter   int
-	NacenkaSumNow  int
-	NacenkaSumPrev int
-	Sales          int
-}
 
 func resolveTelegramProxyURL() string {
 	v := strings.TrimSpace(os.Getenv("TELEGRAM_PROXY"))
@@ -246,29 +232,6 @@ func ensureTelegramXray() error {
 	return fmt.Errorf("таймаут ожидания SOCKS %s:%s", host, port)
 }
 
-func initTelegramBot() {
-	if os.Getenv("TELEGRAM_DISABLED") == "1" {
-		log.Println("[Telegram] отключён (TELEGRAM_DISABLED=1)")
-		return
-	}
-
-	if err := ensureTelegramXray(); err != nil {
-		log.Printf("[Telegram] xray: %v — отправка в TG недоступна", err)
-		return
-	}
-
-	proxyURL := resolveTelegramProxyURL()
-	httpClient := telegramHTTPClient(proxyURL)
-	b, err := bot.New(token, bot.WithHTTPClient(60*time.Second, httpClient))
-	if err != nil {
-		log.Printf("[Telegram] bot.New: %v", err)
-		return
-	}
-	tgBot = b
-	startTelegramOutbox()
-	log.Println("[Telegram] бот готов (api.telegram.org через xray)")
-}
-
 func startTelegramOutbox() {
 	if tgOutbox != nil {
 		return
@@ -316,60 +279,6 @@ func enqueueTelegramMessage(text, parseMode string) {
 	default:
 		log.Printf("[Telegram] очередь полна — дроп (%d символов)", len(text))
 	}
-}
-
-func enqueueExperimentTelegram(ev experimentTelegramEvent) {
-	var title, body string
-	switch ev.Action {
-	case "experiment_start":
-		title = "🧪 Эксперимент СТАРТ"
-		body = "3 цикла роста Σнаценок → +цена и +наценка. Ждём следующий цикл."
-	case "experiment_ok":
-		title = "🧪 Эксперимент OK"
-		body = "Σнаценок продаж не упала — оставляем цену/наценку."
-	case "experiment_rollback":
-		title = "🧪 Эксперимент FAIL"
-		body = "Σнаценок продаж упала — откат цены/наценки."
-	default:
-		title = "🧪 Эксперимент"
-		body = ev.Action
-	}
-	msg := fmt.Sprintf(
-		"*%s*\n"+
-			"📦 `%s`\n"+
-			"%s\n"+
-			"💰 Цена: %d → %d\n"+
-			"🏷 Наценка: %d → %d\n"+
-			"Σ наценок продаж: *%d* (было %d)\n"+
-			"📊 Продаж в окне: %d",
-		title,
-		ev.Item,
-		body,
-		ev.PriceBefore, ev.PriceAfter,
-		ev.NacenkaBefore, ev.NacenkaAfter,
-		ev.NacenkaSumNow, ev.NacenkaSumPrev,
-		ev.Sales,
-	)
-	enqueueTelegramMessage(msg, "Markdown")
-}
-
-func enqueueBuySurgeTelegram(ev BuySurgeEvent) {
-	if !ev.Dropped {
-		return
-	}
-	msg := fmt.Sprintf(
-		"⚡ *Buy surge* — цена сразу вниз\n"+
-			"📦 `%s`\n"+
-			"💬 surge-счётчик ≥2× нормы и продаж < нормы (цикл не трогаем)\n"+
-			"⚡ Surge: *%d* / %d → сброс в 0\n"+
-			"📊 Продажи в окне: *%d* из *%d*\n"+
-			"💰 Цена: %d → %d (−%d)",
-		ev.Item,
-		ev.SurgeCount, ev.Threshold,
-		ev.Sales, ev.NormalSales,
-		ev.PriceBefore, ev.PriceAfter, ev.Step,
-	)
-	enqueueTelegramMessage(msg, "Markdown")
 }
 
 // fetchAndLogTelegramChats — getUpdates: id чатов, куда бот получал сообщения.
@@ -452,195 +361,4 @@ func runListTelegramChats() {
 	if err := fetchAndLogTelegramChats(); err != nil {
 		log.Fatalf("[Telegram] %v", err)
 	}
-}
-
-func getInventoryStats(item string) (onHand, inInventory int) {
-	mutex.RLock()
-	defer mutex.RUnlock()
-	return getItemCount(item), getInventoryCount(item)
-}
-
-func getPriceChangeEmoji(oldPrice, newPrice int) string {
-	if newPrice > oldPrice {
-		return "📈 +"
-	}
-	if newPrice < oldPrice {
-		return "📉 -"
-	}
-	return "↔️ ="
-}
-
-func appendToFile(filename, content string) {
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		log.Printf("[Telegram] log file %s: %v", filename, err)
-		return
-	}
-	defer f.Close()
-	if _, err := f.WriteString(content); err != nil {
-		log.Printf("[Telegram] log write %s: %v", filename, err)
-	}
-}
-
-func sendIntervalStatsToTelegram(
-	item string,
-	start, end time.Time,
-	onlineCount int,
-	rep AdjustReport,
-) {
-	if tgBot == nil {
-		return
-	}
-
-	status := "✅"
-	if rep.Sales < rep.NormalSales {
-		status = "⚠️"
-	}
-	if rep.Skipped {
-		status = "⏸"
-	}
-
-	priceEmoji := getPriceChangeEmoji(rep.PriceBefore, rep.PriceAfter)
-	nacenkaLine := fmt.Sprintf("%d", rep.NacenkaAfter)
-	if rep.NacenkaBefore != rep.NacenkaAfter {
-		nacenkaLine = fmt.Sprintf("%d → %d", rep.NacenkaBefore, rep.NacenkaAfter)
-	}
-
-	decisionMark := "↔️"
-	switch {
-	case rep.Skipped:
-		decisionMark = "⏸"
-	case rep.PriceAfter > rep.PriceBefore || rep.NacenkaAfter > rep.NacenkaBefore:
-		decisionMark = "📈"
-	case rep.PriceAfter < rep.PriceBefore || rep.NacenkaAfter < rep.NacenkaBefore:
-		decisionMark = "📉"
-	}
-
-	msg := fmt.Sprintf(
-		"*%s* %s\n"+
-			"⏳ Интервал: %s - %s\n"+
-			"📦 Покупки: *%d*\n"+
-			"🛒 Попытки продаж: *%d*\n"+
-			"📊 Продажи: *%d* из *%d* (норма)\n"+
-			"💰 Цена: %d → %d (%s)\n"+
-			"🏷 Наценка: %s\n"+
-			"🎒 АХ: %d | Инв: %d | Всего: %d\n"+
-			"📐 Доля слотов: %d (свободно %d, нужно %d)\n"+
-			"🧱 Пол цены: %d | step: %d\n"+
-			"Σ наценок продаж: %d (прошлый цикл %d) | streak %d/3 | cd %d\n"+
-			"👥 Онлайн: %d\n"+
-			"\n"+
-			"%s *Решение:* `%s`\n"+
-			"💬 %s",
-		item,
-		status,
-		start.Format("15:04:05"),
-		end.Format("15:04:05"),
-		rep.Buys,
-		rep.TrySells,
-		rep.Sales,
-		rep.NormalSales,
-		rep.PriceBefore, rep.PriceAfter,
-		priceEmoji,
-		nacenkaLine,
-		rep.OnAH, rep.Inv, rep.Held,
-		rep.Share, rep.Free, rep.Need,
-		rep.PriceFloor, rep.Step,
-		rep.NacenkaSumNow, rep.NacenkaSumPrev, rep.GoodStreak, rep.Cooldown,
-		onlineCount,
-		decisionMark,
-		rep.Action,
-		rep.Reason,
-	)
-	if rep.BlockNacenkaUp {
-		msg += "\n🛡 Защита: buys<sales и есть место — наценку не поднимаем"
-	}
-
-	enqueueTelegramMessage(msg, "Markdown")
-
-	plainLog := fmt.Sprintf(
-		"%s [%s → %s] %s %s | buys=%d try=%d sales=%d/%d | price %d→%d nac %d→%d | AH=%d inv=%d held=%d share=%d | %s | %s\n",
-		item,
-		start.Format("15:04:05"),
-		end.Format("15:04:05"),
-		status,
-		rep.Action,
-		rep.Buys, rep.TrySells, rep.Sales, rep.NormalSales,
-		rep.PriceBefore, rep.PriceAfter, rep.NacenkaBefore, rep.NacenkaAfter,
-		rep.OnAH, rep.Inv, rep.Held, rep.Share,
-		rep.Reason,
-		decisionMark,
-	)
-	appendToFile("logs_interval.txt", plainLog)
-}
-
-func updateTelegramMessageWithoutLocks(prices, buyStats, sellStats map[string]int, date string, messageID int) {
-	if tgBot == nil {
-		return
-	}
-
-	currentTime := time.Now().Format("2006-01-02 15:04:05")
-	msgText := fmt.Sprintf("📊 Статистика за %s\nПоследнее обновление: %s\n\n", date, currentTime)
-	for item := range itemsConfig {
-		msgText += fmt.Sprintf(
-			"🔹 %s: %d ₽\n🛒 Куплено: %d\n💰 Продано: %d\n\n",
-			item,
-			prices[item],
-			buyStats[item],
-			sellStats[item],
-		)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	var newMessageID int
-	if messageID == 0 {
-		msg, err := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:    telegramChatID,
-			Text:   msgText,
-		})
-		if err != nil {
-			log.Printf("[Telegram] дашборд send: %v", err)
-			return
-		}
-		newMessageID = msg.ID
-	} else {
-		_, err := tgBot.EditMessageText(ctx, &bot.EditMessageTextParams{
-			ChatID:    telegramChatID,
-			MessageID: messageID,
-			Text:      msgText,
-		})
-		if err != nil {
-			log.Printf("[Telegram] дашборд edit: %v", err)
-			msg, sendErr := tgBot.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID:    telegramChatID,
-				Text:   msgText,
-			})
-			if sendErr != nil {
-				log.Printf("[Telegram] дашборд resend: %v", sendErr)
-				return
-			}
-			newMessageID = msg.ID
-		}
-	}
-
-	if newMessageID != 0 {
-		mutex.Lock()
-		dailyData.MessageID = newMessageID
-		snap := cloneDailySnapshotLocked()
-		mutex.Unlock()
-		persistDailySnapshot(&snap)
-	}
-}
-
-func updateTelegramMessageSimple() {
-	mutex.RLock()
-	prices := maps.Clone(data.Prices)
-	buyStats := maps.Clone(data.BuyStats)
-	sellStats := maps.Clone(data.SellStats)
-	date := dailyData.Date
-	messageID := dailyData.MessageID
-	mutex.RUnlock()
-	updateTelegramMessageWithoutLocks(prices, buyStats, sellStats, date, messageID)
 }

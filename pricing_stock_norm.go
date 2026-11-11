@@ -1,148 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"sort"
 	"strings"
 	"time"
 )
 
-// stock_norm_july11 — ядро 37e01ade (май–июль, норма стока / слоты АХ), без крутилки наценки.
-//
-// normal_count = порог переизбытка (не «держи ровно N»):
-//   held > norm ∧ sales < NormalSales → ↓ sell
-//   иначе sales < NormalSales → ↑ sell (переизбыток исключён)
-// Книга не якорь цены; рычаг: пусто ∧ сильно ниже пола книги → ↑.
-// Потолок ↑ (только ↑) — перцентиль минимальных цен мульти-селлеров (≥2 лота):
-//   sharp5 → 60%, sharp6 → 50%, sword7 → 40%,
-//   pochti → 25%, mega/яд3 → 10%, прочие мечи → 25%, остальное → 50%.
-// ↓ не трогаем.
-// set_min/set_max проверяются по книге в main.go.
-//
-// Rollback: capitalPolicy = capitalPolicyV9 (+book2).
-
-const capitalPolicyStockNorm = "stock_norm_july11"
-
-// Пусто + цена ниже bookFloor×ratio → можно ↑ к рынку.
-const stockNormBookCatchupRatio = 0.85
-
-const stockNormBookMidMultiMinLots = 2
-
-func isPricingPolicyStockNorm() bool {
-	return capitalPolicy == capitalPolicyStockNorm
-}
-
-type stockNormInput struct {
-	Held, OnAH, Sales, Buys, TrySells int
-	StockNorm, NormalSales            int
-	Price, Step, PriceFloor           int
-	BookFloor                         int
-	BookOK                            bool
-	BookMid                           int // потолок ↑ из книги; 0 = нет
-	BookMidOK                         bool
-	BookMidQ                          float64 // какой % использовали (лог)
-	BlockUp, BlockDown                bool
-}
-
-type stockNormDecision struct {
-	Action   string
-	NewPrice int
-	Reason   string
-}
-
-func stockNormDecide(in stockNormInput) stockNormDecision {
-	price := in.Price
-	if in.PriceFloor > 0 && price < in.PriceFloor {
-		price = in.PriceFloor
-	}
-	step := in.Step
-	if step <= 0 {
-		step = 1
-	}
-	norm := in.StockNorm
-	if norm <= 0 {
-		norm = 4
-	}
-	nSales := in.NormalSales
-	if nSales <= 0 {
-		nSales = 5
-	}
-
-	out := stockNormDecision{Action: "stock_norm_hold", NewPrice: price, Reason: "no_signal"}
-
-	applyDown := func(action, reason string) {
-		if in.BlockDown {
-			out.Action = "hold_manual_min"
-			out.Reason = "manual → ↓ запрещён"
-			return
-		}
-		cand := price - step
-		if in.PriceFloor > 0 && cand < in.PriceFloor {
-			cand = in.PriceFloor
-		}
-		if cand >= price {
-			out.Action = "stock_norm_hold_floor"
-			out.Reason = reason + " · floor"
-			return
-		}
-		out.Action = action
-		out.NewPrice = cand
-		out.Reason = reason
-	}
-
-	applyUp := func(action, reason string) {
-		if in.BlockUp {
-			out.Action = "hold_manual_max"
-			out.Reason = "manual → ↑ запрещён"
-			return
-		}
-		cand := price + step
-		if in.BookMidOK && in.BookMid > 0 {
-			qTag := fmt.Sprintf("p%.0f", in.BookMidQ*100)
-			if in.BookMidQ <= 0 {
-				qTag = "pmid"
-			}
-			if price >= in.BookMid {
-				out.Action = "stock_norm_hold_book_mid"
-				out.Reason = fmt.Sprintf("%s · уже ≥ bookMid(%s)=%d", reason, qTag, in.BookMid)
-				return
-			}
-			if cand > in.BookMid {
-				cand = in.BookMid
-				reason = reason + fmt.Sprintf(" · cap bookMid(%s)=%d", qTag, in.BookMid)
-			}
-		}
-		out.Action = action
-		out.NewPrice = cand
-		out.Reason = reason
-	}
-
-	// 1) Переизбыток: сток выше порога + слабые продажи → ↓
-	if in.Held > norm && in.Sales < nSales {
-		applyDown("stock_norm_price_down_overstock",
-			fmt.Sprintf("held=%d > norm=%d ∧ sales=%d < %d", in.Held, norm, in.Sales, nSales))
-		return out
-	}
-
-	// 2) Книга-рычаг: пусто и сильно ниже пола → ↑
-	if in.Held <= 0 && in.BookOK && in.BookFloor > 0 {
-		cap := int(float64(in.BookFloor)*stockNormBookCatchupRatio + 0.5)
-		if price < cap {
-			applyUp("stock_norm_price_up_book_empty",
-				fmt.Sprintf("empty ∧ price=%d < %.0f%% bookFloor=%d", price, stockNormBookCatchupRatio*100, in.BookFloor))
-			return out
-		}
-	}
-
-	// 3) Недобор продаж при отсутствии переизбытка → ↑
-	if in.Sales < nSales {
-		applyUp("stock_norm_price_up_deficit",
-			fmt.Sprintf("sales=%d < %d ∧ held=%d ≤ norm=%d", in.Sales, nSales, in.Held, norm))
-		return out
-	}
-
-	return out
-}
+// Нормы стока и пол/потолок рынка по книге АХ — общие помощники для pridumalnahuy и stock_target.
 
 // stockNormBookFloor — пол рынка для рычага/проверок (дорогое → дно мульти, иначе seller-p10).
 func stockNormBookFloor(item string, since time.Time) (floor int, ok bool) {
@@ -163,7 +27,7 @@ func stockNormBookFloor(item string, since time.Time) (floor int, ok bool) {
 	return 0, false
 }
 
-func stockNormBookMidQDefault(item string) float64 {
+func stockNormBookCeilQDefault(item string) float64 {
 	id := strings.ToLower(strings.TrimSpace(item))
 	switch {
 	case id == "sword-sharp5-1.21":
@@ -182,7 +46,7 @@ func stockNormBookMidQDefault(item string) float64 {
 	case strings.Contains(id, "sword"):
 		return 0.25 // loot и прочие мечи
 	default:
-		return 0.50 // броня / кирки — середина
+		return 0.50 // броня / кирки — потолок на перцентиле 50
 	}
 }
 
@@ -208,12 +72,12 @@ func stockNormBookFloorQDefault(item string) float64 {
 	}
 }
 
-// stockNormBookMidQForConfig — потолок ↑: JSON book_mid_q или дефолт по id.
-func stockNormBookMidQForConfig(cfg ItemConfig) float64 {
-	if cfg.BookMidQ > 0 && cfg.BookMidQ < 1 {
-		return cfg.BookMidQ
+// stockNormBookCeilQForConfig — потолок ↑: JSON book_ceil_q или дефолт по id.
+func stockNormBookCeilQForConfig(cfg ItemConfig) float64 {
+	if cfg.BookCeilQ > 0 && cfg.BookCeilQ < 1 {
+		return cfg.BookCeilQ
 	}
-	return stockNormBookMidQDefault(cfg.ID)
+	return stockNormBookCeilQDefault(cfg.ID)
 }
 
 // stockNormBookFloorQForConfig — порог empty catchup / низ ↓ (прыжок к полу).
@@ -224,22 +88,47 @@ func stockNormBookFloorQForConfig(cfg ItemConfig) float64 {
 	return stockNormBookFloorQDefault(cfg.ID)
 }
 
-// stockNormBookMidQForItem — legacy / тесты без полного ItemConfig.
-func stockNormBookMidQForItem(item string) float64 {
-	return stockNormBookMidQDefault(item)
+// ahBookMinMultiSellers — меньше стольких продавцов с ≥N лотами выборка слишком мала (перцентиль по 4–6 точкам
+// скачет ступеньками): тогда берём всех продавцов.
+const ahBookMinMultiSellers = 5
+
+// bookMinLotsForConfig — book_min_lots: сколько лотов предмета должно быть у продавца, чтобы попасть в
+// перцентиль (минимум по продавцу). 0 = 2 (ходовые: отсекаем разовых «сливальщиков»), 1 = все продавцы
+// (редкие предметы: продавцов мало, фильтр оставляет 4–6 точек).
+func bookMinLotsForConfig(cfg ItemConfig) int {
+	if cfg.BookMinLots <= 0 {
+		return 2
+	}
+	return cfg.BookMinLots
 }
 
-func stockNormBookPercentileSince(item string, since time.Time, q float64) (px int, ok bool) {
+func stockNormBookPercentileSince(cfg ItemConfig, since time.Time, q float64) (px int, ok bool) {
+	return stockNormBookPercentileMode(cfg, since, q, bookMinLotsForConfig(cfg))
+}
+
+// bookFloorMinLotsForConfig — book_floor_min_lots: режим продавцов для ПОЛА. 0 = 1 (все продавцы, минимум по
+// каждому): пол должен ловить «мы ниже рынка», и разовые продавцы тут не мешают.
+func bookFloorMinLotsForConfig(cfg ItemConfig) int {
+	if cfg.BookFloorMinLots <= 0 {
+		return 1
+	}
+	return cfg.BookFloorMinLots
+}
+
+// stockNormBookPercentileMode — перцентиль минимальных цен продавцов; minLots ≥2: только продавцы с ≥minLots
+// лотов (при выборке меньше ahBookMinMultiSellers — вся книга), minLots=1: все продавцы.
+func stockNormBookPercentileMode(cfg ItemConfig, since time.Time, q float64, minLots int) (px int, ok bool) {
 	if q <= 0 || q >= 1 {
 		return 0, false
 	}
-	if mps, mn := ahBookMultiSellerMinPricesSince(item, since, stockNormBookMidMultiMinLots); mn >= 1 {
-		px = ahBookPercentileSorted(mps, q)
-		if px > 0 {
-			return px, true
+	if minLots >= 2 {
+		if mps, mn := ahBookMultiSellerMinPricesSince(cfg.ID, since, minLots); mn >= ahBookMinMultiSellers {
+			if px = ahBookPercentileSorted(mps, q); px > 0 {
+				return px, true
+			}
 		}
 	}
-	ps, n := ahBookSellerMinPricesSince(item, since)
+	ps, n := ahBookSellerMinPricesSince(cfg.ID, since)
 	if n < ahBookMarketMinSellers {
 		return 0, false
 	}
@@ -262,218 +151,44 @@ func applyRiskCut(px int, cfg ItemConfig) int {
 	return out
 }
 
-// stockNormBookMid — потолок ↑ из мульти-селлеров (fallback: все селлеры, тот же %).
-// Только блокирует ↑; ↓/overstock не трогает. risk_cut сдвигает потолок вниз.
-func stockNormBookMid(cfg ItemConfig, since time.Time) (mid int, q float64, ok bool) {
-	q = stockNormBookMidQForConfig(cfg)
-	mid, ok = stockNormBookPercentileSince(cfg.ID, since, q)
-	if ok {
-		mid = applyRiskCut(mid, cfg)
+// Потолок и пол считаются по окну 30 минут (ahBookCeilWindow / ahBookFloorWindow) без сглаживания:
+// перцентиль читается как есть, длинные окна не используем (в 3-часовом полно давно проданных дампов).
+const (
+	ahBookCeilWindow  = 30 * time.Minute
+	ahBookFloorWindow = 30 * time.Minute
+)
+
+// stockNormBookCatchupFloorNow — пол по окну ahBookFloorWindow, считая от now.
+func stockNormBookCatchupFloorNow(cfg ItemConfig, now time.Time) (floor int, q float64, ok bool) {
+	return stockNormBookCatchupFloor(cfg, now.Add(-ahBookFloorWindow))
+}
+
+// stockNormBookCeilNow — потолок по окну ahBookCeilWindow, считая от now.
+func stockNormBookCeilNow(cfg ItemConfig, now time.Time) (ceil int, q float64, ok bool) {
+	if cfg.BookCeilQNight > 0 && isNightNow(now) {
+		cfg.BookCeilQ = cfg.BookCeilQNight // ночной режим: q как в «хорошую ночь»
 	}
-	return mid, q, ok
+	return stockNormBookCeil(cfg, now.Add(-ahBookCeilWindow))
+}
+
+// stockNormBookCeil — потолок ↑ по книге: минимум по каждому продавцу (с ≥book_min_lots лотов).
+// Только блокирует ↑; ↓/overstock не трогает. risk_cut сдвигает потолок вниз.
+func stockNormBookCeil(cfg ItemConfig, since time.Time) (ceil int, q float64, ok bool) {
+	q = stockNormBookCeilQForConfig(cfg)
+	ceil, ok = stockNormBookPercentileSince(cfg, since, q)
+	if ok {
+		ceil = applyRiskCut(ceil, cfg)
+	}
+	return ceil, q, ok
 }
 
 func stockNormBookCatchupFloor(cfg ItemConfig, since time.Time) (floor int, q float64, ok bool) {
 	q = stockNormBookFloorQForConfig(cfg)
-	floor, ok = stockNormBookPercentileSince(cfg.ID, since, q)
+	floor, ok = stockNormBookPercentileMode(cfg, since, q, bookFloorMinLotsForConfig(cfg))
 	if ok {
 		floor = applyRiskCut(floor, cfg)
 	}
 	return floor, q, ok
-}
-
-func adjustPriceStockNorm(
-	item string,
-	cfg ItemConfig,
-	now time.Time,
-	_ time.Time,
-	sales, buys, trySells, profitNow int,
-	state ItemAdjustState,
-	priceBefore, nacenka, nacenkaBefore, step, minPrice, nacenkaSumNow, nacenkaSumPrev, priceFloor int,
-	onAH, invCount, totalHeld, share, free, need, stockNorm int,
-	underbuyOK bool,
-	tryRatio, stockLoad float64,
-	onlineForCap, onlineMaxForML int,
-	ahCounts map[string]int,
-) AdjustReport {
-	if step <= 0 {
-		step = 1
-	}
-	if stockNorm <= 0 {
-		stockNorm = stockNormFromConfig(cfg)
-	}
-	if stockNorm <= 0 {
-		stockNorm = 4
-	}
-	normalSales := cfg.NormalSales
-	if normalSales <= 0 {
-		normalSales = 5
-	}
-
-	blockUp, blockDown := manualDirectionClampLocked(item, cfg.AnalysisTime)
-
-	mutex.Unlock()
-	bookSince := now.Add(-ahBook2Window)
-	bookFloor, bookOK := stockNormBookFloor(item, bookSince)
-	bookMid, bookMidQ, bookMidOK := stockNormBookMid(cfg, bookSince)
-	mutex.Lock()
-
-	nacT := nacenka
-	if nacT <= 0 {
-		nacT = nacenkaBaseLocked(item, cfg)
-	}
-
-	dec := stockNormDecide(stockNormInput{
-		Held:        totalHeld,
-		OnAH:        onAH,
-		Sales:       sales,
-		Buys:        buys,
-		TrySells:    trySells,
-		StockNorm:   stockNorm,
-		NormalSales: normalSales,
-		Price:       priceBefore,
-		Step:        step,
-		PriceFloor:  priceFloor,
-		BookFloor:   bookFloor,
-		BookOK:      bookOK,
-		BookMid:     bookMid,
-		BookMidOK:   bookMidOK,
-		BookMidQ:    bookMidQ,
-		BlockUp:     blockUp,
-		BlockDown:   blockDown,
-	})
-
-	newPrice := dec.NewPrice
-	action := dec.Action
-	maxReach := maxReachableStockOnAHLocked(item, cfg, onAH, ahCounts)
-	notes := []string{
-		fmt.Sprintf(
-			"stock_norm held=%d onAH=%d inv=%d norm=%d maxReach=%d sales=%d/%d bookFloor=%d ok=%v bookMid=%d q=%.2f midOK=%v | %s",
-			totalHeld, onAH, invCount, stockNorm, maxReach, sales, normalSales, bookFloor, bookOK, bookMid, bookMidQ, bookMidOK, dec.Reason,
-		),
-	}
-
-	// Слоты АХ забиты другими id → норма недостижима → не ↑ (как 37e01ade).
-	if strings.Contains(action, "price_up") &&
-		!allowSellPriceIncreaseLocked(item, cfg, onAH, ahCounts, stockNorm) {
-		newPrice = priceBefore
-		action = "stock_norm_hold_slots"
-		notes = append(notes, fmt.Sprintf("↑ blocked: maxReachable=%d < norm=%d (слоты заняты другими)", maxReach, stockNorm))
-	}
-
-	state.LastCycleSales = sales
-	state.LastCycleProfit = profitNow
-	state.LastCycleNacenkaSum = nacenkaSumNow
-	if onAH > 0 {
-		state.EmptyMarketGapStreak = 0
-	} else if sales == 0 && buys == 0 {
-		state.EmptyMarketGapStreak++
-	} else {
-		state.EmptyMarketGapStreak = 0
-	}
-	data.AdjustState[item] = state
-	dailyData.AdjustState[item] = state
-
-	changed := newPrice != priceBefore
-	if changed {
-		data.Prices[item] = newPrice
-		dailyData.Prices[item] = newPrice
-		lastPriceUpdate[item] = now
-	}
-
-	reason := actionReasonRU(action)
-	if len(notes) > 0 {
-		reason = reason + " | " + strings.Join(notes, " · ")
-	}
-
-	dir := "HOLD"
-	if strings.Contains(action, "price_up") {
-		dir = "UP"
-	} else if strings.Contains(action, "price_down") {
-		dir = "DOWN"
-	}
-	log.Printf("[STOCK_NORM] %s: %s %s | цена %d→%d nac=%d | held=%d norm=%d sales=%d book=%d mid=%d | %s",
-		item, dir, action, priceBefore, newPrice, nacT, totalHeld, stockNorm, sales, bookFloor, bookMid, dec.Reason)
-
-	queueMLDecisionLocked(
-		item, cfg, action,
-		priceBefore, newPrice, nacenkaBefore, nacT,
-		now,
-		onlineForCap, onlineMaxForML,
-	)
-
-	capitalRow := CapitalCycleRow{
-		Policy:         capitalPolicy,
-		Item:           item,
-		Category:       cfg.Type,
-		Action:         action,
-		Winner:         action,
-		Dump:           0,
-		Fill:           stockLoad,
-		Skim:           0,
-		Threshold:      float64(stockNorm),
-		Sales:          sales,
-		Buys:           buys,
-		TrySells:       trySells,
-		OnAH:           onAH,
-		Inv:            invCount,
-		Held:           totalHeld,
-		Share:          share,
-		Free:           free,
-		Need:           need,
-		NormalSales:    normalSales,
-		NormalCount:    stockNorm,
-		TryRatio:       tryRatio,
-		StockLoad:      stockLoad,
-		Underbuy:       underbuyOK,
-		PriceBefore:    priceBefore,
-		PriceAfter:     newPrice,
-		NacenkaBefore:  nacenkaBefore,
-		NacenkaAfter:   nacT,
-		NacenkaSumNow:  nacenkaSumNow,
-		NacenkaSumPrev: nacenkaSumPrev,
-		PriceFloor:     priceFloor,
-		Step:           step,
-		PlayersOnline:  onlineForCap,
-		Notes:          strings.Join(notes, " · "),
-		ProfitNow:      profitNow,
-		MinBuyHistory:  minPrice,
-		BotsCategory:   botsForGoTypeLocked(cfg.Type),
-		CycleMinutes:   cfg.AnalysisTime.Minutes(),
-		DecisionAt:     now,
-		CycleDuration:  cfg.AnalysisTime,
-	}
-	_ = ahCounts
-
-	needBroadcast := changed
-	mutex.Unlock()
-	logCapitalCycle(capitalRow)
-	if needBroadcast {
-		publishPriceUpdate()
-	}
-	saveDailyDataNoMessageUpdate()
-
-	return AdjustReport{
-		Item:          item,
-		Action:        action,
-		Reason:        reason,
-		PriceBefore:   priceBefore,
-		PriceAfter:    newPrice,
-		NacenkaBefore: nacenkaBefore,
-		NacenkaAfter:  nacT,
-		Sales:         sales,
-		Buys:          buys,
-		TrySells:      trySells,
-		OnAH:          onAH,
-		Inv:           invCount,
-		Held:          totalHeld,
-		NormalSales:   normalSales,
-		Share:         share,
-		Free:          free,
-		Need:          need,
-		PriceFloor:    priceFloor,
-		Step:          step,
-	}
 }
 
 // serverMaxBookAnomalous — set_max далеко от книги: шум FunTime / стена.
@@ -496,4 +211,68 @@ func serverMaxBookAnomalous(ours, proposed int, item string, now time.Time) bool
 		return true
 	}
 	return false
+}
+
+// Прыжок к полу (только предметы с floor_jump=true): цена ниже пола 2 цикла подряд — предмет «мёртвый»
+// (по данным продаж в 12 раз меньше, покупок почти нет, цена сама возвращается за 3 цикла лишь в 28% случаев).
+const (
+	floorJumpOwnSalesWindow = 24 * time.Hour
+	floorJumpOwnSalesMin    = 8
+	floorJumpMaxUpPct       = 10 // за один прыжок не больше +10% к цене
+)
+
+// ownSalesQuantile — перцентиль цен наших продаж за окно (trade_events). ok=false, если продаж меньше minN.
+func ownSalesQuantile(item string, now time.Time, window time.Duration, q float64, minN int) (px int, ok bool) {
+	if mlDB == nil || strings.TrimSpace(item) == "" {
+		return 0, false
+	}
+	mlDBMu.Lock()
+	rows, err := mlDB.Query(
+		`SELECT price FROM trade_events
+		 WHERE item_id = ? AND event_type = 'sell' AND ts >= ? AND price > 0 AND nacenka < 100000000`,
+		item, now.Add(-window).UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		mlDBMu.Unlock()
+		return 0, false
+	}
+	var ps []int
+	for rows.Next() {
+		var p int
+		if rows.Scan(&p) == nil && p > 0 {
+			ps = append(ps, p)
+		}
+	}
+	_ = rows.Close()
+	mlDBMu.Unlock()
+	if len(ps) < minN {
+		return 0, false
+	}
+	sort.Ints(ps)
+	return ahBookPercentileSorted(ps, q), true
+}
+
+// floorJumpTarget — куда прыгать вверх: меньшее из (пол сейчас, пол прошлого цикла, p25 наших продаж за 24 ч),
+// не больше +floorJumpMaxUpPct% к цене и не выше потолка. 0 — прыгать некуда.
+func floorJumpTarget(price, floorNow, floorPrev, ownP25 int, ownOK bool, ceil int, ceilOK bool) int {
+	if floorNow <= 0 || price <= 0 {
+		return 0
+	}
+	t := floorNow
+	if floorPrev > 0 && floorPrev < t {
+		t = floorPrev
+	}
+	if ownOK && ownP25 > 0 && ownP25 < t {
+		t = ownP25
+	}
+	if up := price + price*floorJumpMaxUpPct/100; t > up {
+		t = up
+	}
+	if ceilOK && ceil > 0 && t > ceil {
+		t = ceil
+	}
+	if t <= price {
+		return 0
+	}
+	return t
 }

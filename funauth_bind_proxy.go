@@ -51,13 +51,13 @@ type funauthBindProxy struct {
 }
 
 type funauthBindProxyView struct {
-	ID     string `json:"id"`
-	URL    string `json:"url"`
-	Host   string `json:"host"`
-	Label  string `json:"label,omitempty"`
-	OK     *bool  `json:"ok"` // null = ещё не проверяли
-	Err    string `json:"err,omitempty"`
-	CheckedAt int64 `json:"checkedAt,omitempty"`
+	ID        string `json:"id"`
+	URL       string `json:"url"`
+	Host      string `json:"host"`
+	Label     string `json:"label,omitempty"`
+	OK        *bool  `json:"ok"` // null = ещё не проверяли
+	Err       string `json:"err,omitempty"`
+	CheckedAt int64  `json:"checkedAt,omitempty"`
 }
 
 type bindProxyCacheEntry struct {
@@ -67,11 +67,11 @@ type bindProxyCacheEntry struct {
 }
 
 type funauthBindProxyPool struct {
-	mu      sync.Mutex
-	path    string
-	items   []funauthBindProxy
-	cache   map[string]bindProxyCacheEntry
-	rr      uint32
+	mu    sync.Mutex
+	path  string
+	items []funauthBindProxy
+	cache map[string]bindProxyCacheEntry
+	rr    uint32
 }
 
 var funauthBindProxies = &funauthBindProxyPool{}
@@ -327,4 +327,12 @@ func pickBindSOCKS() string {
 // pickFarmLoginSOCKS — для FunAuth login/connect: пул bind-прокси (не ip.json ботов).
 func pickFarmLoginSOCKS() string {
 	return pickBindSOCKS()
+}
+
+func socksURLHost(proxyURL string) string {
+	u, err := url.Parse(strings.TrimSpace(proxyURL))
+	if err != nil || u.Hostname() == "" {
+		return normalizeProxyHost(proxyURL)
+	}
+	return u.Hostname()
 }

@@ -38,9 +38,22 @@ type CatalogItemOut struct {
 	MaxEffects       []ItemEffect `json:"max_effects,omitempty"`
 	ExactEffects     bool         `json:"exact_effects,omitempty"`
 	LoreMatch        string       `json:"lore_match,omitempty"`
-	// BookFloor / BookMid — перцентили книги (sell-шкала) для фильтра FunTime min/max на боте.
+	// BookFloor / BookCeil — перцентили книги (sell-шкала) для фильтра FunTime min/max на боте.
 	BookFloor int `json:"bookFloor,omitempty"`
-	BookMid   int `json:"bookMid,omitempty"`
+	BookCeil  int `json:"bookMid,omitempty"` // имя в проводе — bookMid: его читает бот (item_parse.rs), не менять без пересборки бота
+	// RatePerHour — скорость продаж товара (шт/ч, с поправкой на онлайн), Held — сколько его на руках по
+	// флоту (АХ + инвентарь). Бот по ним считает прибыль лота на слот в час (время слива = (Held+1)/Rate).
+	RatePerHour float64 `json:"ratePerHour,omitempty"`
+	Held        int     `json:"held,omitempty"`
+	// SlotValue — прибыль товара на слот в час по реальным сделкам за 48 ч (slot_value.go); SlotValueRef — средняя
+	// по категории. Шаг 1: боты пока не используют.
+	SlotValue    float64 `json:"slotValue,omitempty"`
+	SlotValueRef float64 `json:"slotValueRef,omitempty"`
+	// SlotMode — stable / opportunistic / unknown (slot_value.go). Шаг 1: боты пока не используют.
+	SlotMode string `json:"slotMode,omitempty"`
+	// ScoreRef — типичная оценка лота у флота сейчас (медиана свежих покупок по категории, lot_score_ref.go).
+	// Бот берёт сверх лимита 8 штук только лоты с оценкой ≥ 1,5 × ScoreRef.
+	ScoreRef float64 `json:"scoreRef,omitempty"`
 }
 
 type ItemEffect struct {
@@ -91,6 +104,8 @@ var (
 	clientActiveTypes = make(map[*websocket.Conn]map[string]struct{})
 	clientFleetTypes  = make(map[*websocket.Conn]map[string]struct{})
 	clientBotsPerType = make(map[*websocket.Conn]map[string]int)
+	// слотов АХ по go-типу от оркестратора (5 на бота, 10 у бота с арендой)
+	clientSlotsPerType = make(map[*websocket.Conn]map[string]int)
 )
 
 var itemLimit = map[string]int{
@@ -104,21 +119,33 @@ var inventoryLimit = map[string]int{
 }
 
 type ItemConfig struct {
-	ID               string
-	Name             string
-	Type             string
-	BasePrice        int
-	NormalSales      int
-	NormalCount      int
-	PriceStep        int
-	AnalysisTime     time.Duration
-	Nacenka          int
-	NacenkaMin       int
-	Num              int
-	// BookMidQ — перцентиль мульти-селлеров, потолок ↑ (0 = дефолт по id).
-	BookMidQ float64
+	ID           string
+	Name         string
+	Type         string
+	BasePrice    int
+	NormalSales  int
+	NormalCount  int
+	PriceStep    int
+	AnalysisTime time.Duration
+	Nacenka      int
+	NacenkaMin   int
+	Num          int
+	// BookCeilQ — перцентиль мульти-селлеров, потолок ↑ (0 = дефолт по id).
+	BookCeilQ float64
 	// BookFloorQ — перцентиль порога empty catchup «мы слишком дёшевы» (0 = дефолт).
 	BookFloorQ float64
+	// BookMinLots — продавцы с ≥N лотами в перцентилях потолка (0 = 2; 1 = все продавцы, для редких).
+	BookMinLots int
+	// BookFloorMinLots — то же для пола (0 = 1: все продавцы).
+	BookFloorMinLots int
+	// FloorJump — прыжок вверх к полу, если цена ниже пола 2 цикла подряд (только ходовые, см. floorJumpTarget).
+	FloorJump bool
+	// NoBuy — боты не закупают предмет (в каталог уходит наценка больше цены → buy_price<0), но уже купленный
+	// запас продают по обычной цене.
+	NoBuy bool
+	// BookCeilQNight — ночной режим (онлайн ниже порога): q потолка и прыжок к потолку как в «хорошую ночь» 03→04.11
+	// (любой разрыв, без подтверждения). 0 = ночного режима у предмета нет.
+	BookCeilQNight float64
 	// RiskCut — минус к цене (book_peg: от перцентиля; иначе от пол/потолка рельс), ₽.
 	RiskCut int
 	// PriceMode — "" = коридор; "book_peg" = sell = book_peg_q − risk_cut.
@@ -127,11 +154,28 @@ type ItemConfig struct {
 	BookPegQ float64
 	// BookPegMinSellers — минимум продавцов, иначе hold (0 → 3).
 	BookPegMinSellers int
-	Effects          []ItemEffect
-	ForbiddenEffects []ItemEffect
-	MaxEffects       []ItemEffect
-	ExactEffects     bool
-	LoreMatch        string
+	// BuyStopQ — перцентиль минимальных цен продавцов в книге: если наша цена выше, закупка выключается (0 = нет защиты).
+	// BuyStopMinSellers — минимум продавцов для достоверного потолка (0 → 5), иначе защита не работает.
+	BuyStopQ          float64
+	BuyStopMinSellers int
+	// BuyStopHeld — закупка выключается, пока на АХ и в инвентарях флота лежит столько штук (0 = нет такого стопа).
+	BuyStopHeld int
+	// HotPriceCapQ — ходовые: повышение цены блокируется, когда наша цена ≥ этого перцентиля рынка (минимумы по
+	// продавцам, книга). HotTetherQ — если цена выше этого перцентиля, она плавно возвращается вниз (шаг за цикл),
+	// даже без затоварки. 0 = выключено. Без привязки к рынку ходовая цена дрейфует вверх и ночью продажи падают на 60–80%.
+	HotPriceCapQ float64
+	HotTetherQ   float64
+	Effects           []ItemEffect
+	ForbiddenEffects  []ItemEffect
+	MaxEffects        []ItemEffect
+	ExactEffects      bool
+	LoreMatch         string
+	Hot bool `json:"hot,omitempty"`
+	// Пороги hot-логики. 0 → дефолт от NormalSales (N/2 и N).
+	HotDownSalesMax int `json:"hot_down_sales_max,omitempty"`
+	HotDownStockMin int `json:"hot_down_stock_min,omitempty"`
+	HotUpSalesMax   int `json:"hot_up_sales_max,omitempty"`
+	HotUpStockMax   int `json:"hot_up_stock_max,omitempty"`
 }
 
 type DailyData struct {
@@ -165,6 +209,7 @@ type RuntimePersist struct {
 }
 
 var itemsConfig map[string]ItemConfig
+
 // itemsNacenkaBase — nac из JSON при load; runtime setRuntimeNacenka его не трогает (для book2 adapt).
 var itemsNacenkaBase map[string]int
 
@@ -284,6 +329,7 @@ func runServer() {
 	// HTTP сразу: /funauth и /ws не ждут SQLite (quick_check на 480МБ вешал старт).
 	goImmortal("broadcastBroker", broadcastBroker)
 	goImmortal("cacheCleanup", startCacheCleanup)
+	goImmortal("catalogStatsRefresh", startCatalogStatsRefresh)
 	goImmortal("httpServer", startHTTPServer)
 	goImmortal("clanSetupDispatch", startClanSetupDispatcher)
 
@@ -317,6 +363,17 @@ func filterPrices() PriceUpdate {
 	return PriceUpdate{Prices: filteredPrices}
 }
 
+// noBuyNacenka — «бесконечная» наценка для no_buy: бот считает buy_price = sell − nacenka < 0 и не покупает.
+const noBuyNacenka = 900_000_000
+
+func catalogNacenka(id string, cfg ItemConfig) int {
+	// no_buy и стоп-закуп (цена выше рынка, см. buy_stop.go) выключают закупку одинаково
+	if cfg.NoBuy || buyStopActive[id] || buyStopStock[id] {
+		return noBuyNacenka
+	}
+	return getNacenka(id)
+}
+
 func buildCatalogOut() []CatalogItemOut {
 	out := make([]CatalogItemOut, 0, len(itemsConfig))
 	for id, cfg := range itemsConfig {
@@ -324,7 +381,7 @@ func buildCatalogOut() []CatalogItemOut {
 			ID:               id,
 			Name:             cfg.Name,
 			Type:             cfg.Type,
-			Nacenka:          getNacenka(id),
+			Nacenka:          catalogNacenka(id, cfg),
 			Num:              cfg.Num,
 			Effects:          cfg.Effects,
 			ForbiddenEffects: cfg.ForbiddenEffects,
@@ -342,8 +399,7 @@ func enrichCatalogBookBounds(p *PriceUpdate) {
 		return
 	}
 	now := time.Now()
-	floorSince := now.Add(-ahBookRaiseWindow)
-	midSince := now.Add(-ahBook2Window)
+	ceilSince := now.Add(-ahBook2Window) // book-peg режим: прежнее окно
 
 	mutex.RLock()
 	cfgs := make(map[string]ItemConfig, len(p.Catalog))
@@ -354,23 +410,42 @@ func enrichCatalogBookBounds(p *PriceUpdate) {
 	}
 	mutex.RUnlock()
 
+	mutex.RLock()
+	for i := range p.Catalog {
+		id := p.Catalog[i].ID
+		if inf, ok := stockTargetLocked(id, now); ok {
+			p.Catalog[i].RatePerHour = inf.RatePerHour * inf.OnlineFactor
+		}
+		p.Catalog[i].Held = getItemCount(id) + getInventoryCount(id)
+		sv, ref, ok := slotValueLocked(id, now)
+		if ok {
+			p.Catalog[i].SlotValue = sv.Value
+			p.Catalog[i].SlotValueRef = ref
+		}
+		p.Catalog[i].SlotMode = slotMode(sv, ref)
+		if cfg, ok := itemsConfig[id]; ok {
+			p.Catalog[i].ScoreRef = lotScoreRef(cfg.Type, now)
+		}
+	}
+	mutex.RUnlock()
+
 	for i := range p.Catalog {
 		cfg, ok := cfgs[p.Catalog[i].ID]
 		if !ok {
 			continue
 		}
 		if isBookPegConfig(cfg) {
-			if tgt, _, _, _, ok := bookPegTarget(cfg, midSince); ok && tgt > 0 {
-				p.Catalog[i].BookMid = tgt
+			if tgt, _, _, _, ok := bookPegTarget(cfg, ceilSince); ok && tgt > 0 {
+				p.Catalog[i].BookCeil = tgt
 				p.Catalog[i].BookFloor = tgt
 			}
 			continue
 		}
-		if floor, _, fok := stockNormBookCatchupFloor(cfg, floorSince); fok && floor > 0 {
+		if floor, _, fok := stockNormBookCatchupFloorNow(cfg, now); fok && floor > 0 {
 			p.Catalog[i].BookFloor = floor
 		}
-		if mid, _, mok := stockNormBookMid(cfg, midSince); mok && mid > 0 {
-			p.Catalog[i].BookMid = mid
+		if ceil, _, cok := stockNormBookCeilNow(cfg, now); cok && ceil > 0 {
+			p.Catalog[i].BookCeil = ceil
 		}
 	}
 }
@@ -415,6 +490,27 @@ func aggregateActiveTypesLocked() map[string]int {
 	return counts
 }
 
+func setClientSlotsPerType(ws *websocket.Conn, counts map[string]int) {
+	if len(counts) == 0 {
+		clientSlotsPerType[ws] = make(map[string]int)
+		return
+	}
+	clientSlotsPerType[ws] = copyMap(counts)
+}
+
+// aggregateSlotsPerTypeLocked — сумма слотов АХ по go-типу со всех оркестраторов.
+func aggregateSlotsPerTypeLocked() map[string]int {
+	totals := make(map[string]int)
+	for _, m := range clientSlotsPerType {
+		for t, n := range m {
+			if n > 0 {
+				totals[t] += n
+			}
+		}
+	}
+	return totals
+}
+
 func setClientBotsPerType(ws *websocket.Conn, counts map[string]int) {
 	if len(counts) == 0 {
 		clientBotsPerType[ws] = make(map[string]int)
@@ -448,26 +544,6 @@ func logGlobalFleetState(prefix string) {
 	}
 	sort.Strings(parts)
 	log.Printf("%s активные типы: %s", prefix, strings.Join(parts, ", "))
-}
-
-// isMinecraftTypeActiveLocked — вызывать только под mutex.Lock (не RLock!).
-func isMinecraftTypeActiveLocked(minecraftType string) bool {
-	if minecraftType == "" {
-		return false
-	}
-	for _, types := range clientActiveTypes {
-		if catalogTypeActiveIn(types, minecraftType) {
-			return true
-		}
-	}
-	return false
-}
-
-// Тип активен, если хотя бы один подключённый оркестратор прислал живых ботов этого типа.
-func isMinecraftTypeActive(minecraftType string) bool {
-	mutex.RLock()
-	defer mutex.RUnlock()
-	return isMinecraftTypeActiveLocked(minecraftType)
 }
 
 func setClientActiveTypes(ws *websocket.Conn, activeTypes []string) {
@@ -505,18 +581,6 @@ func updateTypeFleetActivityLocked() {
 			delete(typeInactiveSince, t)
 		}
 	}
-}
-
-// typeWasActiveForAnalysisWindowLocked — тип был активен с начала окна анализа (бот не перезапускался mid-window).
-func typeWasActiveForAnalysisWindowLocked(minecraftType string, windowStart time.Time) bool {
-	if !isMinecraftTypeActiveLocked(minecraftType) {
-		return false
-	}
-	since, ok := typeActiveSince[minecraftType]
-	if !ok || since.IsZero() {
-		return false
-	}
-	return !since.After(windowStart)
 }
 
 func setClientFleetTypes(ws *websocket.Conn, fleetTypes []string) {
@@ -562,11 +626,12 @@ func removeClient(ws *websocket.Conn) {
 	delete(clientActiveTypes, ws)
 	delete(clientFleetTypes, ws)
 	delete(clientBotsPerType, ws)
-	clearClientTreasuryEmptyTypes(ws)
+	delete(clientSlotsPerType, ws)
 	delete(clientBannedBots, ws)
 	delete(clientAuthFaults, ws)
 	delete(clientClanOwners, ws)
 	deleteClientOrchBots(ws)
+	deleteClientConfigBots(ws)
 	deleteClientOrchestratorAnarchy(ws)
 }
 
@@ -608,6 +673,19 @@ func startCacheCleanup() {
 	}
 }
 
+// startCatalogStatsRefresh — боты выбирают лот по прибыли на слот в час, а скорость продаж и запас на руках
+// (ratePerHour / held в каталоге) они получают только вместе с рассылкой цен. Без этого тикера цифры
+// обновлялись бы лишь раз в цикл (10 мин) или при заморозке, и оценка лота опиралась бы на устаревший запас.
+func startCatalogStatsRefresh() {
+	ticker := time.NewTicker(catalogStatsRefreshEvery)
+	defer ticker.Stop()
+	for range ticker.C {
+		publishPriceUpdate()
+	}
+}
+
+const catalogStatsRefreshEvery = 60 * time.Second
+
 func getCurrentJsonList() []string {
 	jsonCacheMu.RLock()
 	defer jsonCacheMu.RUnlock()
@@ -617,12 +695,6 @@ func getCurrentJsonList() []string {
 		list = append(list, k)
 	}
 	return list
-}
-
-func getConnectedClientsCount() int {
-	mutex.Lock()
-	defer mutex.Unlock()
-	return len(clients)
 }
 
 // pruneStaleDataKeys удаляет из data_* id, которых нет в items_config (старые *-шипы и т.п.).
@@ -1014,8 +1086,9 @@ func maxAnalysisRetain() time.Duration {
 			max = w
 		}
 	}
-	if max < time.Hour {
-		max = time.Hour
+	// 3 часа: по ним считается скорость слива для динамической цели запаса (stock_target.go)
+	if max < stockRateWindow {
+		max = stockRateWindow
 	}
 	if max > 6*time.Hour {
 		max = 6 * time.Hour
@@ -1086,13 +1159,6 @@ func persistRuntimeState(snap *RuntimePersist) {
 	if err := os.Rename(tmp, runtimeStatePath); err != nil {
 		_ = os.WriteFile(runtimeStatePath, file, 0644)
 	}
-}
-
-func saveRuntimeState() {
-	mutex.Lock()
-	snap := buildRuntimePersistLocked()
-	mutex.Unlock()
-	persistRuntimeState(&snap)
 }
 
 func loadRuntimeState() {
@@ -1278,17 +1344,6 @@ func startItemTimers() {
 	}
 }
 
-func getItemStatsForReporting(item string, since time.Time) (sales, buys, trySells, price int) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	sales = countRecentSales(item, since)
-	buys = countRecentBuys(item, since)
-	trySells = countRecentTrySells(item, since)
-	price = data.Prices[item]
-	return
-}
-
 func adjustAndReport(item string, cfg ItemConfig) {
 	if !itemConfigActiveLocked(cfg) {
 		log.Printf("[SKIP] %s: тип %s — нет активных ботов на оркестраторах", item, cfg.Type)
@@ -1390,34 +1445,6 @@ func checkDayChange(loc *time.Location) {
 	}
 }
 
-func saveDailyData() {
-	today := currentDay
-	if today == "" {
-		return
-	}
-
-	filename := fmt.Sprintf("data_%s.json", today)
-	dailyData.Prices = data.Prices
-	dailyData.Nacenkas = data.Nacenkas
-	dailyData.AdjustState = data.AdjustState
-	dailyData.BuyStats = data.BuyStats
-	dailyData.SellStats = data.SellStats
-	dailyData.TrySellStats = data.TrySellStats
-	dailyData.BuySum = data.BuySum
-	dailyData.SellSum = data.SellSum
-
-	file, err := json.MarshalIndent(dailyData, "", "  ")
-	if err != nil {
-		log.Printf("Ошибка сохранения данных: %v", err)
-		return
-	}
-
-	if err := os.WriteFile(filename, file, 0644); err != nil {
-		log.Printf("Ошибка записи файла: %v", err)
-		return
-	}
-}
-
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -1472,33 +1499,35 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var msg struct {
-			Action              string          `json:"action"`
-			Type                string          `json:"type"`
-			Items               map[string]int  `json:"items"`
-			Inventory           map[string]int  `json:"inventory"`
-			Types               []string        `json:"types"`
-			ActiveTypes         []string        `json:"active_types"`
-			BotsPerType         map[string]int  `json:"bots_per_type"`
-			TreasuryEmptyTypes  []string        `json:"treasury_empty_types"`
-			Banned              []bannedBotView `json:"banned"`
-			AuthFaults          []authFaultView `json:"auth_faults"`
-			ClanOwners          []clanOwnerView `json:"clan_owners"`
-			Bots                []orchBotNick   `json:"bots"`
-			FleetStats          map[string]int  `json:"fleet_stats"`
-			Price               int             `json:"price"`
-			Enchants            []ItemEffect    `json:"enchants"`
-			Durability          *float64        `json:"durability"`
-			Floors              map[string]int  `json:"floors"`
-			WindowStartMs       int64           `json:"window_start_ms"`
-			WindowEndMs         int64           `json:"window_end_ms"`
-			WindowMs            int64           `json:"window_ms"`
-			Uuid                string          `json:"uuid"`
-			GoType              string          `json:"go_type"`
-			ItemID              string          `json:"item_id"`
-			Seller              string          `json:"seller"`
-			Anarchy             any             `json:"anarchy"`
-			SeenBy              string          `json:"seen_by"`
-			Lots                []ahBookWire    `json:"lots"`
+			Action        string          `json:"action"`
+			Type          string          `json:"type"`
+			Items         map[string]int  `json:"items"`
+			Inventory     map[string]int  `json:"inventory"`
+			Types         []string        `json:"types"`
+			ActiveTypes   []string        `json:"active_types"`
+			BotsPerType   map[string]int  `json:"bots_per_type"`
+			SlotsPerType  map[string]int  `json:"slots_per_type"`
+			Banned        []bannedBotView `json:"banned"`
+			AuthFaults    []authFaultView `json:"auth_faults"`
+			ClanOwners    []clanOwnerView `json:"clan_owners"`
+			Bots          []orchBotNick   `json:"bots"`
+			ConfigBots    *[]orchBotNick  `json:"config_bots"`
+			ConfigAnarchy int             `json:"config_anarchy"`
+			FleetStats    map[string]int  `json:"fleet_stats"`
+			Price         int             `json:"price"`
+			Enchants      []ItemEffect    `json:"enchants"`
+			Durability    *float64        `json:"durability"`
+			Floors        map[string]int  `json:"floors"`
+			WindowStartMs int64           `json:"window_start_ms"`
+			WindowEndMs   int64           `json:"window_end_ms"`
+			WindowMs      int64           `json:"window_ms"`
+			Uuid          string          `json:"uuid"`
+			GoType        string          `json:"go_type"`
+			ItemID        string          `json:"item_id"`
+			Seller        string          `json:"seller"`
+			Anarchy       any             `json:"anarchy"`
+			SeenBy        string          `json:"seen_by"`
+			Lots          []ahBookWire    `json:"lots"`
 		}
 		if err := json.Unmarshal(rawMsg, &msg); err != nil {
 			log.Printf("json unmarshal error: %v", err)
@@ -1507,7 +1536,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		if msg.Action == "presence" {
 			log.Printf("[WS incoming] presence items=%d inv=%d banned=%d faults=%d owners=%d bots=%d active=%v",
 				len(msg.Items), len(msg.Inventory), len(msg.Banned), len(msg.AuthFaults), len(msg.ClanOwners), len(msg.Bots), msg.ActiveTypes)
-		} else if msg.Action != "add" && msg.Action != "ah_lot" && msg.Action != "ah_lots" && msg.Action != "desk_chat" && msg.Action != "clan_needed" {
+		} else if msg.Action != "add" && msg.Action != "claim" && msg.Action != "unclaim" && msg.Action != "ah_lot" && msg.Action != "ah_lots" && msg.Action != "desk_chat" && msg.Action != "clan_needed" {
 			log.Printf("[WS incoming] %s", string(rawMsg))
 		}
 
@@ -1518,33 +1547,35 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
-	Action             string          `json:"action"`
-	Type               string          `json:"type"`
-	Items              map[string]int  `json:"items"`
-	Inventory          map[string]int  `json:"inventory"`
-	Types              []string        `json:"types"`
-	ActiveTypes        []string        `json:"active_types"`
-	BotsPerType        map[string]int  `json:"bots_per_type"`
-	TreasuryEmptyTypes []string        `json:"treasury_empty_types"`
-	Banned             []bannedBotView `json:"banned"`
-	AuthFaults         []authFaultView `json:"auth_faults"`
-	ClanOwners         []clanOwnerView `json:"clan_owners"`
-	Bots               []orchBotNick   `json:"bots"`
-	FleetStats         map[string]int  `json:"fleet_stats"`
-	Price              int             `json:"price"`
-	Enchants           []ItemEffect    `json:"enchants"`
-	Durability         *float64        `json:"durability"`
-	Floors             map[string]int  `json:"floors"`
-	WindowStartMs      int64           `json:"window_start_ms"`
-	WindowEndMs        int64           `json:"window_end_ms"`
-	WindowMs           int64           `json:"window_ms"`
-	Uuid               string          `json:"uuid"`
-	GoType             string          `json:"go_type"`
-	ItemID             string          `json:"item_id"`
-	Seller             string          `json:"seller"`
-	Anarchy            any             `json:"anarchy"`
-	SeenBy             string          `json:"seen_by"`
-	Lots               []ahBookWire    `json:"lots"`
+	Action        string          `json:"action"`
+	Type          string          `json:"type"`
+	Items         map[string]int  `json:"items"`
+	Inventory     map[string]int  `json:"inventory"`
+	Types         []string        `json:"types"`
+	ActiveTypes   []string        `json:"active_types"`
+	BotsPerType   map[string]int  `json:"bots_per_type"`
+	SlotsPerType  map[string]int  `json:"slots_per_type"`
+	Banned        []bannedBotView `json:"banned"`
+	AuthFaults    []authFaultView `json:"auth_faults"`
+	ClanOwners    []clanOwnerView `json:"clan_owners"`
+	Bots          []orchBotNick   `json:"bots"`
+	ConfigBots    *[]orchBotNick  `json:"config_bots"`
+	ConfigAnarchy int             `json:"config_anarchy"`
+	FleetStats    map[string]int  `json:"fleet_stats"`
+	Price         int             `json:"price"`
+	Enchants      []ItemEffect    `json:"enchants"`
+	Durability    *float64        `json:"durability"`
+	Floors        map[string]int  `json:"floors"`
+	WindowStartMs int64           `json:"window_start_ms"`
+	WindowEndMs   int64           `json:"window_end_ms"`
+	WindowMs      int64           `json:"window_ms"`
+	Uuid          string          `json:"uuid"`
+	GoType        string          `json:"go_type"`
+	ItemID        string          `json:"item_id"`
+	Seller        string          `json:"seller"`
+	Anarchy       any             `json:"anarchy"`
+	SeenBy        string          `json:"seen_by"`
+	Lots          []ahBookWire    `json:"lots"`
 }) {
 	mutex.Lock()
 	enchJSON := tradeEnchantsJSON(msg.Enchants)
@@ -1567,6 +1598,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		}
 		data.BuyStats[msg.Type]++
 		data.LastTrade[msg.Type] = time.Now()
+		recordLotScoreLocked(msg.Type, msg.Price, time.Now())
 		data.TradeHistory[msg.Type] = append(data.TradeHistory[msg.Type], TradeLog{Time: time.Now(), Type: "buy", Price: msg.Price})
 		data.BuySum[msg.Type] += msg.Price
 		addPriceToHistory(msg.Type, msg.Price)
@@ -1642,10 +1674,11 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		clientInventory[ws] = copyMap(msg.Inventory)
 		setClientActiveTypes(ws, msg.ActiveTypes)
 		setClientBotsPerType(ws, msg.BotsPerType)
-		setClientTreasuryEmptyTypes(ws, msg.TreasuryEmptyTypes)
+		setClientSlotsPerType(ws, msg.SlotsPerType)
 		if len(msg.Bots) > 0 {
 			setClientOrchBots(ws, msg.Bots)
 		}
+		setClientConfigBots(ws, msg.ConfigBots, msg.ConfigAnarchy)
 		setClientBannedBots(ws, msg.Banned)
 		setClientAuthFaults(ws, msg.AuthFaults)
 		setClientClanOwners(ws, msg.ClanOwners)
@@ -1658,7 +1691,12 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		}
 		updateTypeFleetActivityLocked()
 		applyPresenceFleetStats(ws, msg.BotsPerType, msg.FleetStats)
+		// стоп-закуп по запасу (buy_stop_held): запас обновился → пересчитать и при смене переслать ботам каталог
+		stockStopChanged := evalStockBuyStopsLocked()
 		mutex.Unlock()
+		if stockStopChanged {
+			publishPriceUpdate()
+		}
 
 	case "add":
 		jsonData, exists := rawJSONField(rawMsg, "json_data")
@@ -1684,6 +1722,59 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		}
 
 		saveDailyDataNoMessageUpdate()
+
+	case "claim":
+		// Заявка бота на лот АХ: решает Go, первый заявивший владеет лотом (lot_claims.go).
+		uuid, okU := rawJSONField(rawMsg, "json_data")
+		owner, okO := rawJSONField(rawMsg, "username")
+		mutex.Unlock()
+		if !okU || !okO || uuid == "" || owner == "" {
+			return
+		}
+		var extra struct {
+			Held      *int   `json:"held"`
+			AHFull    bool   `json:"ah_full"`
+			ClickInMs *int64 `json:"click_in_ms"`
+		}
+		_ = json.Unmarshal(rawMsg, &extra)
+		held := heldUnknown
+		if extra.Held != nil {
+			held = *extra.Held
+		}
+		clickIn := clickUnknown
+		if extra.ClickInMs != nil && *extra.ClickInMs >= 0 {
+			clickIn = time.Duration(*extra.ClickInMs) * time.Millisecond
+		}
+		granted, current := tryClaimLotRanked(uuid, owner, held, extra.AHFull, clickIn, time.Now())
+		_ = wsWriteJSON(ws, map[string]interface{}{
+			"action":   "claim_result",
+			"uuid":     uuid,
+			"username": owner,
+			"granted":  granted,
+			"owner":    current,
+		})
+		if granted {
+			select {
+			case broadcast <- map[string]interface{}{"action": "json_update", "data": lotClaimsSnapshot(time.Now())}:
+			default:
+				log.Println("Буфер broadcast переполнен при отправке json_update (claim)")
+			}
+		}
+
+	case "unclaim":
+		uuid, okU := rawJSONField(rawMsg, "json_data")
+		owner, okO := rawJSONField(rawMsg, "username")
+		mutex.Unlock()
+		if !okU || !okO || uuid == "" || owner == "" {
+			return
+		}
+		if releaseLot(uuid, owner, time.Now()) {
+			select {
+			case broadcast <- map[string]interface{}{"action": "json_update", "data": lotClaimsSnapshot(time.Now())}:
+			default:
+				log.Println("Буфер broadcast переполнен при отправке json_update (unclaim)")
+			}
+		}
 
 	case "set_min_price":
 		if msg.Type == "" || msg.Price == 0 {
@@ -1893,18 +1984,6 @@ func getInventoryCount(item string) int {
 		count += items[item]
 	}
 	return count
-}
-
-func getInventoryFreeSlots(itemType string) int {
-	count := 0
-	for _, items := range clientInventory {
-		for t, c := range items {
-			if itemsConfig[t].Type == itemType {
-				count += c
-			}
-		}
-	}
-	return inventoryLimit[itemType] - count
 }
 
 func countRecentBuys(item string, since time.Time) int {

@@ -1,6 +1,6 @@
 package main
 
-import "time"
+import "math"
 
 // legacy merged type — ещё матчим, если оркестратор шлёт netherite_armor-1.21
 const netheriteArmorGoType = "netherite_armor-1.21"
@@ -23,6 +23,45 @@ func catalogTypeActiveIn(activeTypes map[string]struct{}, catalogType string) bo
 // Берём sticky (не схлопываем долю от разового вылета); сон по расписанию
 // орк помечает scheduled_off — тогда sticky сразу = live; live=0 → 0.
 // Merged armor и piece-типы считают вместе.
+// mergedTypeTotal — значение для go-типа из карты totals с тем же слиянием брони и частей, что у ботов.
+func mergedTypeTotal(totals map[string]int, goType string) int {
+	n := totals[goType]
+	if goType == netheriteArmorGoType {
+		for piece := range pieceGoTypeToName {
+			n += totals[piece]
+		}
+		return n
+	}
+	if _, isPiece := pieceGoTypeToName[goType]; isPiece {
+		return n + totals[netheriteArmorGoType]
+	}
+	return n
+}
+
+// baseAHSlotsPerBot — слотов АХ у бота без аренды. С арендой у бота 10 (см. rent.rs в azalea).
+const baseAHSlotsPerBot = 5
+
+// slotsPerBotForGoTypeLocked — сколько слотов АХ в среднем у бота этого типа: 5, а доля арендованных поднимает
+// среднее до 10. Нет данных от оркестратора (старая версия) — 5.
+func slotsPerBotForGoTypeLocked(goType string) float64 {
+	bots := mergedTypeTotal(aggregateBotsPerTypeLocked(), goType)
+	slots := mergedTypeTotal(aggregateSlotsPerTypeLocked(), goType)
+	if bots <= 0 || slots <= 0 {
+		return baseAHSlotsPerBot
+	}
+	per := float64(slots) / float64(bots)
+	if per < baseAHSlotsPerBot {
+		return baseAHSlotsPerBot
+	}
+	return per
+}
+
+// slotsForGoTypeLocked — ёмкость АХ категории: боты (с тем же «липким» сглаживанием, что и везде) × средние
+// слоты на бота. Раньше везде стояло «боты × 5»; теперь у ботов с арендой 10.
+func slotsForGoTypeLocked(goType string) int {
+	return int(math.Round(float64(botsForGoTypeLocked(goType)) * slotsPerBotForGoTypeLocked(goType)))
+}
+
 func botsForGoTypeLocked(goType string) int {
 	totals := aggregateBotsPerTypeLocked()
 	n := totals[goType]
@@ -71,38 +110,4 @@ func itemConfigActiveLocked(cfg ItemConfig) bool {
 		}
 	}
 	return false
-}
-
-func typeActiveSinceForItemConfig(cfg ItemConfig) time.Time {
-	if since, ok := typeActiveSince[cfg.Type]; ok && !since.IsZero() {
-		return since
-	}
-	if cfg.Type == netheriteArmorGoType {
-		for goType, name := range pieceGoTypeToName {
-			if cfg.Name != name {
-				continue
-			}
-			if since, ok := typeActiveSince[goType]; ok && !since.IsZero() {
-				return since
-			}
-		}
-		return typeActiveSince[netheriteArmorGoType]
-	}
-	if _, isPiece := pieceGoTypeToName[cfg.Type]; isPiece {
-		if since, ok := typeActiveSince[netheriteArmorGoType]; ok && !since.IsZero() {
-			return since
-		}
-	}
-	return time.Time{}
-}
-
-func itemConfigWasActiveForWindowLocked(cfg ItemConfig, windowStart time.Time) bool {
-	if !itemConfigActiveLocked(cfg) {
-		return false
-	}
-	since := typeActiveSinceForItemConfig(cfg)
-	if since.IsZero() {
-		return false
-	}
-	return !since.After(windowStart)
 }

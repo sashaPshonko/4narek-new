@@ -32,215 +32,6 @@ func TestIsFleetSellerLocked(t *testing.T) {
 	}
 }
 
-func TestShouldRaiseFromAhBook(t *testing.T) {
-	n := ahBookMinLotsInWindow
-	minAsk := 1_000_000
-	nac := 300_000
-	// живой разбор: held>0, sales≥3, buys=0
-	if !shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 0, 4, false, false, false) {
-		t.Fatal("селл ниже min+наценка + разбор — поднимаем")
-	}
-	if shouldRaiseFromAhBook(minAsk+nac, minAsk, nac, n, 5, 0, 4, false, false, false) {
-		t.Fatal("уже на min+наценка — не трогаем")
-	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n-1, 5, 0, 4, false, false, false) {
-		t.Fatal("мало uuid в окне — рано")
-	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 0, 4, true, false, false) {
-		t.Fatal("dump — не поднимаем")
-	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 0, 4, false, true, false) {
-		t.Fatal("уже ↓ в этом цикле")
-	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 0, 4, false, false, true) {
-		t.Fatal("были покупки — не поднимаем")
-	}
-	// v8r: пусто — обычный ah_book-ап не трогаем, для этого отдельный empty_book путь.
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 0, 0, 0, false, false, false) {
-		t.Fatal("held=0 sales=0 — не обычный ah_book raise")
-	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 2, 0, 4, false, false, false) {
-		t.Fatal("sales<minForUp — не поднимаем")
-	}
-	if shouldRaiseFromAhBook(400_000, minAsk, nac, n, 5, 6, 4, false, false, false) {
-		t.Fatal("buys≥sales — не поднимаем")
-	}
-}
-
-
-func TestShouldRaiseEmptyFromAhBook(t *testing.T) {
-	n := ahBookMinLotsInWindow
-	p10 := 1_600_000
-	minAsk := 1_400_000
-	nac := 300_000
-	step := 100_000
-	if !shouldRaiseEmptyFromAhBook(1_400_000, p10, minAsk, nac, n, step, 0, 0, false, false) {
-		t.Fatal("held=0 and market 2+ steps above us — raise")
-	}
-	if shouldRaiseEmptyFromAhBook(1_800_000, p10, minAsk, nac, n, step, 0, 0, false, false) {
-		t.Fatal("gap < 2 steps — no empty raise")
-	}
-	if shouldRaiseEmptyFromAhBook(1_400_000, p10, minAsk, nac, n-1, step, 0, 0, false, false) {
-		t.Fatal("thin book — no empty raise")
-	}
-	if shouldRaiseEmptyFromAhBook(1_400_000, p10, minAsk, nac, n, step, 1, 0, false, false) {
-		t.Fatal("with stock this path is disabled")
-	}
-	if shouldRaiseEmptyFromAhBook(1_400_000, p10, minAsk, nac, n, step, 0, 1, false, false) {
-		t.Fatal("while buys already flowing, no empty raise")
-	}
-}
-
-func TestEmptyBookRaiseTarget(t *testing.T) {
-	if got := emptyBookRaiseTarget(1_400_000, 1_600_000, 1_400_000, 300_000, 100_000); got != 1_500_000 {
-		t.Fatalf("step target got %d", got)
-	}
-	if got := emptyBookRaiseTarget(1_800_000, 1_600_000, 1_400_000, 300_000, 100_000); got != 1_900_000 {
-		t.Fatalf("cap to +1 step got %d", got)
-	}
-}
-
-func TestAhBookRaiseTarget(t *testing.T) {
-	if got := ahBookRaiseTarget(1_000_000, 300_000, 100_000); got != 1_400_000 {
-		t.Fatalf("got %d", got)
-	}
-	if ahBookRaiseTarget(0, 300_000, 100_000) != 0 {
-		t.Fatal("пустой min")
-	}
-}
-
-func TestAhBookRaiseTargetCapped(t *testing.T) {
-	step := 100_000
-	// полный таргет 1.4M, но с 400k только +2 step → 600k
-	if got := ahBookRaiseTargetCapped(400_000, 1_000_000, 300_000, step); got != 600_000 {
-		t.Fatalf("cap: got %d", got)
-	}
-	// уже близко — полный таргет
-	if got := ahBookRaiseTargetCapped(1_300_000, 1_000_000, 300_000, step); got != 1_400_000 {
-		t.Fatalf("near: got %d", got)
-	}
-}
-
-func TestAhBookSoftDownTarget(t *testing.T) {
-	if got := ahBookSoftDownTarget(2_000_000, 1_800_000, 300_000, 100_000); got != 2_400_000 {
-		t.Fatalf("got %d", got)
-	}
-	// p10 занижен дампами — не ниже min+наценка
-	if got := ahBookSoftDownTarget(400_000, 2_000_000, 300_000, 100_000); got != 2_300_000 {
-		t.Fatalf("floor min+nac: got %d", got)
-	}
-	if ahBookSoftDownTarget(0, 2_000_000, 300_000, 100_000) != 0 {
-		t.Fatal("пустой p10")
-	}
-	if ahBookSoftDownTarget(2_000_000, 0, 300_000, 100_000) != 0 {
-		t.Fatal("пустой min")
-	}
-}
-
-func TestShouldSoftDownFromAhBook(t *testing.T) {
-	n := ahBookMinLotsInWindow
-	p10 := 2_000_000
-	minAsk := 1_800_000
-	nac := 300_000
-	step := 100_000
-	held := 4
-	// триггер: > p10+nac+2×step = 2.5M и > min+nac = 2.1M
-	if !shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, false, held) {
-		t.Fatal("селл явно выше рынка — снижаем")
-	}
-	if shouldSoftDownFromAhBook(2_500_000, p10, minAsk, nac, n, step, false, false, held) {
-		t.Fatal("на границе мёртвой зоны — не трогаем")
-	}
-	if shouldSoftDownFromAhBook(2_100_000, p10, minAsk, nac, n, step, false, false, held) {
-		t.Fatal("уже на min+наценка — не ниже")
-	}
-	if shouldSoftDownFromAhBook(2_000_000, p10, minAsk, nac, n, step, false, false, held) {
-		t.Fatal("ниже/на min+наценка — не ↓")
-	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n-1, step, false, false, held) {
-		t.Fatal("мало лотов — рано")
-	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, true, false, held) {
-		t.Fatal("уже ↑ из книги в этом цикле")
-	}
-	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, true, held) {
-		t.Fatal("были покупки при held>0 — не снижаем")
-	}
-	// v8q: held=0 тоже только при полной книге (≥40), тонкая ночная больше не сливает
-	if shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, ahBookMinLotsWhenEmpty, step, false, true, 0) {
-		t.Fatal("пусто + тонкая книга — soft-↓ запрещён")
-	}
-	if !shouldSoftDownFromAhBook(2_600_000, p10, minAsk, nac, n, step, false, true, 0) {
-		t.Fatal("пусто + полная книга + buys — soft-↓ можно (выше рынка)")
-	}
-}
-
-func TestAhBookSoftDownApplyEmptyCap(t *testing.T) {
-	step := 100_000
-	floor := 400_000
-	// пусто: 3.5M → цель 1.0M, но за цикл только −2 step
-	if got := ahBookSoftDownApply(3_500_000, 1_000_000, floor, step, 0); got != 3_300_000 {
-		t.Fatalf("empty cap: got %d", got)
-	}
-	// со стоком — полный таргет
-	if got := ahBookSoftDownApply(3_500_000, 2_400_000, floor, step, 5); got != 2_400_000 {
-		t.Fatalf("with stock: got %d", got)
-	}
-}
-
-func TestAhBookMinOfLastN(t *testing.T) {
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close(); mlDB = nil })
-	if _, err := db.Exec(`CREATE TABLE ah_book_lots (
-		uuid TEXT PRIMARY KEY, ts TEXT NOT NULL, go_type TEXT, item_id TEXT,
-		price INTEGER, durability REAL, seller TEXT, enchants_json TEXT, anarchy INTEGER, seen_by TEXT)`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`CREATE TABLE ah_book_seller_bans (
-		seller TEXT PRIMARY KEY, ts TEXT NOT NULL, item_id TEXT NOT NULL, n INTEGER NOT NULL, window_sec INTEGER NOT NULL)`); err != nil {
-		t.Fatal(err)
-	}
-	mlDB = db
-	item := "меч-1.21"
-	base := time.Now().UTC()
-	for i := 0; i < 49; i++ {
-		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price) VALUES (?,?,?,?,?)`,
-			fmt.Sprintf("u-%d", i), base.Add(time.Duration(i)*time.Second).Format(time.RFC3339),
-			"sword", item, 900_000+i)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, ok := ahBookMinOfLastN(item, 50); ok {
-		t.Fatal("49 строк — рано")
-	}
-	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price) VALUES (?,?,?,?,?)`,
-		"cheap", base.Add(50*time.Second).Format(time.RFC3339), "sword", item, 500_000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	minP, ok := ahBookMinOfLastN(item, 50)
-	if !ok || minP != 500_000 {
-		t.Fatalf("min=%d ok=%v want 500000", minP, ok)
-	}
-	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price) VALUES (?,?,?,?,?)`,
-		"newer-high", base.Add(120*time.Second).Format(time.RFC3339), "sword", item, 2_000_000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// 50 newest: cheap still in window (49 old + cheap + newer = 51, drop oldest)
-	minP, ok = ahBookMinOfLastN(item, 50)
-	if !ok || minP != 500_000 {
-		t.Fatalf("after high min=%d ok=%v", minP, ok)
-	}
-}
-
-
-
-
 func TestAhBookUpsertRefreshesTsAndPrice(t *testing.T) {
 	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
 	if err != nil {
@@ -251,8 +42,8 @@ func TestAhBookUpsertRefreshesTsAndPrice(t *testing.T) {
 	initAhBookTable()
 	item := "шлем-1.21"
 	old := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
-	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-		"same", old, "netherite_armor-1.21", item, 2_200_000, "Laymix777")
+	_, err = db.Exec(`INSERT INTO ah_book_lots (lot_id, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		ahLotKey("same"), old, "netherite_armor-1.21", item, 2_200_000, "Laymix777")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +52,7 @@ func TestAhBookUpsertRefreshesTsAndPrice(t *testing.T) {
 	}})
 	var n, price int
 	var ts string
-	_ = db.QueryRow(`SELECT COUNT(*), price, ts FROM ah_book_lots WHERE uuid = 'same'`).Scan(&n, &price, &ts)
+	_ = db.QueryRow(`SELECT COUNT(*), price, ts FROM ah_book_lots WHERE lot_id = ?`, ahLotKey("same")).Scan(&n, &price, &ts)
 	if n != 1 {
 		t.Fatalf("повтор не плодит строк, got %d", n)
 	}
@@ -270,34 +61,6 @@ func TestAhBookUpsertRefreshesTsAndPrice(t *testing.T) {
 	}
 	if ts <= old {
 		t.Fatalf("ts должен стать свежим: old=%s new=%s", old, ts)
-	}
-}
-
-func TestAhBookMinSince(t *testing.T) {
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "book.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close(); mlDB = nil })
-	mlDB = db
-	initAhBookTable()
-	item := "шлем-1.21"
-	now := time.Now().UTC()
-	for i := 0; i < ahBookMinLotsInWindow; i++ {
-		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-			fmt.Sprintf("n-%d", i), now.Add(-time.Minute).Format(time.RFC3339), "armor", item, 1_000_000+i, "p")
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-		"old", now.Add(-time.Hour).Format(time.RFC3339), "armor", item, 100_000, "p")
-	if err != nil {
-		t.Fatal(err)
-	}
-	minP, n, ok := ahBookMinSince(item, now.Add(-ahBookRaiseWindow))
-	if !ok || n != ahBookMinLotsInWindow || minP != 1_000_000 {
-		t.Fatalf("min=%d n=%d ok=%v", minP, n, ok)
 	}
 }
 
@@ -313,14 +76,14 @@ func TestServerFunTimeRaiseAnomalousBookFloor(t *testing.T) {
 	now := time.Now().UTC()
 	ts := now.Format(time.RFC3339)
 	for i := 0; i < ahBookMinLotsInWindow; i++ {
-		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-			fmt.Sprintf("wall-%d", i), ts, "armor", item, 2_200_000, "shop")
+		_, err := db.Exec(`INSERT INTO ah_book_lots (lot_id, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+			ahLotKey(fmt.Sprintf("wall-%d", i)), ts, "armor", item, 2_200_000, "shop")
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-		"dump", ts, "armor", item, 300_000, "dump")
+	_, err = db.Exec(`INSERT INTO ah_book_lots (lot_id, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		ahLotKey("dump"), ts, "armor", item, 300_000, "dump")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,15 +136,15 @@ func TestAhBookMarketAnchorSellerP40(t *testing.T) {
 	ts := now.Format(time.RFC3339)
 	for i := 0; i < 20; i++ {
 		price := 700_000 + i*50_000
-		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-			fmt.Sprintf("s-%d", i), ts, "sword", item, price, fmt.Sprintf("seller%d", i))
+		_, err := db.Exec(`INSERT INTO ah_book_lots (lot_id, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+			ahLotKey(fmt.Sprintf("s-%d", i)), ts, "sword", item, price, fmt.Sprintf("seller%d", i))
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 	for i := 0; i < 40; i++ {
-		_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-			fmt.Sprintf("wall-%d", i), ts, "sword", item, 2_500_000, "wallshop")
+		_, err := db.Exec(`INSERT INTO ah_book_lots (lot_id, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+			ahLotKey(fmt.Sprintf("wall-%d", i)), ts, "sword", item, 2_500_000, "wallshop")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -424,8 +187,8 @@ func TestAhBookExpensiveBottomMultiSellers(t *testing.T) {
 	ts := now.Format(time.RFC3339)
 
 	// one-off cheap random — must NOT set the bottom
-	_, err = db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-		"once", ts, "sword", item, 1_500_000, "random_once")
+	_, err = db.Exec(`INSERT INTO ah_book_lots (lot_id, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+		ahLotKey("once"), ts, "sword", item, 1_500_000, "random_once")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,8 +209,8 @@ func TestAhBookExpensiveBottomMultiSellers(t *testing.T) {
 	for _, m := range multis {
 		for _, p := range m.prices {
 			u++
-			_, err := db.Exec(`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
-				fmt.Sprintf("m-%d", u), ts, "sword", item, p, m.seller)
+			_, err := db.Exec(`INSERT INTO ah_book_lots (lot_id, ts, go_type, item_id, price, seller) VALUES (?,?,?,?,?,?)`,
+				ahLotKey(fmt.Sprintf("m-%d", u)), ts, "sword", item, p, m.seller)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -470,16 +233,5 @@ func TestAhBookExpensiveBottomMultiSellers(t *testing.T) {
 	classicSell, _, _, cok := ahBookMarketAnchorsSince(item, now.Add(-30*time.Minute))
 	if !cok || classicSell <= sell {
 		t.Fatalf("classic sell=%d should be above multiLow=%d", classicSell, sell)
-	}
-}
-
-func TestBook2PickNacHardSoftMin(t *testing.T) {
-	// softMin 300k не режется buy-ratio/buyEdge — место даёт sell
-	nac := book2PickNac(1_000_000, 300_000, 300_000, 1000)
-	if nac != 300_000 {
-		t.Fatalf("nac=%d want softMin 300k", nac)
-	}
-	if min := book2MinSellForNac(800_000, 300_000, 1000); min != 1_100_000 {
-		t.Fatalf("minSell=%d want buyEdge+nac=1.1M", min)
 	}
 }

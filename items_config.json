@@ -1,168 +1,326 @@
 {
   "pochti-megasword-1.21": {
     "base_price": 3000002,
-    "normal_sales": 5,
-    "normal_count": 5,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
-    "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 3 },
-      { "name": "minecraft:sharpness", "lvl": 7 },
-      { "name": "minecraft:fire_aspect", "lvl": 1 },
-      { "name": "poison", "lvl": 1 },
-      { "name": "detection", "lvl": 1 }
-    ],
-    "nacenka": 300000,
-    "num": 5,
-    "book_mid_q": 0.4,
-    "book_floor_q": 0.01
-  },
-  "sword7-1.21": {
-    "base_price": 1000003,
-    "normal_sales": 5,
-    "normal_count": 5,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
-    "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:fire_aspect", "lvl": 1 },
-      { "name": "minecraft:sharpness", "lvl": 7 }
-    ],
-    "nacenka": 300000,
-    "num": 3,
-    "book_mid_q": 0.55,
-    "book_floor_q": 0.05
-  },
-  "megasword-1.21": {
-    "base_price": 4200004,
-    "normal_sales": 5,
-    "normal_count": 5,
-    "price_step": 100000,
-    "analysis_minutes": 10,
-    "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
-    "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 3 },
-      { "name": "minecraft:sharpness", "lvl": 7 },
-      { "name": "minecraft:fire_aspect", "lvl": 1 },
-      { "name": "poison", "lvl": 2 },
-      { "name": "detection", "lvl": 2 }
-    ],
-    "nacenka": 400000,
-    "num": 6,
-    "book_mid_q": 0.4,
-    "book_floor_q": 0.01
-  },
-  "megasword-яд3-1.21": {
-    "base_price": 4000007,
     "normal_sales": 3,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 3 },
-      { "name": "minecraft:sharpness", "lvl": 7 },
-      { "name": "minecraft:fire_aspect", "lvl": 1 },
-      { "name": "poison", "lvl": 3 },
-      { "name": "detection", "lvl": 3 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "poison",
+        "lvl": 1
+      },
+      {
+        "name": "detection",
+        "lvl": 1
+      }
+    ],
+    "book_min_lots": 1,
+    "book_ceil_q_night": 0.32,
+    "hot": true,
+    "hot_down_sales_max": 1,
+    "hot_down_stock_min": 3,
+    "hot_up_sales_max": 2,
+    "hot_up_stock_max": 2,
+    "buy_stop_q": 0.8,
+    "hot_price_cap_q": 0,
+    "hot_tether_q": 0.65,
+    "nacenka": 1500000,
+    "num": 5,
+    "book_ceil_q": 0.4,
+    "book_floor_q": 0.05
+  },
+  "sword7-1.21": {
+    "base_price": 760003,
+    "normal_sales": 4,
+    "normal_count": 5,
+    "price_step": 50000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      }
+    ],
+    "hot": true,
+    "hot_down_sales_max": 4,
+    "hot_down_stock_min": 13,
+    "hot_up_sales_max": 8,
+    "hot_up_stock_max": 10,
+    "floor_jump": true,
+    "hot_price_cap_q": 0.7,
+    "hot_tether_q": 0.88,
+    "nacenka": 300000,
+    "num": 3,
+    "book_ceil_q": 0.9,
+    "book_ceil_q_night": 0.4,
+    "book_floor_q": 0.15
+  },
+  "megasword-1.21": {
+    "base_price": 3600004,
+    "normal_sales": 3,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "poison",
+        "lvl": 2
+      },
+      {
+        "name": "detection",
+        "lvl": 2
+      }
+    ],
+    "book_min_lots": 1,
+    "book_ceil_q_night": 0.26,
+    "hot": true,
+    "hot_down_sales_max": 1,
+    "hot_down_stock_min": 3,
+    "hot_up_sales_max": 2,
+    "hot_up_stock_max": 2,
+    "buy_stop_q": 0.8,
+    "hot_price_cap_q": 0,
+    "hot_tether_q": 0.6,
+    "nacenka": 1000000,
+    "num": 6,
+    "book_ceil_q": 0.3,
+    "book_floor_q": 0.05
+  },
+  "megasword-яд3-1.21": {
+    "base_price": 3400007,
+    "normal_sales": 3,
+    "normal_count": 5,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:fire_aspect",
+        "lvl": 1
+      },
+      {
+        "name": "poison",
+        "lvl": 3
+      },
+      {
+        "name": "detection",
+        "lvl": 3
+      }
     ],
     "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "nacenka": 500000,
+    "buy_stop_q": 0.8,
+    "hot": true,
+    "hot_down_sales_max": 1,
+    "hot_down_stock_min": 2,
+    "hot_up_sales_max": 2,
+    "hot_up_stock_max": 1,
+    "hot_price_cap_q": 0,
+    "hot_tether_q": 0.55,
+    "nacenka": 1100000,
     "num": 7,
-    "book_mid_q": 0.35,
-    "book_floor_q": 0.005,
-    "book_peg_min_sellers": 3
+    "book_ceil_q": 0.14,
+    "book_floor_q": 0.03
   },
-
   "штаны-1.21": {
     "base_price": 600005,
     "normal_sales": 5,
     "normal_count": 7,
-    "price_step": 100000,
+    "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
-    "type": "netherite_leggings-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 5 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      }
     ],
+    "hot": true,
+    "hot_down_sales_max": 4,
+    "hot_down_stock_min": 11,
+    "hot_up_sales_max": 6,
+    "hot_up_stock_max": 8,
+    "floor_jump": true,
+    "hot_price_cap_q": 0.7,
+    "hot_tether_q": 0.88,
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.55,
-    "book_floor_q": 0.1,
+    "book_ceil_q": 0.9,
+    "book_ceil_q_night": 0.7,
+    "book_floor_q": 0.2,
     "forbidden_effects": [
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ]
   },
   "нагрудник-1.21": {
     "base_price": 600007,
     "normal_sales": 5,
     "normal_count": 5,
-    "price_step": 100000,
+    "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_chestplate",
-    "type": "netherite_chestplate-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 5 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      }
     ],
+    "hot": true,
+    "hot_down_sales_max": 3,
+    "hot_down_stock_min": 11,
+    "hot_up_sales_max": 5,
+    "hot_up_stock_max": 8,
+    "floor_jump": true,
+    "hot_price_cap_q": 0.7,
+    "hot_tether_q": 0.88,
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.55,
-    "book_floor_q": 0.05,
+    "book_ceil_q": 0.9,
+    "book_ceil_q_night": 0.65,
+    "book_floor_q": 0.15,
     "forbidden_effects": [
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ]
   },
   "ботинки-1.21": {
     "base_price": 600009,
     "normal_sales": 5,
     "normal_count": 6,
-    "price_step": 100000,
+    "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
-    "type": "netherite_boots-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 5 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      }
     ],
+    "hot": true,
+    "hot_down_sales_max": 3,
+    "hot_down_stock_min": 12,
+    "hot_up_sales_max": 6,
+    "hot_up_stock_max": 9,
+    "floor_jump": true,
+    "hot_price_cap_q": 0.7,
+    "hot_tether_q": 0.88,
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.55,
-    "book_floor_q": 0.1,
+    "book_ceil_q": 0.9,
+    "book_ceil_q_night": 0.65,
+    "book_floor_q": 0.15,
     "forbidden_effects": [
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ]
   },
   "шлем-1.21": {
     "base_price": 600011,
     "normal_sales": 5,
     "normal_count": 7,
-    "price_step": 100000,
+    "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
-    "type": "netherite_helmet-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 5 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      }
     ],
+    "hot": true,
+    "hot_down_sales_max": 4,
+    "hot_down_stock_min": 11,
+    "hot_up_sales_max": 6,
+    "hot_up_stock_max": 8,
+    "floor_jump": true,
+    "hot_price_cap_q": 0.7,
+    "hot_tether_q": 0.88,
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.5,
-    "book_floor_q": 0.01,
+    "book_ceil_q": 0.9,
+    "book_ceil_q_night": 0.65,
+    "book_floor_q": 0.25,
     "forbidden_effects": [
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ]
   },
-
   "штаны-починка-1.21": {
     "base_price": 610005,
     "normal_sales": 3,
@@ -170,20 +328,26 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
-    "type": "netherite_leggings-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 5 },
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ],
-    "nacenka": 500000,
+    "nacenka": 600000,
     "num": 3,
-    "book_mid_q": 0.15,
-    "book_floor_q": 0.005,
-    "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "book_peg_min_sellers": 3
+    "book_ceil_q": 0.1,
+    "book_floor_q": 0.01,
+    "risk_cut": 300000
   },
   "нагрудник-починка-1.21": {
     "base_price": 610007,
@@ -192,20 +356,26 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_chestplate",
-    "type": "netherite_chestplate-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 5 },
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ],
-    "nacenka": 500000,
+    "nacenka": 600000,
     "num": 3,
-    "book_mid_q": 0.15,
-    "book_floor_q": 0.005,
-    "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "book_peg_min_sellers": 3
+    "book_ceil_q": 0.1,
+    "book_floor_q": 0.01,
+    "risk_cut": 300000
   },
   "ботинки-починка-1.21": {
     "base_price": 610009,
@@ -214,20 +384,26 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
-    "type": "netherite_boots-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 5 },
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ],
-    "nacenka": 500000,
+    "nacenka": 600000,
     "num": 3,
-    "book_mid_q": 0.15,
-    "book_floor_q": 0.005,
-    "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "book_peg_min_sellers": 3
+    "book_ceil_q": 0.1,
+    "book_floor_q": 0.01,
+    "risk_cut": 300000
   },
   "шлем-починка-1.21": {
     "base_price": 610011,
@@ -236,22 +412,27 @@
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
-    "type": "netherite_helmet-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 5 },
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ],
-    "nacenka": 500000,
+    "nacenka": 600000,
     "num": 3,
-    "book_mid_q": 0.15,
-    "book_floor_q": 0.005,
-    "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "book_peg_min_sellers": 3
+    "book_ceil_q": 0.08,
+    "book_floor_q": 0.01,
+    "risk_cut": 300000
   },
-
   "sword-sharp5-1.21": {
     "base_price": 200015,
     "normal_sales": 3,
@@ -259,318 +440,911 @@
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:sharpness", "lvl": 5 }
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 5
+      }
     ],
+    "no_buy": true,
     "nacenka": 300000,
+    "hot_price_cap_q": 0.7,
+    "hot_tether_q": 0.85,
     "num": 1,
-    "book_mid_q": 0.3,
-    "book_floor_q": 0.05
+    "book_ceil_q": 0.3,
+    "book_floor_q": 0.03
   },
   "sword-sharp6-1.21": {
-    "base_price": 300016,
+    "base_price": 290016,
     "normal_sales": 3,
     "normal_count": 4,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:sharpness", "lvl": 6 }
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 6
+      }
     ],
+    "hot": true,
+    "hot_down_sales_max": 1,
+    "hot_down_stock_min": 2,
+    "hot_up_sales_max": 2,
+    "hot_up_stock_max": 1,
+    "hot_price_cap_q": 0.7,
+    "hot_tether_q": 0.85,
     "nacenka": 300000,
     "num": 2,
-    "book_mid_q": 0.3,
+    "book_ceil_q": 0.27,
     "book_floor_q": 0.05
   },
-
   "кирка-бульд-маг-1.21": {
     "base_price": 1000018,
-    "normal_sales": 5,
+    "normal_sales": 3,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 3 },
-      { "name": "minecraft:efficiency", "lvl": 3 },
-      { "name": "buldozing", "lvl": 2 },
-      { "name": "magnet", "lvl": 1 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 3
+      },
+      {
+        "name": "buldozing",
+        "lvl": 2
+      },
+      {
+        "name": "magnet",
+        "lvl": 1
+      }
     ],
-    "nacenka": 300000,
+    "hot": true,
+    "no_buy": true,
+    "hot_down_sales_max": 1,
+    "hot_down_stock_min": 5,
+    "hot_up_sales_max": 2,
+    "hot_up_stock_max": 4,
+    "hot_price_cap_q": 0.5,
+    "hot_tether_q": 0.7,
+    "buy_stop_q": 0.8,
+    "nacenka": 500000,
     "num": 1,
-    "book_mid_q": 0.50,
-    "book_floor_q": 0.05
+    "book_ceil_q": 0.3,
+    "book_floor_q": 0.15,
+    "risk_cut": 300000
   },
   "кирка-эфф7-1.21": {
-    "base_price": 2000023,
-    "normal_sales": 5,
+    "base_price": 1550023,
+    "normal_sales": 3,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
-    "book_mid_q": 0.5,
+    "book_ceil_q": 0.17,
     "book_floor_q": 0.05,
     "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 3 },
-      { "name": "minecraft:efficiency", "lvl": 7 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 7
+      }
     ],
     "forbidden_effects": [
-      { "name": "buldozing", "lvl": 1 }
+      {
+        "name": "buldozing",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ],
-    "nacenka": 400000,
+    "hot": true,
+    "hot_down_sales_max": 2,
+    "hot_down_stock_min": 8,
+    "hot_up_sales_max": 4,
+    "hot_up_stock_max": 6,
+    "buy_stop_q": 0.8,
+    "hot_price_cap_q": 0.5,
+    "hot_tether_q": 0.7,
+    "nacenka": 600000,
     "num": 2
   },
+  "кирка-эфф7-починка-1.21": {
+    "base_price": 3500000,
+    "normal_sales": 3,
+    "normal_count": 4,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_pickaxe",
+    "type": "netherite-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ],
+    "forbidden_effects": [
+      {
+        "name": "buldozing",
+        "lvl": 1
+      }
+    ],
+    "buy_stop_q": 0.8,
+    "hot": true,
+    "hot_down_sales_max": 1,
+    "hot_down_stock_min": 2,
+    "hot_up_sales_max": 2,
+    "hot_up_stock_max": 1,
+    "hot_price_cap_q": 0.5,
+    "hot_tether_q": 0.7,
+    "nacenka": 1200000,
+    "num": 2,
+    "book_ceil_q": 0.1,
+    "book_floor_q": 0.01,
+    "risk_cut": 300000
+  },
   "кирка-мид-1.21": {
+    "no_buy": true,
     "base_price": 1200022,
-    "normal_sales": 5,
+    "normal_sales": 3,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "book_mid_q": 0.5,
-    "book_floor_q": 0.05,
+    "type": "netherite-1.21",
+    "book_ceil_q": 0.3,
+    "book_floor_q": 0.08,
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 3 },
-      { "name": "minecraft:efficiency", "lvl": 5 },
-      { "name": "minecraft:fortune", "lvl": 3 },
-      { "name": "buldozing", "lvl": 2 },
-      { "name": "magnet", "lvl": 1 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fortune",
+        "lvl": 3
+      },
+      {
+        "name": "buldozing",
+        "lvl": 2
+      },
+      {
+        "name": "magnet",
+        "lvl": 1
+      }
     ],
-    "nacenka": 300000,
+    "buy_stop_q": 0.8,
+    "nacenka": 700000,
     "num": 3
   },
   "кирка-топ-1.21": {
+    "no_buy": true,
     "base_price": 2700025,
-    "normal_sales": 5,
+    "normal_sales": 3,
     "normal_count": 5,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_pickaxe",
-    "type": "netherite_pickaxe-1.21",
-    "book_mid_q": 0.5,
-    "book_floor_q": 0.05,
+    "type": "netherite-1.21",
+    "book_ceil_q": 0.17,
+    "book_floor_q": 0.03,
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 3 },
-      { "name": "minecraft:efficiency", "lvl": 7 },
-      { "name": "minecraft:fortune", "lvl": 5 },
-      { "name": "buldozing", "lvl": 2 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:fortune",
+        "lvl": 5
+      },
+      {
+        "name": "buldozing",
+        "lvl": 2
+      }
     ],
-    "nacenka": 500000,
+    "buy_stop_q": 0.8,
+    "nacenka": 1900000,
     "num": 4
   },
-
   "шлем-позор-1.21": {
-    "base_price": 500012,
+    "base_price": 340012,
     "normal_sales": 3,
     "normal_count": 3,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
-    "type": "netherite_helmet-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 4 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 4
+      }
     ],
+    "no_buy": true,
     "nacenka": 300000,
     "num": 1,
-    "book_mid_q": 0.55,
-    "book_floor_q": 0.05,
+    "book_ceil_q": 0.42,
+    "book_floor_q": 0.08,
     "forbidden_effects": [
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ]
   },
   "нагрудник-позор-1.21": {
-    "base_price": 500016,
+    "base_price": 250016,
     "normal_sales": 3,
     "normal_count": 3,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_chestplate",
-    "type": "netherite_chestplate-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 4 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 4
+      }
     ],
+    "no_buy": true,
     "nacenka": 300000,
     "num": 1,
-    "book_mid_q": 0.65,
+    "book_ceil_q": 0.37,
     "book_floor_q": 0.05,
     "forbidden_effects": [
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ]
   },
   "штаны-позор-1.21": {
-    "base_price": 500014,
+    "base_price": 250014,
     "normal_sales": 3,
     "normal_count": 3,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
-    "type": "netherite_leggings-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 4 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 4
+      }
     ],
+    "no_buy": true,
     "nacenka": 300000,
     "num": 1,
-    "book_mid_q": 0.65,
-    "book_floor_q": 0.05,
+    "book_ceil_q": 0.65,
+    "book_floor_q": 0.01,
     "forbidden_effects": [
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ]
   },
   "ботинки-позор-1.21": {
-    "base_price": 500010,
+    "base_price": 250010,
     "normal_sales": 3,
     "normal_count": 3,
     "price_step": 50000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
-    "type": "netherite_boots-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 4 },
-      { "name": "minecraft:protection", "lvl": 4 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 4
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 4
+      }
     ],
+    "no_buy": true,
     "nacenka": 300000,
     "num": 1,
-    "book_mid_q": 0.65,
-    "book_floor_q": 0.05,
+    "book_ceil_q": 0.43,
+    "book_floor_q": 0.01,
     "forbidden_effects": [
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ]
   },
-
   "меч-крушитель-1.21": {
-    "base_price": 12000030,
+    "no_buy": true,
+    "base_price": 6300030,
     "normal_sales": 3,
     "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_sword",
-    "type": "netherite_sword-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 5 },
-      { "name": "minecraft:sharpness", "lvl": 7 },
-      { "name": "minecraft:mending", "lvl": 1 },
-      { "name": "poison", "lvl": 3 },
-      { "name": "detection", "lvl": 3 },
-      { "name": "minecraft:smite", "lvl": 5 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      },
+      {
+        "name": "poison",
+        "lvl": 3
+      },
+      {
+        "name": "detection",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:smite",
+        "lvl": 5
+      }
     ],
-    "nacenka": 500000,
+    "buy_stop_q": 0.8,
+    "nacenka": 2500000,
     "num": 10,
-    "book_mid_q": 0.1,
-    "book_floor_q": 0.005,
-    "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "book_peg_min_sellers": 3
+    "book_ceil_q": 0.1,
+    "book_floor_q": 0.01,
+    "risk_cut": 500000
   },
   "шлем-крушитель-1.21": {
-    "base_price": 10000031,
+    "no_buy": true,
+    "base_price": 5400031,
     "normal_sales": 3,
     "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_helmet",
-    "type": "netherite_helmet-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 5 },
-      { "name": "minecraft:protection", "lvl": 5 },
-      { "name": "minecraft:blast_protection", "lvl": 5 },
-      { "name": "minecraft:fire_protection", "lvl": 5 },
-      { "name": "minecraft:projectile_protection", "lvl": 5 },
-      { "name": "minecraft:mending", "lvl": 1 },
-      { "name": "minecraft:respiration", "lvl": 3 },
-      { "name": "minecraft:aqua_affinity", "lvl": 1 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:respiration",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:aqua_affinity",
+        "lvl": 1
+      }
     ],
-    "nacenka": 500000,
+    "buy_stop_q": 0.8,
+    "nacenka": 2200000,
     "num": 8,
-    "book_mid_q": 0.1,
+    "book_ceil_q": 0.1,
     "book_floor_q": 0.005,
-    "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "book_peg_min_sellers": 3
+    "risk_cut": 500000
   },
   "нагрудник-крушитель-1.21": {
-    "base_price": 10000032,
+    "no_buy": true,
+    "base_price": 4800032,
     "normal_sales": 3,
     "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_chestplate",
-    "type": "netherite_chestplate-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 5 },
-      { "name": "minecraft:protection", "lvl": 5 },
-      { "name": "minecraft:blast_protection", "lvl": 5 },
-      { "name": "minecraft:fire_protection", "lvl": 5 },
-      { "name": "minecraft:projectile_protection", "lvl": 5 },
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ],
-    "nacenka": 500000,
+    "book_min_lots": 1,
+    "buy_stop_q": 0.8,
+    "nacenka": 1900000,
     "num": 8,
-    "book_mid_q": 0.1,
-    "book_floor_q": 0.005,
-    "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "book_peg_min_sellers": 3
+    "book_ceil_q": 0.15,
+    "book_floor_q": 0.07,
+    "risk_cut": 500000
   },
   "штаны-крушитель-1.21": {
-    "base_price": 10000033,
+    "no_buy": true,
+    "base_price": 4600033,
     "normal_sales": 3,
     "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_leggings",
-    "type": "netherite_leggings-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 5 },
-      { "name": "minecraft:protection", "lvl": 5 },
-      { "name": "minecraft:blast_protection", "lvl": 5 },
-      { "name": "minecraft:fire_protection", "lvl": 5 },
-      { "name": "minecraft:projectile_protection", "lvl": 5 },
-      { "name": "minecraft:mending", "lvl": 1 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
     ],
-    "nacenka": 500000,
+    "book_min_lots": 1,
+    "buy_stop_q": 0.8,
+    "nacenka": 1800000,
     "num": 8,
-    "book_mid_q": 0.1,
-    "book_floor_q": 0.005,
-    "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "book_peg_min_sellers": 3
+    "book_ceil_q": 0.17,
+    "book_floor_q": 0.1,
+    "risk_cut": 500000
   },
   "ботинки-крушитель-1.21": {
-    "base_price": 10000034,
+    "no_buy": true,
+    "base_price": 7500034,
     "normal_sales": 3,
     "normal_count": 3,
     "price_step": 100000,
     "analysis_minutes": 10,
     "name": "netherite_boots",
-    "type": "netherite_boots-1.21",
+    "type": "netherite-1.21",
     "effects": [
-      { "name": "minecraft:unbreaking", "lvl": 5 },
-      { "name": "minecraft:protection", "lvl": 5 },
-      { "name": "minecraft:blast_protection", "lvl": 5 },
-      { "name": "minecraft:fire_protection", "lvl": 5 },
-      { "name": "minecraft:projectile_protection", "lvl": 5 },
-      { "name": "minecraft:mending", "lvl": 1 },
-      { "name": "minecraft:feather_falling", "lvl": 4 }
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:feather_falling",
+        "lvl": 4
+      }
     ],
-    "nacenka": 500000,
+    "buy_stop_q": 0.8,
+    "nacenka": 3000000,
     "num": 8,
-    "book_mid_q": 0.1,
+    "book_ceil_q": 0.05,
     "book_floor_q": 0.005,
-    "risk_cut": 300000,
-    "price_mode": "book_peg",
-    "book_peg_q": 0.1,
-    "book_peg_min_sellers": 3
+    "risk_cut": 500000
+  },
+  "меч-крушитель-ориг-1.21": {
+    "no_buy": true,
+    "base_price": 6900035,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_sword",
+    "type": "netherite-1.21",
+    "lore_match": "Оригинальный предмет",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:sharpness",
+        "lvl": 7
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      },
+      {
+        "name": "poison",
+        "lvl": 3
+      },
+      {
+        "name": "detection",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:smite",
+        "lvl": 5
+      }
+    ],
+    "book_min_lots": 1,
+    "buy_stop_q": 0.8,
+    "nacenka": 2800000,
+    "num": 11,
+    "book_ceil_q": 0.15,
+    "book_floor_q": 0.03,
+    "risk_cut": 500000
+  },
+  "шлем-крушитель-ориг-1.21": {
+    "no_buy": true,
+    "base_price": 6300036,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_helmet",
+    "type": "netherite-1.21",
+    "lore_match": "Оригинальный предмет",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:respiration",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:aqua_affinity",
+        "lvl": 1
+      }
+    ],
+    "buy_stop_q": 0.8,
+    "nacenka": 2500000,
+    "num": 9,
+    "book_ceil_q": 0.1,
+    "book_floor_q": 0.005,
+    "risk_cut": 500000
+  },
+  "нагрудник-крушитель-ориг-1.21": {
+    "no_buy": true,
+    "base_price": 6100037,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_chestplate",
+    "type": "netherite-1.21",
+    "lore_match": "Оригинальный предмет",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ],
+    "buy_stop_q": 0.8,
+    "nacenka": 2400000,
+    "num": 9,
+    "book_ceil_q": 0.1,
+    "book_floor_q": 0.005,
+    "risk_cut": 500000
+  },
+  "штаны-крушитель-ориг-1.21": {
+    "no_buy": true,
+    "base_price": 6200038,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_leggings",
+    "type": "netherite-1.21",
+    "lore_match": "Оригинальный предмет",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      }
+    ],
+    "buy_stop_q": 0.8,
+    "nacenka": 2500000,
+    "num": 9,
+    "book_ceil_q": 0.1,
+    "book_floor_q": 0.005,
+    "risk_cut": 500000
+  },
+  "ботинки-крушитель-ориг-1.21": {
+    "no_buy": true,
+    "base_price": 8400039,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_boots",
+    "type": "netherite-1.21",
+    "lore_match": "Оригинальный предмет",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:blast_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:fire_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:projectile_protection",
+        "lvl": 5
+      },
+      {
+        "name": "minecraft:mending",
+        "lvl": 1
+      },
+      {
+        "name": "minecraft:feather_falling",
+        "lvl": 4
+      }
+    ],
+    "buy_stop_q": 0.8,
+    "nacenka": 3400000,
+    "num": 9,
+    "book_ceil_q": 0.05,
+    "book_floor_q": 0.005,
+    "risk_cut": 500000
+  },
+  "кирка-молот-тора-1.21": {
+    "no_buy": true,
+    "base_price": 5000041,
+    "normal_sales": 2,
+    "normal_count": 2,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_pickaxe",
+    "type": "netherite-1.21",
+    "lore_match": "Молот Тора",
+    "effects": [
+      {
+        "name": "mega_buldozing",
+        "lvl": 1
+      }
+    ],
+    "book_min_lots": 1,
+    "nacenka": 7000000,
+    "num": 7,
+    "book_ceil_q": 0.16,
+    "book_floor_q": 0.13,
+    "risk_cut": 500000
+  },
+  "кирка-эфф9-1.21": {
+    "no_buy": true,
+    "base_price": 7500026,
+    "normal_sales": 3,
+    "normal_count": 3,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_pickaxe",
+    "type": "netherite-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 9
+      }
+    ],
+    "forbidden_effects": [
+      {
+        "name": "buldozing",
+        "lvl": 1
+      }
+    ],
+    "buy_stop_q": 0.8,
+    "nacenka": 1500000,
+    "num": 5,
+    "book_ceil_q": 0.25,
+    "book_floor_q": 0.05
+  },
+  "кирка-топ10-1.21": {
+    "no_buy": true,
+    "base_price": 15500028,
+    "normal_sales": 2,
+    "normal_count": 2,
+    "price_step": 100000,
+    "analysis_minutes": 10,
+    "name": "netherite_pickaxe",
+    "type": "netherite-1.21",
+    "effects": [
+      {
+        "name": "minecraft:unbreaking",
+        "lvl": 3
+      },
+      {
+        "name": "minecraft:efficiency",
+        "lvl": 10
+      },
+      {
+        "name": "minecraft:fortune",
+        "lvl": 5
+      },
+      {
+        "name": "buldozing",
+        "lvl": 2
+      }
+    ],
+    "nacenka": 4000000,
+    "num": 13,
+    "book_ceil_q": 0.1,
+    "book_floor_q": 0.05,
+    "risk_cut": 500000
+  },
+  "инвиз-1.21": {
+    "base_price": 45000,
+    "normal_sales": 60,
+    "normal_count": 5,
+    "price_step": 1000,
+    "analysis_minutes": 10,
+    "name": "potion",
+    "type": "invis-1.21",
+    "effects": [],
+    "no_buy": true,
+    "nacenka": 30000,
+    "num": 50
   }
 }

@@ -54,8 +54,3 @@ func fetchOnlineSnapshot() (playersOnline, playersMax int) {
 	}
 	return status.Players.Online, status.Players.Max
 }
-
-func getOnlineCount() int {
-	online, _ := fetchOnlineSnapshot()
-	return online
-}

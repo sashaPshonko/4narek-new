@@ -690,6 +690,10 @@ func buildSalesOverview(periodKey string) salesOverview {
 			}
 		}
 		v := buildSalesItemViewLocked(id, cfg, now, agg, facts[id])
+		// no_buy без движения (нет покупок, продаж, лотов и инвентаря) в панели не показываем
+		if cfg.NoBuy && v.Buys == 0 && v.Sells == 0 && v.TrySells == 0 && v.OnAH == 0 && v.Inv == 0 {
+			continue
+		}
 		out.Items = append(out.Items, v)
 
 		out.Totals.Buys += v.Buys

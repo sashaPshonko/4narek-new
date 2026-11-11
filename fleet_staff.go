@@ -250,6 +250,10 @@ func listStaffChecksForAPI() []staffCheckView {
 	chats := append([]deskChatView(nil), deskChatsMem...)
 	staffDeskMu.RUnlock()
 
+	roster := banConfigRoster()
+	checks = filterStaffChecksByRoster(checks, roster)
+	chats = filterDeskChatsByRoster(chats, roster)
+
 	by := make(map[string][]deskChatView, 8)
 	loose := make([]deskChatView, 0)
 	for _, ch := range chats {
@@ -281,18 +285,6 @@ func trimChatTail(in []deskChatView, n int) []deskChatView {
 		return in
 	}
 	return in[len(in)-n:]
-}
-
-func staffCheckLiveCount() int {
-	staffDeskMu.RLock()
-	defer staffDeskMu.RUnlock()
-	n := 0
-	for _, c := range staffChecksMem {
-		if c.Status == "live" {
-			n++
-		}
-	}
-	return n
 }
 
 func handleStaffCheckHTTP(w http.ResponseWriter, r *http.Request) {
@@ -335,4 +327,31 @@ func handleDeskChatHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ingestDeskChat(body.Username, body.From, body.Text, body.Anarchy)
 	fleetJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// filterStaffChecksByRoster — вызов виден, пока ник есть в JSON оркестратора.
+func filterStaffChecksByRoster(in []staffCheckView, roster funauthRoster) []staffCheckView {
+	if len(roster) == 0 {
+		return in
+	}
+	out := make([]staffCheckView, 0, len(in))
+	for _, c := range in {
+		if rosterAllowsNick(roster, c.Username, c.Anarchy) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func filterDeskChatsByRoster(in []deskChatView, roster funauthRoster) []deskChatView {
+	if len(roster) == 0 {
+		return in
+	}
+	out := make([]deskChatView, 0, len(in))
+	for _, ch := range in {
+		if rosterAllowsNick(roster, ch.Username, ch.Anarchy) {
+			out = append(out, ch)
+		}
+	}
+	return out
 }

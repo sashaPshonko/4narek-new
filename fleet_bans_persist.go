@@ -126,8 +126,8 @@ func cloneBannedIPMap(in map[string]bannedIPView) map[string]bannedIPView {
 }
 
 var (
-	fleetSaveReq     = make(chan struct{}, 1)
-	fleetSaveOnce    sync.Once
+	fleetSaveReq  = make(chan struct{}, 1)
+	fleetSaveOnce sync.Once
 )
 
 func ensureFleetPersistLoop() {
@@ -207,17 +207,10 @@ func prunePersistedBansNotInRoster(roster funauthRoster) {
 	fleetPersistMu.Lock()
 	changed := false
 	for key, b := range persistedBannedBots {
-		if nickInCurrentRoster(roster, b.Username, b.Anarchy) {
+		if rosterAllowsNick(roster, b.Username, b.Anarchy) {
 			continue
 		}
 		delete(persistedBannedBots, key)
-		changed = true
-	}
-	for key, o := range persistedClanOwnerBans {
-		if nickInCurrentRoster(roster, o.Username, o.Anarchy) {
-			continue
-		}
-		delete(persistedClanOwnerBans, key)
 		changed = true
 	}
 	fleetPersistMu.Unlock()

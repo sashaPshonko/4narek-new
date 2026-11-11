@@ -5,30 +5,6 @@ import (
 	"time"
 )
 
-func TestDemandMinSalesForUpThinFleet(t *testing.T) {
-	if got := demandMinSalesForUp(2, false); got != 2 {
-		t.Fatalf("day thin=%d want 2", got)
-	}
-	if got := demandMinSalesForUp(2, true); got != 3 {
-		t.Fatalf("night thin=%d want 3", got)
-	}
-	if got := demandMinSalesForUp(3, false); got != corridorMinSalesForUp {
-		t.Fatalf("day normal=%d want %d", got, corridorMinSalesForUp)
-	}
-}
-
-func TestDemandStrongEnoughForUpWithMin(t *testing.T) {
-	if !demandStrongEnoughForUp(2, 2, 2, false) {
-		t.Fatal("sustained 2x2 day")
-	}
-	if demandStrongEnoughForUp(2, 1, 3, false) {
-		t.Fatal("sales=2 < min 3")
-	}
-	if demandStrongEnoughForUp(2, 2, 3, true) {
-		t.Fatal("night sales=2 < min 3")
-	}
-}
-
 func TestServerMinBuyBlocksUp(t *testing.T) {
 	now := time.Date(2026, 9, 2, 19, 13, 0, 0, time.UTC)
 	item := "шлем-1.21"
@@ -88,45 +64,6 @@ func TestServerFunTimeRaiseAnomalousNoBook(t *testing.T) {
 	}
 }
 
-func TestRecoverPaidCap(t *testing.T) {
-	step := 100_000
-	paid := 2_500_000
-	if recoverPaidCap(paid, step) != paid+1*step {
-		t.Fatalf("cap=%d want paid+1×step (v8p)", recoverPaidCap(paid, step))
-	}
-	if recoverBlockedByPaidCap(paid, paid, step) {
-		t.Fatal("at last paid should still allow +K probe")
-	}
-	if !recoverBlockedByPaidCap(paid+1*step, paid, step) {
-		t.Fatal("at cap must block")
-	}
-	if !recoverBlockedByPaidCap(1_200_000, 0, step) {
-		t.Fatal("no sells → block recover")
-	}
-	// dump: current 1.2M, last paid 2.5M — recover must climb
-	if recoverBlockedByPaidCap(1_200_000, paid, step) {
-		t.Fatal("after dump below paid should recover")
-	}
-}
-
-func TestAllowHardDown(t *testing.T) {
-	if !allowHardDown(2, 5, 0.2) {
-		t.Fatal("с продажами всегда можно")
-	}
-	if !allowHardDown(0, 0, 0.2) {
-		t.Fatal("первый idle щуп")
-	}
-	if allowHardDown(0, 1, 0.2) {
-		t.Fatal("второй idle — стоп цепочки")
-	}
-	if !allowHardDown(0, 2, 0.55) {
-		t.Fatal("fill≥50% — третий idle ещё можно")
-	}
-	if allowHardDown(0, 3, 0.55) {
-		t.Fatal("fill≥50% — четвёртый idle стоп")
-	}
-}
-
 func TestStockTargetsSmallShareWidensDown(t *testing.T) {
 	def := stockBandFracs{
 		lo: stockBandLoFrac, hi: stockBandHiFrac, soft: stockSoftDownFrac,
@@ -147,30 +84,5 @@ func TestStockTargetsSmallShareWidensDown(t *testing.T) {
 	plo, phi, _, _, _ := stockTargets(10, poz)
 	if plo != 1 || phi != 2 {
 		t.Fatalf("pozor share=10 must stay 10–18%% [%d,%d]", plo, phi)
-	}
-}
-
-func TestDeepUnderstockOnlyEmpty(t *testing.T) {
-	if !deepUnderstock(0, 4) {
-		t.Fatal("empty is deep")
-	}
-	if deepUnderstock(2, 4) {
-		t.Fatal("held=2 at lo=4 is normal armor, not deep")
-	}
-	if deepUnderstock(1, 4) {
-		t.Fatal("held=1 is not empty")
-	}
-}
-
-func TestPriceFarBelowPaid(t *testing.T) {
-	step := 100_000
-	if !priceFarBelowPaid(300_000, 1_200_000, step) {
-		t.Fatal("300к vs paid 1.2кк")
-	}
-	if priceFarBelowPaid(1_100_000, 1_200_000, step) {
-		t.Fatal("рядом с paid — не far")
-	}
-	if priceFarBelowPaid(300_000, 0, step) {
-		t.Fatal("нет якоря")
 	}
 }

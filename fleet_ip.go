@@ -207,7 +207,6 @@ func loadAssignedProxies() []assignedProxyView {
 	if dir != "" {
 		parent = filepath.Dir(dir)
 		addMapFile(filepath.Join(parent, "ip.json"), "bot", add)
-		addMapFile(filepath.Join(parent, "owner-ip.json"), "owner", add)
 	}
 	for _, p := range []string{
 		strings.TrimSpace(os.Getenv("FLEET_SELL_BOT")),

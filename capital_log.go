@@ -5,16 +5,8 @@ import (
 	"time"
 )
 
-// classic_book + per-SKU book_peg (починка/круш/яд3) ← live
-// Переключатель production-политики:
-//   capitalPolicyV10         — v10 rails (+↑ empty)
-//   capitalPolicyV9          — inventory+market (+book2)
-//   capitalPolicyClassicBook — classic + book rails ← live
-//   capitalPolicyStockNorm — july11 норма стока
-//   capitalPolicyClassic — Feb22 NormalSales
-//   capitalPolicyV4      — inventory corridor Jul peak
-//   capitalPolicyV8af    — late-v8 corridor
-// Рисковые SKU с price_mode=book_peg не ходят в коридор/classic — статика p10−cut.
+// Единственная политика ценообразования. Рисковые SKU с price_mode=book_peg идут отдельно
+// (статика p10−cut, см. pricing_book_peg.go).
 const capitalPolicy = capitalPolicyPridumalnahuy
 const capitalForwardCycles = 3
 

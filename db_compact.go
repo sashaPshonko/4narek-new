@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"database/sql"
-	"io"
 	"log"
 	"os"
 	"strings"
@@ -77,7 +76,7 @@ func compactHistoryOnce() int {
 	return compactHistoryBatch(20, 40, 400, 400)
 }
 
-func compactHistoryBatch(snapGroups, payloads, enchants, sellers int) int {
+func compactHistoryBatch(snapGroups, payloads, enchants, _ int) int {
 	if mlDB == nil {
 		return 0
 	}
@@ -85,7 +84,6 @@ func compactHistoryBatch(snapGroups, payloads, enchants, sellers int) int {
 	n += compactStockSnapshotGroups(snapGroups)
 	n += compactMLDecisionPayloads(payloads)
 	n += compactEmptyEnchants(enchants)
-	n += backfillAhSellerIDs(sellers)
 	return n
 }
 
@@ -257,48 +255,6 @@ WHERE id IN (
 	return int(n)
 }
 
-func backfillAhSellerIDs(limit int) int {
-	if mlDB == nil || limit <= 0 {
-		return 0
-	}
-	mlDBMu.Lock()
-	defer mlDBMu.Unlock()
-	if err := ensureAhSellersTableLocked(); err != nil {
-		return 0
-	}
-	rows, err := mlDB.Query(`
-SELECT uuid, trim(seller) FROM ah_book_lots
-WHERE seller IS NOT NULL AND trim(seller) != '' AND (seller_id IS NULL OR seller_id = 0)
-LIMIT ?`, limit)
-	if err != nil {
-		return 0
-	}
-	type lot struct {
-		uuid, seller string
-	}
-	var lots []lot
-	for rows.Next() {
-		var l lot
-		if err := rows.Scan(&l.uuid, &l.seller); err != nil {
-			continue
-		}
-		lots = append(lots, l)
-	}
-	rows.Close()
-	n := 0
-	for _, l := range lots {
-		id := upsertAhSellerLocked(strings.ToLower(strings.TrimSpace(l.seller)))
-		if id == 0 {
-			continue
-		}
-		if _, err := mlDB.Exec(`UPDATE ah_book_lots SET seller_id = ? WHERE uuid = ?`, id, l.uuid); err != nil {
-			continue
-		}
-		n++
-	}
-	return n
-}
-
 func gzipBytes(raw []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w := gzip.NewWriter(&buf)
@@ -309,15 +265,6 @@ func gzipBytes(raw []byte) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
-}
-
-func gunzipBytes(gz []byte) ([]byte, error) {
-	r, err := gzip.NewReader(bytes.NewReader(gz))
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	return io.ReadAll(r)
 }
 
 func tableExistsLocked(name string) bool {

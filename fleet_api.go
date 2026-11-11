@@ -36,6 +36,44 @@ type authFaultView struct {
 	IP       string `json:"ip,omitempty"`
 }
 
+// proxyFaultView — один неисправный прокси и боты, которые на нём сидят.
+type proxyFaultView struct {
+	IP     string   `json:"ip"`
+	Bots   []string `json:"bots"`
+	Reason string   `json:"reason,omitempty"`
+	At     string   `json:"at,omitempty"`
+}
+
+// aggregateProxyFaults — из auth_faults берёт proxy_error и группирует по ip прокси.
+func aggregateProxyFaults(faults []authFaultView) []proxyFaultView {
+	byIP := make(map[string]*proxyFaultView)
+	var order []string
+	for _, f := range faults {
+		if f.Kind != "proxy_error" || strings.TrimSpace(f.IP) == "" {
+			continue
+		}
+		pf, ok := byIP[f.IP]
+		if !ok {
+			pf = &proxyFaultView{IP: f.IP}
+			byIP[f.IP] = pf
+			order = append(order, f.IP)
+		}
+		pf.Bots = append(pf.Bots, f.Username)
+		if f.At != "" && f.At > pf.At {
+			pf.At = f.At
+			pf.Reason = f.Reason
+		}
+		if pf.Reason == "" {
+			pf.Reason = f.Reason
+		}
+	}
+	out := make([]proxyFaultView, 0, len(order))
+	for _, ip := range order {
+		out = append(out, *byIP[ip])
+	}
+	return out
+}
+
 type clanOwnerView struct {
 	Username  string `json:"username"`
 	Anarchy   any    `json:"anarchy"`
@@ -62,6 +100,9 @@ type fleetOverview struct {
 	Banned          []bannedBotView     `json:"banned"`
 	AuthFaults      []authFaultView     `json:"auth_faults"`
 	AuthFaultCount  int                 `json:"auth_fault_count"`
+	// ProxyFaults — прокси с неисправностью (kind=proxy_error), сгруппированы по ip: что заменять.
+	ProxyFaults     []proxyFaultView    `json:"proxy_faults"`
+	ProxyFaultCount int                 `json:"proxy_fault_count"`
 	ClanOwners      []clanOwnerView     `json:"clan_owners"`
 	BannedIPs       []bannedIPView      `json:"banned_ips"`
 	AssignedProxies []assignedProxyView `json:"assigned_proxies"`
@@ -380,6 +421,7 @@ func buildFleetOverview() fleetOverview {
 
 	bannedIPs := listBannedIPs()
 	faults := collectAuthFaultsLocked()
+	proxyFaults := aggregateProxyFaults(faults)
 	checks := listStaffChecksForAPI()
 	live := 0
 	totalChecks := 0
@@ -401,6 +443,8 @@ func buildFleetOverview() fleetOverview {
 		Banned:          visible,
 		AuthFaults:      faults,
 		AuthFaultCount:  len(faults),
+		ProxyFaults:     proxyFaults,
+		ProxyFaultCount: len(proxyFaults),
 		ClanOwners:      owners,
 		BannedIPs:       bannedIPs,
 		AssignedProxies: loadAssignedProxies(),

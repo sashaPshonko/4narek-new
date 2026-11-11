@@ -20,7 +20,8 @@ var (
 	funauthBinderInst *funauthBinder
 	funauthInitOnce   sync.Once
 
-	// nick → last bind outcome: "pending" | "ok" | "no_accounts" | "fail"
+	// nick → last bind outcome: "pending" | "ok" | "no_accounts" | "fail:<err>"
+	// Только для UI (что показать на фронте). НЕ блокирует запуск нового бинда.
 	funauthNickState   = make(map[string]string)
 	funauthNickStateMu sync.Mutex
 
@@ -55,7 +56,6 @@ func registerFunauthHTTP(mux *http.ServeMux) {
 				funauthAPI(w, r)
 				return
 			}
-			// Strip /funauth prefix for static files.
 			r2 := *r
 			u := *r.URL
 			u.Path = strings.TrimPrefix(r.URL.Path, "/funauth")
@@ -145,6 +145,8 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 			"accounts":      len(funauthPoolInst.list()),
 			"ready":         funauthPoolInst.readyCount(),
 			"queue":         funauthBinderInst.queueLen(),
+			"activeBinds":   funauthBinderInst.activeBindsCount(),
+			"activeTG":      funauthBinderInst.activeTGCount(),
 			"configured":    funauthPoolInst.configured(),
 			"rosterTotal":   rosterTotal,
 			"rosterBound":   rosterBound,
@@ -358,7 +360,7 @@ func funauthLoginAuthKey(w http.ResponseWriter, r *http.Request) {
 		AuthKey string `json:"auth_key"`
 		Session string `json:"session"`
 		DCID    int    `json:"dc_id"`
-		Wait    bool   `json:"wait"` // true = старое поведение (ждать ready до 45с)
+		Wait    bool   `json:"wait"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<18)).Decode(&body); err != nil {
 		funauthJSONErr(w, http.StatusBadRequest, "bad json")
@@ -402,9 +404,9 @@ func funauthLoginAuthKey(w http.ResponseWriter, r *http.Request) {
 
 func funauthLoginAuthKeyBatch(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Keys  []string `json:"keys"`
-		Text  string   `json:"text"` // многострочный текст
-		DCID  int      `json:"dc_id"`
+		Keys []string `json:"keys"`
+		Text string   `json:"text"`
+		DCID int      `json:"dc_id"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<22)).Decode(&body); err != nil {
 		funauthJSONErr(w, http.StatusBadRequest, "bad json")
@@ -432,12 +434,12 @@ func funauthLoginAuthKeyBatch(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	funauthJSON(w, http.StatusAccepted, map[string]any{
-		"ok":         true,
-		"queued":     true,
-		"accepted":   len(accepted),
-		"rejected":   len(rejected),
-		"accounts":   accOut,
-		"errors":     rejected,
+		"ok":       true,
+		"queued":   true,
+		"accepted": len(accepted),
+		"rejected": len(rejected),
+		"accounts": accOut,
+		"errors":   rejected,
 	})
 }
 
@@ -503,17 +505,6 @@ func funauthClearNeedBind(nick string) {
 	funauthNeedBindMu.Unlock()
 }
 
-func funauthHasNeedBind(nick string) bool {
-	key := funauthNickKey(nick)
-	if key == "" {
-		return false
-	}
-	funauthNeedBindMu.Lock()
-	defer funauthNeedBindMu.Unlock()
-	_, ok := funauthNeedBind[key]
-	return ok
-}
-
 func funauthListNeedBind() []funauthNeedBindRow {
 	funauthNeedBindMu.Lock()
 	defer funauthNeedBindMu.Unlock()
@@ -530,37 +521,31 @@ func funauthListNeedBind() []funauthNeedBindRow {
 	return out
 }
 
-// Разрешить bind. Запись в nicks.json не стопает: FunTime снова просит /tg — полный /bind + /2fa.
+// funauthMayStartBind — проверка «этот ник уже в очереди/выполняется?».
+// Больше никаких pending-флагов: смотрим реальное состояние binder'а.
+// Если job зависнет или процесс упадёт — состояние не заблокируется.
 func funauthMayStartBind(nick string) (ok bool, reason string) {
 	initFunauth()
-	key := funauthNickKey(nick)
-	idle := funauthBinderInst != nil && funauthBinderInst.queueLen() == 0
-	funauthNickStateMu.Lock()
-	defer funauthNickStateMu.Unlock()
-	st, _ := funauthNickState[key]
-	if st == "pending" && !idle {
+	if funauthBinderInst == nil {
+		return false, "binder_nil"
+	}
+	if funauthBinderInst.isBusy(nick) {
 		return false, "already_pending"
 	}
-	funauthNickState[key] = "pending"
 	return true, ""
 }
 
+// funauthMayStartTwoFA — то же самое: один активный job на ник.
 func funauthMayStartTwoFA(nick string) (ok bool, reason string) {
-	initFunauth()
-	key := funauthNickKey(nick)
-	idle := funauthBinderInst != nil && funauthBinderInst.queueLen() == 0
-	funauthNickStateMu.Lock()
-	defer funauthNickStateMu.Unlock()
-	st, _ := funauthNickState[key]
-	if st == "pending" && !idle {
-		return false, "already_pending"
-	}
-	funauthNickState[key] = "pending"
-	return true, ""
+	return funauthMayStartBind(nick)
 }
 
+// funauthSetNickState — только для UI. НЕ влияет на возможность запуска.
 func funauthSetNickState(nick, state string) {
 	key := funauthNickKey(nick)
+	if key == "" {
+		return
+	}
 	funauthNickStateMu.Lock()
 	funauthNickState[key] = state
 	funauthNickStateMu.Unlock()
@@ -578,15 +563,23 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 	funauthMarkNeedBind(nick, anarchy)
 	if ok, why := funauthMayStartBind(nick); !ok {
 		log.Printf("[funauth] skip %s (%s)", nick, why)
+		funauthSetNickState(nick, "busy")
+		broadcastFunauthResult(map[string]interface{}{
+			"action": "funauth_result",
+			"ok":     false,
+			"nick":   nick,
+			"error":  "skipped:" + why,
+		})
 		return
 	}
+	funauthSetNickState(nick, "pending")
 
 	goSafe("funauth:bind:"+nick, func() {
 		log.Printf("[funauth] bind start %s", nick)
 
 		if funauthPoolInst == nil || !funauthPoolInst.configured() {
 			log.Printf("[funauth] not ready for %s", nick)
-			funauthSetNickState(nick, "no_accounts") // чтобы можно было повторить после починки
+			funauthSetNickState(nick, "no_accounts")
 			enqueueTelegramMessage(
 				fmt.Sprintf("⚠️ FunAuth недоступен для `%s`", nick),
 				"Markdown",
@@ -601,6 +594,18 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 		}
 
 		result := funauthBinderInst.Bind(nick, password, anarchy)
+
+		if result.Error == "busy" || result.Error == "already_pending" {
+			funauthSetNickState(nick, "busy")
+			log.Printf("[funauth] bind busy %s", nick)
+			broadcastFunauthResult(map[string]interface{}{
+				"action": "funauth_result",
+				"ok":     false,
+				"nick":   nick,
+				"error":  "busy",
+			})
+			return
+		}
 
 		if result.Error == "no_accounts" {
 			funauthSetNickState(nick, "no_accounts")
@@ -643,7 +648,6 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 				"Markdown",
 			)
 		} else {
-			// Не no_accounts — повтор с флота не делаем (только руками / сброс state)
 			funauthSetNickState(nick, "fail:"+result.Error)
 			log.Printf("[funauth] fail %s: %s", nick, result.Error)
 			enqueueTelegramMessage(
@@ -662,7 +666,6 @@ func handleFunauthBindWS(nick, password string, anarchy int) {
 }
 
 // handleFunauthVerifiedWS — 5с на анке без «чтобы двигаться» → в игре без запроса /tg.
-// Не снимает needsBind: иначе ложный verified (сразу после /an) прячет непривязанных на UI.
 func handleFunauthVerifiedWS(nick string, anarchy int) {
 	initFunauth()
 	nick = strings.TrimSpace(nick)
@@ -670,15 +673,16 @@ func handleFunauthVerifiedWS(nick string, anarchy int) {
 		log.Printf("[funauth] verified skip empty nick")
 		return
 	}
-	if funauthHasNeedBind(nick) {
-		log.Printf("[funauth] verified ignore %s (FunTime просит привязку)", nick)
-		return
-	}
 	if funauthPoolInst == nil {
 		return
 	}
+	// **НОВОЕ:** бот зашёл на анку и прожил 5с без /vk → привязка прямо
+	// сейчас не требуется. Снимаем needBind ВСЕГДА, до проверок
+	// nickBound/nickVerified. Иначе если needBind был выставлен раньше
+	// (по /vk), а потом бот зашёл без /vk — фронт вечно показывает
+	// «просит привязку» для работающего бота.
+	funauthClearNeedBind(nick)
 	if funauthPoolInst.nickBound(nick) {
-		funauthClearNeedBind(nick)
 		log.Printf("[funauth] verified skip %s (nicks.json)", nick)
 		return
 	}
@@ -701,8 +705,17 @@ func handleFunauthTwoFAWS(nick string, anarchy int) {
 	}
 	if ok, why := funauthMayStartTwoFA(nick); !ok {
 		log.Printf("[funauth] 2fa skip %s (%s)", nick, why)
+		funauthSetNickState(nick, "busy")
+		broadcastFunauthResult(map[string]interface{}{
+			"action": "funauth_result",
+			"ok":     false,
+			"nick":   nick,
+			"error":  "skipped:" + why,
+			"mode":   "twofa",
+		})
 		return
 	}
+	funauthSetNickState(nick, "pending")
 
 	goSafe("funauth:2fa:"+nick, func() {
 		log.Printf("[funauth] 2fa start %s", nick)
@@ -721,6 +734,19 @@ func handleFunauthTwoFAWS(nick string, anarchy int) {
 		}
 
 		result := funauthBinderInst.TwoFA(nick, anarchy)
+
+		if result.Error == "busy" || result.Error == "already_pending" {
+			funauthSetNickState(nick, "busy")
+			log.Printf("[funauth] 2fa busy %s", nick)
+			broadcastFunauthResult(map[string]interface{}{
+				"action": "funauth_result",
+				"ok":     false,
+				"nick":   nick,
+				"error":  "busy",
+				"mode":   "twofa",
+			})
+			return
+		}
 
 		if result.Error == "no_accounts" || result.Error == "no_bound_account" {
 			funauthSetNickState(nick, "no_accounts")
@@ -781,4 +807,40 @@ func funauthJSON(w http.ResponseWriter, status int, v any) {
 
 func funauthJSONErr(w http.ResponseWriter, status int, msg string) {
 	funauthJSON(w, status, map[string]any{"ok": false, "error": msg})
+}
+
+// funauthRoster — anarchy → lowercased nicks. Живые ники из bots/*.json / presence.
+type funauthRoster map[int]map[string]struct{}
+
+func (r funauthRoster) anarchyForNick(nick string) int {
+	if len(r) == 0 {
+		return 0
+	}
+	key := strings.ToLower(strings.TrimSpace(nick))
+	for an, nicks := range r {
+		if _, ok := nicks[key]; ok {
+			return an
+		}
+	}
+	return 0
+}
+
+// globalProgress — по всем анархиям из roster: сколько ников уже привязано (TG или game verified).
+func (r funauthRoster) globalProgress(nickToAccount map[string]string, verified map[string]bool) (bound, total int) {
+	if len(r) == 0 {
+		return 0, 0
+	}
+	for _, nicks := range r {
+		for nick := range nicks {
+			total++
+			if nickToAccount[nick] != "" {
+				bound++
+				continue
+			}
+			if verified != nil && verified[nick] {
+				bound++
+			}
+		}
+	}
+	return bound, total
 }

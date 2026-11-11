@@ -1,6 +1,7 @@
 package main
 
 import (
+	"hash/fnv"
 	"log"
 	"sort"
 	"strings"
@@ -10,22 +11,53 @@ import (
 // skipAhBookBackfillOnInit — legacy test flag (ban backfill removed).
 var skipAhBookBackfillOnInit bool
 
+// ahLotKey — компактный ключ лота: FNV-64a от uuid (маска до 63 бит, чтобы помещался в INTEGER PRIMARY KEY).
+// Коллизии на сотнях тысяч лотов практически невозможны (≈10^-8), а при совпадении просто обновится чужая строка кэша.
+func ahLotKey(uuid string) int64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(uuid))
+	return int64(h.Sum64() & 0x7fffffffffffffff)
+}
+
+// ahBookHasColumn — есть ли колонка в текущей таблице книги (mlDBMu уже взят вызывающим).
+func ahBookHasColumn(col string) bool {
+	rows, err := mlDB.Query(`SELECT name FROM pragma_table_info('ah_book_lots')`)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var n string
+		if rows.Scan(&n) == nil && n == col {
+			return true
+		}
+	}
+	return false
+}
+
 // ah_lot — снимок чужого лота с АХ. В adjustPrice не входит.
 func initAhBookTable() {
 	if mlDB == nil {
 		return
 	}
 	mlDBMu.Lock()
+	// Старая схема (uuid TEXT PRIMARY KEY, ~57 символов на лот + дубль в служебном индексе, enchants_json) весила
+	// ~310 байт на лот. Книга — кэш на 3 суток, поэтому при старой схеме таблицу просто пересоздаём.
+	if ahBookHasColumn("uuid") {
+		log.Printf("[ah_book] старая схема книги — пересоздаю (кэш наполнится из сканов)")
+		_, _ = mlDB.Exec(`DROP TABLE IF EXISTS ah_book_lots`)
+	}
 	_, err := mlDB.Exec(`
 CREATE TABLE IF NOT EXISTS ah_book_lots (
-	uuid TEXT PRIMARY KEY,
+	lot_id INTEGER PRIMARY KEY, -- 63-битный хеш uuid лота (ahLotKey): ключ и rowid в одном
 	ts TEXT NOT NULL,
 	go_type TEXT NOT NULL,
 	item_id TEXT NOT NULL,
 	price INTEGER NOT NULL,
 	durability REAL,
 	seller TEXT,
-	enchants_json TEXT,
+	seller_id INTEGER,
+	enchants_c TEXT,
 	anarchy INTEGER,
 	seen_by TEXT
 )`)
@@ -35,9 +67,11 @@ CREATE TABLE IF NOT EXISTS ah_book_lots (
 		return
 	}
 	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_ah_book_item_ts ON ah_book_lots(item_id, ts)`)
-	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_ah_book_go_ts ON ah_book_lots(go_type, ts)`)
-	_, _ = mlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_ah_book_seller_item_ts ON ah_book_lots(seller, item_id, ts)`)
-	ensureMLColumn(mlDB, "ah_book_lots", "seller_id", "INTEGER")
+	_, _ = mlDB.Exec(`DROP INDEX IF EXISTS idx_ah_book_go_ts`)
+	_, _ = mlDB.Exec(`DROP INDEX IF EXISTS idx_ah_book_seller_item_ts`)
+	if err := ensureEnchNamesTableLocked(); err != nil {
+		log.Printf("[ah_book] ench_names schema: %v", err)
+	}
 	if err := ensureAhSellersTableLocked(); err != nil {
 		log.Printf("[ah_book] sellers schema: %v", err)
 	}
@@ -74,7 +108,6 @@ type ahBookWire struct {
 	Enchants   []ItemEffect `json:"enchants"`
 	Anarchy    any          `json:"anarchy"`
 	SeenBy     string       `json:"seen_by"`
-	enchJSON   string       `json:"-"`
 }
 
 func insertAhBookBatch(rows []ahBookWire) {
@@ -91,220 +124,73 @@ func insertAhBookBatch(rows []ahBookWire) {
 	}
 	mutex.RUnlock()
 	ts := time.Now().UTC().Format(time.RFC3339)
-	const unlockEvery = 25
-	n := 0
-	mlDBMu.Lock()
-	for _, r := range keep {
-		uuid := strings.TrimSpace(r.Uuid)
-		if uuid == "" || r.ItemID == "" {
-			continue
-		}
-		ench := r.enchJSON
-		if ench == "" {
-			ench = tradeEnchantsJSON(r.Enchants)
-		}
-		var dur any
-		if r.Durability != nil {
-			dur = *r.Durability
-		}
-		seller := strings.TrimSpace(r.Seller)
-		sellerID := upsertAhSellerLocked(strings.ToLower(seller))
-		_, err := mlDB.Exec(
-			`INSERT INTO ah_book_lots (uuid, ts, go_type, item_id, price, durability, seller, seller_id, enchants_json, anarchy, seen_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			 ON CONFLICT(uuid) DO UPDATE SET
-			   ts = excluded.ts,
-			   go_type = excluded.go_type,
-			   item_id = excluded.item_id,
-			   price = excluded.price,
-			   durability = excluded.durability,
-			   seller = excluded.seller,
-			   seller_id = excluded.seller_id,
-			   enchants_json = excluded.enchants_json,
-			   anarchy = excluded.anarchy,
-			   seen_by = excluded.seen_by`,
-			uuid, ts, r.GoType, r.ItemID, r.Price, dur, seller, sellerID, ench, anarchyInt(r.Anarchy), r.SeenBy,
-		)
-		if err != nil {
-			log.Printf("[ah_book] insert: %v", err)
-			continue
-		}
-		n++
-		// Отпускаем mlDBMu — иначе sales/adjust голодают за ah_lots flood.
-		if n%unlockEvery == 0 {
-			mlDBMu.Unlock()
-			mlDBMu.Lock()
-		}
+	// Пачками по 25 лотов в одной транзакции (один commit вместо 25), между пачками отпускаем mlDBMu —
+	// иначе sales/adjust голодают за ah_lots flood. Словари (продавцы, зачарования) читаем ДО Begin:
+	// соединение одно (MaxOpenConns=1), запрос внутри открытой транзакции заблокировал бы сам себя.
+	const chunk = 25
+	type prepared struct {
+		r        ahBookWire
+		uuid     string
+		seller   string
+		sellerID int64
+		ench     string
+		dur      any
 	}
-	mlDBMu.Unlock()
-}
-
-// ahBookMarketRecoverySnap — книга за длинное окно для shadow market_recovery (не 10m ah_book).
-type ahBookMarketRecoverySnap struct {
-	MinAsk  int
-	P10     int
-	NSell   int // unique sellers по книге
-	NUUID   int // unique uuid по книге
-	NRows   int
-	OK      bool
-}
-
-// ahBookMarketRecoveryStats — min/p10 + unique sellers/uuid за since…now, по книге.
-// p10 по всем лотам окна (как ahBookP10Since); min/sellers/uuid — .
-// Не использует nacenka. Не меняет пороги обычного 10m ah_book.
-func ahBookMarketRecoveryStats(itemID string, since time.Time) ahBookMarketRecoverySnap {
-	var out ahBookMarketRecoverySnap
-	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
-		return out
-	}
-	mlDBMu.Lock()
-	rows, err := mlDB.Query(
-		`SELECT a.price, lower(trim(coalesce(a.seller,''))), a.uuid
-		 FROM ah_book_lots a
-		 WHERE a.item_id = ? AND a.ts >= ? AND a.price > 0`,
-		itemID, since.UTC().Format(time.RFC3339),
-	)
-	if err != nil {
+	for start := 0; start < len(keep); start += chunk {
+		end := start + chunk
+		if end > len(keep) {
+			end = len(keep)
+		}
+		mlDBMu.Lock()
+		batch := make([]prepared, 0, end-start)
+		for _, r := range keep[start:end] {
+			uuid := strings.TrimSpace(r.Uuid)
+			if uuid == "" || r.ItemID == "" {
+				continue
+			}
+			var dur any
+			if r.Durability != nil {
+				dur = *r.Durability
+			}
+			seller := strings.TrimSpace(r.Seller)
+			batch = append(batch, prepared{
+				r: r, uuid: uuid, seller: seller, dur: dur,
+				sellerID: upsertAhSellerLocked(strings.ToLower(seller)),
+				ench:     encodeEnchantsCompactLocked(r.Enchants),
+			})
+		}
+		if len(batch) > 0 {
+			tx, err := mlDB.Begin()
+			if err != nil {
+				log.Printf("[ah_book] begin: %v", err)
+			} else {
+				for _, p := range batch {
+					if _, err := tx.Exec(
+						`INSERT INTO ah_book_lots (lot_id, ts, go_type, item_id, price, durability, seller, seller_id, enchants_c, anarchy, seen_by)
+						 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+						 ON CONFLICT(lot_id) DO UPDATE SET
+						   ts = excluded.ts,
+						   go_type = excluded.go_type,
+						   item_id = excluded.item_id,
+						   price = excluded.price,
+						   durability = excluded.durability,
+						   seller = excluded.seller,
+						   seller_id = excluded.seller_id,
+						   enchants_c = excluded.enchants_c,
+						   anarchy = excluded.anarchy,
+						   seen_by = excluded.seen_by`,
+						ahLotKey(p.uuid), ts, p.r.GoType, p.r.ItemID, p.r.Price, p.dur, p.seller, p.sellerID, p.ench, anarchyInt(p.r.Anarchy), p.r.SeenBy,
+					); err != nil {
+						log.Printf("[ah_book] insert: %v", err)
+					}
+				}
+				if err := tx.Commit(); err != nil {
+					log.Printf("[ah_book] commit: %v", err)
+				}
+			}
+		}
 		mlDBMu.Unlock()
-		log.Printf("[ah_book] market_recovery stats: %v", err)
-		return out
 	}
-	allPrices := make([]int, 0, 256)
-	byUUID := map[string]int{}
-	sellers := map[string]struct{}{}
-	for rows.Next() {
-		var price int
-		var seller, uuid string
-		if err := rows.Scan(&price, &seller, &uuid); err != nil || price <= 0 {
-			continue
-		}
-		allPrices = append(allPrices, price)
-		out.NRows++
-		if seller != "" {
-			sellers[seller] = struct{}{}
-		}
-		if uuid == "" {
-			continue
-		}
-		if prev, ok := byUUID[uuid]; !ok || price < prev {
-			byUUID[uuid] = price
-		}
-	}
-	_ = rows.Close()
-	mlDBMu.Unlock()
-
-	out.NSell = len(sellers)
-	out.NUUID = len(byUUID)
-	if out.NUUID == 0 || len(allPrices) == 0 {
-		return out
-	}
-	minAsk := 0
-	for _, p := range byUUID {
-		if minAsk == 0 || p < minAsk {
-			minAsk = p
-		}
-	}
-	out.MinAsk = minAsk
-	sort.Ints(allPrices)
-	out.P10 = allPrices[len(allPrices)/10]
-	out.OK = out.MinAsk > 0 && out.P10 > 0
-	return out
-}
-
-// ahBookTrustedSellerMinSnap — sell-side min по независимым продавцам (не uuid-flood).
-// На продавца берём его самый дешёвый лот; флот отфильтрован на insert.
-// Не использует nacenka. Не меняет ahBookMinSince / 10m raise logic.
-type ahBookTrustedSellerMinSnap struct {
-	TrustedMin       int // min среди per-seller mins
-	UniqueSellers    int
-	SellersNearMin   int // sellers with min <= TrustedMin + nearSlack
-	NUUID            int // informational
-	OK               bool
-}
-
-// ahBookTrustedSellerMin — книга за since…now: per-seller min → global min + trust counts.
-func ahBookTrustedSellerMin(itemID string, since time.Time, nearSlackSteps, step int) ahBookTrustedSellerMinSnap {
-	var out ahBookTrustedSellerMinSnap
-	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
-		return out
-	}
-	mlDBMu.Lock()
-	rows, err := mlDB.Query(
-		`SELECT a.price, lower(trim(coalesce(a.seller,''))), a.uuid
-		 FROM ah_book_lots a
-		 WHERE a.item_id = ? AND a.ts >= ? AND a.price > 0`,
-		itemID, since.UTC().Format(time.RFC3339),
-	)
-	if err != nil {
-		mlDBMu.Unlock()
-		log.Printf("[ah_book] trusted seller min: %v", err)
-		return out
-	}
-	bySeller := map[string]int{}
-	uuids := map[string]struct{}{}
-	for rows.Next() {
-		var price int
-		var seller, uuid string
-		if err := rows.Scan(&price, &seller, &uuid); err != nil || price <= 0 {
-			continue
-		}
-		if seller == "" {
-			continue
-		}
-		if prev, ok := bySeller[seller]; !ok || price < prev {
-			bySeller[seller] = price
-		}
-		if uuid != "" {
-			uuids[uuid] = struct{}{}
-		}
-	}
-	_ = rows.Close()
-	mlDBMu.Unlock()
-
-	out.UniqueSellers = len(bySeller)
-	out.NUUID = len(uuids)
-	if out.UniqueSellers == 0 {
-		return out
-	}
-	minAsk := 0
-	for _, p := range bySeller {
-		if minAsk == 0 || p < minAsk {
-			minAsk = p
-		}
-	}
-	out.TrustedMin = minAsk
-	near := minAsk
-	if step > 0 && nearSlackSteps > 0 {
-		near = minAsk + nearSlackSteps*step
-	}
-	for _, p := range bySeller {
-		if p <= near {
-			out.SellersNearMin++
-		}
-	}
-	out.OK = out.TrustedMin > 0
-	return out
-}
-
-// ahBookMinSince — min(price) по уникальным uuid SKU с ts≥since.
-// n = COUNT(DISTINCT uuid); ok только при n ≥ ahBookMinLotsInWindow.
-func ahBookMinSince(itemID string, since time.Time) (minPrice, n int, ok bool) {
-	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
-		return 0, 0, false
-	}
-	mlDBMu.Lock()
-	err := mlDB.QueryRow(`
-SELECT COUNT(DISTINCT a.uuid), COALESCE(MIN(a.price), 0) FROM ah_book_lots a
-WHERE a.item_id = ? AND a.ts >= ?`, itemID, since.UTC().Format(time.RFC3339)).Scan(&n, &minPrice)
-	mlDBMu.Unlock()
-	if err != nil {
-		log.Printf("[ah_book] min since: %v", err)
-		return 0, 0, false
-	}
-	if n < ahBookMinLotsInWindow || minPrice <= 0 {
-		return minPrice, n, false
-	}
-	return minPrice, n, true
 }
 
 // ahBookPricesSince — цены лотов SKU в окне, отсортированные по возрастанию.
@@ -320,46 +206,6 @@ func ahBookPricesSince(itemID string, since time.Time) (ps []int, n int) {
 	if err != nil {
 		mlDBMu.Unlock()
 		log.Printf("[ah_book] prices since: %v", err)
-		return nil, 0
-	}
-	for rows.Next() {
-		var p int
-		if err := rows.Scan(&p); err != nil {
-			continue
-		}
-		if p > 0 {
-			ps = append(ps, p)
-		}
-	}
-	_ = rows.Close()
-	mlDBMu.Unlock()
-	n = len(ps)
-	if n == 0 {
-		return nil, 0
-	}
-	sort.Ints(ps)
-	return ps, n
-}
-
-// ahBookUniquePricesSince — последняя цена каждого uuid в окне, по возрастанию.
-// Для opt buyMax (K-й дешёвый), без раздува от повторных сканов.
-func ahBookUniquePricesSince(itemID string, since time.Time) (ps []int, n int) {
-	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
-		return nil, 0
-	}
-	ts := since.UTC().Format(time.RFC3339)
-	mlDBMu.Lock()
-	rows, err := mlDB.Query(`
-SELECT b.price FROM ah_book_lots b
-INNER JOIN (
-  SELECT uuid, MAX(ts) AS mts FROM ah_book_lots
-  WHERE item_id = ? AND ts >= ? AND price > 0
-  GROUP BY uuid
-) t ON b.uuid = t.uuid AND b.ts = t.mts AND b.item_id = ?
-WHERE b.price > 0`, itemID, ts, itemID)
-	if err != nil {
-		mlDBMu.Unlock()
-		log.Printf("[ah_book] unique prices: %v", err)
 		return nil, 0
 	}
 	for rows.Next() {
@@ -449,8 +295,9 @@ func ahBookSellerMinPricesSince(itemID string, since time.Time) (ps []int, nSell
 }
 
 // ahBookMarketAnchorsSince — якоря из per-seller min ():
-//   buyEdge  = p10 — нижний край, до него боты должны доставать buyMax;
-//   sellMkt  = p40 — конкурентный sell (не дамп p10 и не стена клонов lot-p10).
+//
+//	buyEdge  = p10 — нижний край, до него боты должны доставать buyMax;
+//	sellMkt  = p40 — конкурентный sell (не дамп p10 и не стена клонов lot-p10).
 const (
 	ahBookMarketBuyPct     = 0.10
 	ahBookMarketSellPct    = 0.40
@@ -476,7 +323,7 @@ func ahBookMarketAnchorsSince(itemID string, since time.Time) (sellMkt, buyEdge,
 }
 
 // ahBookMultiSellerMinPricesSince — мин. цена только у продавцов с ≥minLots лотов SKU в окне.
-// «Селлер» = пачка одного меча, не разовый рандом. 
+// «Селлер» = пачка одного меча, не разовый рандом.
 func ahBookMultiSellerMinPricesSince(itemID string, since time.Time, minLots int) (ps []int, nSellers int) {
 	if mlDB == nil || strings.TrimSpace(itemID) == "" || since.IsZero() {
 		return nil, 0
@@ -549,12 +396,6 @@ func ahBookExpensiveBottomAnchorsSince(itemID string, since time.Time) (sellMkt,
 	return bottom, bottom, n, true
 }
 
-// ahBookMarketAnchorSince — sell-якорь (p40 seller-mins). Для полов/volume gate.
-func ahBookMarketAnchorSince(itemID string, since time.Time) (anchor, nSellers int, ok bool) {
-	sellMkt, _, n, ok := ahBookMarketAnchorsSince(itemID, since)
-	return sellMkt, n, ok
-}
-
 // ahBookP10Since — 10-й процентиль цен SKU в окне (витрины тоже).
 // Для set_min: сырой min = дампы, медиана = витрины.
 func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {
@@ -569,42 +410,67 @@ func ahBookP10Since(itemID string, since time.Time) (p10, n int, ok bool) {
 	return p10, n, true
 }
 
-// ahBookP5P10Since — p5 и p10 одной живой выборки (book2 buy/sell).
-func ahBookP5P10Since(itemID string, since time.Time) (p5, p10, n int, ok bool) {
-	ps, n := ahBookPricesSince(itemID, since)
-	if n < ahBookMinLotsInWindow {
-		return 0, 0, n, false
-	}
-	p5 = ahBookPercentileSorted(ps, 0.05)
-	p10 = ps[n/10]
-	if p10 <= 0 {
-		return p5, p10, n, false
-	}
-	return p5, p10, n, true
-}
+// ============ чистка книги АХ ============
+//
+// Раньше ah_book_lots не чистилась: за 9 суток она выросла до 4.5 ГБ, полные проходы по ней (бэкфиллы) держали
+// mlDBMu по 30+ секунд, и страница с продажами зависала. Книге нужны только свежие окна (самое длинное — 24 ч),
+// поэтому храним ahBookKeep и раз в час удаляем старьё по индексу (item_id, ts), по одному товару за раз:
+// mlDBMu отпускается между товарами, а файл больше не растёт (место освобождается для новых вставок).
 
-// ahBookMinOfLastN — min(price) среди последних n лотов SKU (по ts).
-// ok только при ровно n строках.
-func ahBookMinOfLastN(itemID string, n int) (minPrice int, ok bool) {
-	if mlDB == nil || n <= 0 || strings.TrimSpace(itemID) == "" {
-		return 0, false
+const (
+	ahBookKeep          = 3 * 24 * time.Hour
+	ahBookPruneEvery    = time.Hour
+	ahBookPruneFirstRun = 5 * time.Minute
+)
+
+// pruneAhBookOnce удаляет лоты старше keep. Возвращает число удалённых строк.
+func pruneAhBookOnce(now time.Time, keep time.Duration) int {
+	if mlDB == nil {
+		return 0
 	}
-	var cnt int
-	var minP int
+	cutoff := now.Add(-keep).UTC().Format(time.RFC3339)
 	mlDBMu.Lock()
-	err := mlDB.QueryRow(`
-SELECT COUNT(*), COALESCE(MIN(price), 0) FROM (
-	SELECT a.price FROM ah_book_lots a
-	WHERE a.item_id = ?
-	ORDER BY a.ts DESC LIMIT ?
-)`, itemID, n).Scan(&cnt, &minP)
+	rows, err := mlDB.Query(`SELECT DISTINCT item_id FROM ah_book_lots`)
+	var items []string
+	if err == nil {
+		for rows.Next() {
+			var id string
+			if rows.Scan(&id) == nil {
+				items = append(items, id)
+			}
+		}
+		rows.Close()
+	}
 	mlDBMu.Unlock()
 	if err != nil {
-		log.Printf("[ah_book] min last: %v", err)
-		return 0, false
+		log.Printf("[ah_book] prune: список товаров: %v", err)
+		return 0
 	}
-	if cnt < n || minP <= 0 {
-		return 0, false
+	total := 0
+	for _, id := range items {
+		mlDBMu.Lock()
+		res, err := mlDB.Exec(`DELETE FROM ah_book_lots WHERE item_id = ? AND ts < ?`, id, cutoff)
+		mlDBMu.Unlock()
+		if err != nil {
+			log.Printf("[ah_book] prune %s: %v", id, err)
+			continue
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			total += int(n)
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
-	return minP, true
+	return total
+}
+
+func startAhBookPruneLoop() {
+	goImmortal("ahBookPrune", func() {
+		time.Sleep(ahBookPruneFirstRun)
+		for {
+			if n := pruneAhBookOnce(time.Now(), ahBookKeep); n > 0 {
+				log.Printf("[ah_book] prune: удалено %d лотов старше %v", n, ahBookKeep)
+			}
+			time.Sleep(ahBookPruneEvery)
+		}
+	})
 }

@@ -1,52 +1,10 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
-
-func TestLookupMCNickSOCKS(t *testing.T) {
-	root := t.TempDir()
-	bots := filepath.Join(root, "bots")
-	if err := os.Mkdir(bots, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(bots, "502b.json"), []byte(`[
-  {"username":"uglevik_q3","ip":"502-1","anarchy":502}
-]`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "ip.json"), []byte(`{
-  "502-1": "socks5://u:p@10.1.2.3:50101"
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "clan-owners.json"), []byte(`{
-  "502": {"username":"tormozKisl","ip":"502","anarchy":502}
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "owner-ip.json"), []byte(`{
-  "502": "socks5://u:p@10.9.9.9:50101"
-}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("FLEET_BOTS_DIR", bots)
-
-	got := lookupMCNickSOCKS("uglevik_q3")
-	if got != "socks5://u:p@10.1.2.3:50101" {
-		t.Fatalf("bot socks: %q", got)
-	}
-	got = lookupMCNickSOCKS("tormozKisl")
-	if got != "socks5://u:p@10.9.9.9:50101" {
-		t.Fatalf("owner socks: %q", got)
-	}
-	if lookupMCNickSOCKS("nobody") != "" {
-		t.Fatal("unknown nick")
-	}
-}
 
 func TestPickBindSOCKSUsesCache(t *testing.T) {
 	prev := funauthBindProxies

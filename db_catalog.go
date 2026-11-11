@@ -62,9 +62,15 @@ CREATE TABLE IF NOT EXISTS ah_sellers (
 	return nil
 }
 
+// ahSellerIDCache — nick → id в памяти: раньше на каждый лот шло 2 SQL-запроса.
+var ahSellerIDCache = map[string]int64{}
+
 func upsertAhSellerLocked(nick string) int64 {
 	if nick == "" || mlDB == nil {
 		return 0
+	}
+	if id, ok := ahSellerIDCache[nick]; ok {
+		return id
 	}
 	_, err := mlDB.Exec(`INSERT OR IGNORE INTO ah_sellers (nick) VALUES (?)`, nick)
 	if err != nil {
@@ -74,5 +80,6 @@ func upsertAhSellerLocked(nick string) int64 {
 	if err := mlDB.QueryRow(`SELECT id FROM ah_sellers WHERE nick = ?`, nick).Scan(&id); err != nil {
 		return 0
 	}
+	ahSellerIDCache[nick] = id
 	return id
 }

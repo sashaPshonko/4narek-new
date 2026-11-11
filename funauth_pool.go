@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,6 +68,8 @@ type funauthAccount struct {
 	botMsg   chan string
 	cancel   context.CancelFunc
 	socksURL string
+	// floodUntil — Telegram вернул FLOOD_WAIT: до этого момента аккаунт для биндов не берём.
+	floodUntil time.Time
 }
 
 type funauthLoginResult struct {
@@ -415,12 +418,6 @@ func (p *funauthPool) markDead(id, reason string) {
 	log.Printf("[funauth] TG %s → dead (%s), clearedNicks=%d", phone, reason, cleared)
 }
 
-func (p *funauthPool) accountByID(id string) *funauthAccount {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.accounts[id]
-}
-
 func (p *funauthPool) accountForNick(nick string) *funauthAccount {
 	key := strings.ToLower(strings.TrimSpace(nick))
 	p.mu.Lock()
@@ -576,18 +573,6 @@ func (p *funauthPool) syncAllRosterFull() {
 	}
 }
 
-func (p *funauthPool) listReadyAccounts() []*funauthAccount {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	out := make([]*funauthAccount, 0, len(p.accounts))
-	for _, a := range p.accounts {
-		if a.ready && !a.meta.Full && a.api != nil {
-			out = append(out, a)
-		}
-	}
-	return out
-}
-
 func normalizeFunauthPhone(phone string) string {
 	var b strings.Builder
 	for _, r := range phone {
@@ -670,10 +655,6 @@ func (p *funauthPool) rosterAnarchy(nick string) int {
 	return r.anarchyForNick(nick)
 }
 
-func (p *funauthPool) pickReady(exclude map[string]struct{}) *funauthAccount {
-	return p.pickForAnarchyBind("", 0, exclude)
-}
-
 func (p *funauthPool) accountBoundCountLocked(accountID string) int {
 	n := 0
 	for _, id := range p.nicks {
@@ -691,17 +672,6 @@ func (p *funauthPool) accountHasFarmNickLocked(accountID string) bool {
 		}
 	}
 	return false
-}
-
-func (p *funauthPool) effectiveAnarchyLocked(acc *funauthAccount) int {
-	if acc == nil {
-		return 0
-	}
-	an := acc.meta.Anarchy
-	if an > 0 && p.accountBoundCountLocked(acc.meta.ID) == 0 {
-		return 0
-	}
-	return an
 }
 
 func (p *funauthPool) cleanupOrphanAnarchies() {
@@ -732,11 +702,6 @@ type funauthPickDiag struct {
 	OtherAn int
 }
 
-func (p *funauthPool) pickForAnarchyBind(nick string, anarchy int, exclude map[string]struct{}) *funauthAccount {
-	acc, _ := p.pickForAnarchyBindDiag(nick, anarchy, exclude)
-	return acc
-}
-
 func (p *funauthPool) pickForAnarchyBindDiag(
 	nick string,
 	anarchy int,
@@ -752,12 +717,21 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 	var ownerReuse []*funauthAccount
 	ownerJob := nickIsClanOwnerOf(key, anarchy)
 
+	// TG-логины в процессе (loginStart → loginCode/importAuthKey → connectAccount)
+	// ещё не в p.accounts, но скоро появятся. Считаем их busy, чтобы биндер
+	// подождал (processJob: if diag.Busy > 0 → sleep 5s → continue).
+	diag.Busy += len(p.pending)
+
 	for _, acc := range p.accounts {
 		if _, skip := exclude[acc.meta.ID]; skip {
 			diag.Excluded++
 			continue
 		}
 		if !acc.ready || acc.api == nil {
+			diag.Offline++
+			continue
+		}
+		if time.Now().Before(acc.floodUntil) {
 			diag.Offline++
 			continue
 		}
@@ -1590,8 +1564,8 @@ func splitAuthKeyLines(raw string) []string {
 }
 
 type funauthAuthKeyReject struct {
-	Index int    `json:"index"`
-	Error string `json:"error"`
+	Index   int    `json:"index"`
+	Error   string `json:"error"`
 	Preview string `json:"preview,omitempty"`
 }
 
@@ -1629,4 +1603,38 @@ func (p *funauthPool) importAuthKey(raw string, dcID int) (funauthAccountView, e
 	}
 	// Оставляем акк в пуле — коннект ещё может добить DC; не удаляем по таймауту UI.
 	return view, nil
+}
+
+// activeTGLoginCount — сколько TG-логинов сейчас в процессе (для /health и binder).
+func (p *funauthPool) activeTGLoginCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.pending)
+}
+
+// markFlood — аккаунт временно недоступен (Telegram FLOOD_WAIT). Ничего не стирает: ни привязки, ни сессию.
+func (p *funauthPool) markFlood(id string, d time.Duration) {
+	if p == nil || strings.TrimSpace(id) == "" || d <= 0 {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if a := p.accounts[id]; a != nil {
+		a.floodUntil = time.Now().Add(d)
+	}
+}
+
+var funauthFloodWaitRe = regexp.MustCompile(`(?i)FLOOD_WAIT\s*\(?(\d+)`)
+
+// funauthFloodWait: сколько секунд Telegram просит ждать (0 — это не FLOOD_WAIT).
+func funauthFloodWait(errStr string) time.Duration {
+	m := funauthFloodWaitRe.FindStringSubmatch(errStr)
+	if m == nil {
+		return 0
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return time.Duration(n) * time.Second
 }

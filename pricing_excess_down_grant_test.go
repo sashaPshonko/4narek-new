@@ -13,13 +13,3 @@ func TestAutomaticDownAllowed(t *testing.T) {
 		t.Fatal("held=6 > hi → grant")
 	}
 }
-
-func TestGrantBlocksDOIOverAtNoExcess(t *testing.T) {
-	// held=3 hi=5 DOI over — grant closed; C not involved
-	if doiCoverIntensity(3, 1) != "over" {
-		t.Fatal("precondition")
-	}
-	if automaticDownAllowed(3, 5) {
-		t.Fatal("no grant")
-	}
-}

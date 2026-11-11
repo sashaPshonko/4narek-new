@@ -177,10 +177,6 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	mlDB = db
 	initAhBookTable()
 	initCapitalTables()
-	initMLShadowTable()
-	initMarketRecoveryShadowTable()
-	initCappedDiscoveryShadowTable()
-	initTrustedMinDiscoveryShadowTable()
 	if os.Getenv("ML_HEAL_ON_START") == "1" {
 		log.Printf("[ML] ML_HEAL_ON_START=1 — PRAGMA quick_check (минуты на большой БД)")
 		healMLDatabase(db)
@@ -189,12 +185,10 @@ CREATE TABLE IF NOT EXISTS ml_decisions (
 	syncItemsCatalog()
 	ensureCompactSchema()
 	backfillPriceExplorationFromDB()
-	startMLBackupLoop()
+	// Периодические бэкапы отключены по решению владельца (VACUUM INTO на 4+ ГБ забивал диск и тормозил сервер).
 	startMLCompactLoop()
+	startAhBookPruneLoop()
 	log.Printf("[ML] SQLite %s (schema v%d + compact history rewrite)", mlDBPath, mlSchemaVersion)
-	if mlShadowEnabled() {
-		log.Printf("[ML-SHADOW] включён → %s (Go правила + лог сравнения с ML)", mlWSURL())
-	}
 }
 
 func ensureMLColumn(db *sql.DB, table, col, decl string) {
@@ -787,7 +781,6 @@ func healMLDatabase(db *sql.DB) {
 		"idx_capital_cycles_ts", "idx_capital_cycles_item",
 		"idx_stock_snapshots_ts", "idx_stock_snapshots_item",
 		"idx_server_price_events_ts", "idx_ml_decisions_ts",
-		"idx_ml_shadow_ts",
 	} {
 		if _, err := db.Exec(`DROP INDEX IF EXISTS "` + idx + `"`); err != nil {
 			log.Printf("[ML] DROP INDEX %s: %v", idx, err)
@@ -803,7 +796,6 @@ func healMLDatabase(db *sql.DB) {
 	}
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_server_price_events_ts ON server_price_events(ts)`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_decisions_ts ON ml_decisions(logged_ts)`)
-	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_ml_shadow_ts ON ml_shadow(ts)`)
 	if _, err := db.Exec(`REINDEX`); err != nil {
 		log.Printf("[ML] REINDEX all: %v", err)
 	}
@@ -907,4 +899,75 @@ func rebuildTradeEventsTable(db *sql.DB) {
 		copied++
 	}
 	log.Printf("[ML] trade_events: спасено %d строк из %s", copied, bak)
+}
+
+// События set_min_price / set_max_price от ботов (сервер), не adjustPrice.
+
+type externalPriceEvent struct {
+	Time        time.Time
+	Item        string
+	Kind        string // server_min | server_max
+	PriceBefore int
+	PriceAfter  int
+}
+
+var externalPriceEvents []externalPriceEvent
+
+const externalPriceRetain = 72 * time.Hour
+
+func recordExternalPriceChangeLocked(item, kind string, priceBefore, priceAfter int) {
+	externalPriceEvents = append(externalPriceEvents, externalPriceEvent{
+		Time:        time.Now(),
+		Item:        item,
+		Kind:        kind,
+		PriceBefore: priceBefore,
+		PriceAfter:  priceAfter,
+	})
+	pruneExternalPriceEventsLocked(time.Now().Add(-externalPriceRetain))
+}
+
+func pruneExternalPriceEventsLocked(cutoff time.Time) {
+	i := 0
+	for _, e := range externalPriceEvents {
+		if e.Time.After(cutoff) {
+			externalPriceEvents[i] = e
+			i++
+		}
+	}
+	externalPriceEvents = externalPriceEvents[:i]
+}
+
+func externalEventsToML(categoryType string, since, until time.Time) []mlExternalPriceEvent {
+	pruneExternalPriceEventsLocked(time.Now().Add(-externalPriceRetain))
+	out := make([]mlExternalPriceEvent, 0, 8)
+	for _, e := range externalPriceEvents {
+		cfg, ok := itemsConfig[e.Item]
+		if !ok || cfg.Type != categoryType {
+			continue
+		}
+		if !e.Time.After(since) || e.Time.After(until) {
+			continue
+		}
+		out = append(out, mlExternalPriceEvent{
+			Ts:          e.Time.UTC().Format(time.RFC3339),
+			Item:        e.Item,
+			Kind:        e.Kind,
+			PriceBefore: e.PriceBefore,
+			PriceAfter:  e.PriceAfter,
+			Delta:       e.PriceAfter - e.PriceBefore,
+			Note:        externalPriceEventNote(e.Kind),
+		})
+	}
+	return out
+}
+
+func externalPriceEventNote(kind string) string {
+	switch kind {
+	case "server_min":
+		return "Сервер/боты: минимальная цена лота — Go подставил floor. Не наше правило adjustPrice."
+	case "server_max":
+		return "Сервер/боты: максимальная цена — потолок лота. Не наше правило adjustPrice."
+	default:
+		return "Внешнее изменение цены, не adjustPrice."
+	}
 }
