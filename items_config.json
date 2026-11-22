@@ -37,12 +37,13 @@
     "hot_up_sales_max": 2,
     "hot_up_stock_max": 2,
     "buy_stop_q": 0.8,
-    "hot_price_cap_q": 0,
+    "hot_price_cap_q": 0.4,
     "hot_tether_q": 0.65,
     "nacenka": 1500000,
     "num": 5,
     "book_ceil_q": 0.4,
-    "book_floor_q": 0.05
+    "book_floor_q": 0.05,
+    "buy_stop_min_sellers": 3
   },
   "sword7-1.21": {
     "base_price": 760003,
@@ -118,12 +119,13 @@
     "hot_up_sales_max": 2,
     "hot_up_stock_max": 2,
     "buy_stop_q": 0.8,
-    "hot_price_cap_q": 0,
+    "hot_price_cap_q": 0.4,
     "hot_tether_q": 0.6,
     "nacenka": 1000000,
     "num": 6,
     "book_ceil_q": 0.3,
-    "book_floor_q": 0.05
+    "book_floor_q": 0.05,
+    "buy_stop_min_sellers": 3
   },
   "megasword-яд3-1.21": {
     "base_price": 3400007,
@@ -162,12 +164,13 @@
     "hot_down_stock_min": 2,
     "hot_up_sales_max": 2,
     "hot_up_stock_max": 1,
-    "hot_price_cap_q": 0,
+    "hot_price_cap_q": 0.4,
     "hot_tether_q": 0.55,
     "nacenka": 1100000,
     "num": 7,
     "book_ceil_q": 0.14,
-    "book_floor_q": 0.03
+    "book_floor_q": 0.03,
+    "buy_stop_min_sellers": 3
   },
   "штаны-1.21": {
     "base_price": 600005,
@@ -452,7 +455,7 @@
     "hot_price_cap_q": 0.7,
     "hot_tether_q": 0.85,
     "num": 1,
-    "book_ceil_q": 0.3,
+    "book_ceil_q": 0.5,
     "book_floor_q": 0.03
   },
   "sword-sharp6-1.21": {
@@ -469,16 +472,9 @@
         "lvl": 6
       }
     ],
-    "hot": true,
-    "hot_down_sales_max": 1,
-    "hot_down_stock_min": 2,
-    "hot_up_sales_max": 2,
-    "hot_up_stock_max": 1,
-    "hot_price_cap_q": 0.7,
-    "hot_tether_q": 0.85,
     "nacenka": 300000,
     "num": 2,
-    "book_ceil_q": 0.27,
+    "book_ceil_q": 0.5,
     "book_floor_q": 0.05
   },
   "кирка-бульд-маг-1.21": {
