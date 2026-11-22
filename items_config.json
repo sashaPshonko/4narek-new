@@ -170,7 +170,8 @@
     "num": 7,
     "book_ceil_q": 0.14,
     "book_floor_q": 0.03,
-    "buy_stop_min_sellers": 3
+    "buy_stop_min_sellers": 3,
+    "book_min_lots": 1
   },
   "штаны-1.21": {
     "base_price": 600005,
