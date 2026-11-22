@@ -3,8 +3,8 @@
     "base_price": 3000002,
     "normal_sales": 3,
     "normal_count": 5,
-    "price_step": 100000,
-    "analysis_minutes": 10,
+    "price_step": 50000,
+    "analysis_minutes": 60,
     "name": "netherite_sword",
     "type": "netherite-1.21",
     "effects": [
@@ -85,8 +85,8 @@
     "base_price": 3600004,
     "normal_sales": 3,
     "normal_count": 5,
-    "price_step": 100000,
-    "analysis_minutes": 10,
+    "price_step": 50000,
+    "analysis_minutes": 60,
     "name": "netherite_sword",
     "type": "netherite-1.21",
     "effects": [
@@ -131,8 +131,8 @@
     "base_price": 3400007,
     "normal_sales": 3,
     "normal_count": 5,
-    "price_step": 100000,
-    "analysis_minutes": 10,
+    "price_step": 50000,
+    "analysis_minutes": 60,
     "name": "netherite_sword",
     "type": "netherite-1.21",
     "effects": [
