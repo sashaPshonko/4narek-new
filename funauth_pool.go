@@ -271,6 +271,7 @@ func (p *funauthPool) init() {
 		return
 	}
 	n := 0
+	phones := map[string]string{} // id → телефон из мета-файлов (для журнала TG ↔ бот)
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
@@ -289,6 +290,7 @@ func (p *funauthPool) init() {
 			log.Printf("[funauth] bad meta %s", path)
 			continue
 		}
+		phones[meta.ID] = meta.Phone
 		if _, err := os.Stat(p.sessionPath(meta.ID)); err != nil {
 			log.Printf("[funauth] session missing for %s", meta.ID)
 			continue
@@ -300,6 +302,7 @@ func (p *funauthPool) init() {
 		})
 	}
 	log.Printf("[funauth] loading %d account(s) from %s", n, p.dir)
+	p.backfillTGMap(phones)
 	p.scheduleScrubBound()
 }
 
@@ -904,6 +907,7 @@ func (p *funauthPool) afterBindSuccess(nick, accountID string, anarchy int) {
 	}
 	p.assignAnarchy(accountID, anarchy)
 	p.rememberNick(nick, accountID)
+	p.logTGMap(nick, accountID, anarchy)
 	log.Printf("[funauth] bind %s → TG %s (an%d)", nick, accountID, anarchy)
 }
 

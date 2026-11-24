@@ -250,3 +250,34 @@ func TestNoAccessErrors(t *testing.T) {
 		t.Fatal("флуд и nil — не потеря доступа")
 	}
 }
+
+func TestTGMapLogAndView(t *testing.T) {
+	old := funauthTGMapPath
+	funauthTGMapPath = filepath.Join(t.TempDir(), "map.jsonl")
+	defer func() { funauthTGMapPath = old }()
+
+	p := newFunauthPool()
+	p.accounts = map[string]*funauthAccount{"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+7001"}}}
+	p.nicks = map[string]string{"old_nick": "tg0", "nick_a": "tg1"}
+	p.logTGMap("Nick_A", "tg1", 503)
+	p.backfillTGMap(map[string]string{"tg0": "+7000"})
+	p.backfillTGMap(nil) // повторный запуск ничего не дублирует
+
+	v := p.tgMapView("")
+	if len(v) != 2 {
+		t.Fatalf("ждали 2 ника, получили %d: %+v", len(v), v)
+	}
+	byNick := map[string]map[string]any{}
+	for _, r := range v {
+		byNick[r["nick"].(string)] = r
+	}
+	if byNick["nick_a"]["phone"] != "+7001" || byNick["nick_a"]["event"] != "bind" || byNick["nick_a"]["tgInPool"] != true {
+		t.Fatalf("nick_a: %+v", byNick["nick_a"])
+	}
+	if byNick["old_nick"]["phone"] != "+7000" || byNick["old_nick"]["tgInPool"] != false {
+		t.Fatalf("old_nick: %+v", byNick["old_nick"])
+	}
+	if f := p.tgMapView("old"); len(f) != 1 {
+		t.Fatalf("фильтр по нику: %d", len(f))
+	}
+}

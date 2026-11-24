@@ -155,6 +155,10 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 
+	case path == "/tg-map" && r.Method == http.MethodGet:
+		funauthJSON(w, http.StatusOK, map[string]any{"ok": true, "items": funauthPoolInst.tgMapView(r.URL.Query().Get("nick"))})
+		return
+
 	case path == "/settings" && r.Method == http.MethodGet:
 		funauthJSON(w, http.StatusOK, map[string]any{
 			"ok": true, "perAccount": funauthPoolInst.perAccountLimit(), "maxPerAccount": funauthMaxPerAccount,
