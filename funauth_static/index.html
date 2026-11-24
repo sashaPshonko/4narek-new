@@ -384,13 +384,6 @@
       </section>
 
       <section class="card wide">
-        <h2>Какой TG какому боту</h2>
-        <p class="hint">Журнал привязок для аналитики банов: он остаётся, даже когда TG удалён из пула. У старых привязок (до журнала) известен только id аккаунта, телефон — если сессия ещё в пуле.</p>
-        <input id="tgMapFilter" type="text" placeholder="фильтр по нику" autocomplete="off" />
-        <div id="tgMapList"><p class="empty">Загрузка…</p></div>
-      </section>
-
-      <section class="card wide">
         <h2>Аккаунты</h2>
         <div id="accounts"><p class="empty">Пока пусто</p></div>
       </section>
@@ -782,26 +775,6 @@
     };
     loadPerAccount();
 
-    let tgMapTimer = null;
-    async function loadTgMap() {
-      const q = $('tgMapFilter').value.trim();
-      const d = await api('/tg-map' + (q ? '?nick=' + encodeURIComponent(q) : ''));
-      const box = $('tgMapList');
-      if (!d || !d.ok || !Array.isArray(d.items) || !d.items.length) {
-        box.innerHTML = '<p class="empty">Нет записей</p>';
-        return;
-      }
-      const esc = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-      const rows = d.items.slice(0, 300).map((r) =>
-        '<tr><td>' + esc(r.nick) + '</td><td>' + esc(r.anarchy || '') + '</td><td>' + esc(r.phone || '—') +
-        '</td><td title="' + esc(r.account_id) + '">' + esc(String(r.account_id).slice(0, 8)) + '</td><td>' + esc(r.botsOnTG) +
-        '</td><td>' + (r.tgInPool ? 'в пуле' : 'удалён/нет') + '</td><td>' + esc((r.at || '').slice(0, 16).replace('T', ' ')) +
-        (r.event === 'backfill' ? ' (старая)' : '') + '</td></tr>');
-      box.innerHTML = '<table><thead><tr><th>Ник</th><th>Анка</th><th>Телефон TG</th><th>ID акк.</th><th>Ботов на TG</th><th>TG</th><th>Привязан</th></tr></thead><tbody>' +
-        rows.join('') + '</tbody></table>' + (d.items.length > 300 ? '<p class="hint">Показаны первые 300, уточни фильтр.</p>' : '');
-    }
-    $('tgMapFilter').addEventListener('input', () => { clearTimeout(tgMapTimer); tgMapTimer = setTimeout(loadTgMap, 300); });
-    loadTgMap();
 
     $('btnRefresh').onclick = () => refresh();
     refresh();
