@@ -12,3 +12,6 @@ var funauthStaticFS embed.FS
 
 //go:embed sales_static/*
 var salesStaticFS embed.FS
+
+//go:embed autosell_static/*
+var autosellStaticFS embed.FS

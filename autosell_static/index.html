@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>4narek · Автопродажа</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #e9ecef; --bg-deep: #dde3ea; --ink: #0c1222; --muted: #5b6578; --faint: #8b94a5;
+      --line: rgba(12, 18, 34, 0.1); --surface: rgba(255, 255, 255, 0.78); --surface-solid: #fff;
+      --accent: #0f766e; --accent-soft: rgba(15, 118, 110, 0.12);
+      --profit: #047857; --profit-bg: rgba(4, 120, 87, 0.1); --loss: #b91c1c; --loss-bg: rgba(185, 28, 28, 0.1);
+      --warn: #a16207; --warn-bg: rgba(161, 98, 7, 0.12);
+      --shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 40px rgba(12, 18, 34, 0.06);
+      --radius: 18px;
+      --font: "IBM Plex Sans", system-ui, sans-serif; --display: "Syne", "IBM Plex Sans", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0; color: var(--ink); font-family: var(--font);
+      background: radial-gradient(900px 480px at 8% -8%, #d7e8e4 0%, transparent 55%),
+        radial-gradient(700px 420px at 100% 0%, #d5dce8 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+      background-attachment: fixed; -webkit-font-smoothing: antialiased; line-height: 1.45;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 34px 22px 72px; }
+    header.hero { display: grid; gap: 14px; margin-bottom: 22px; }
+    .brand { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 62px); letter-spacing: -.045em; line-height: .95; margin: 0; }
+    .brand span { color: var(--accent); }
+    .lede { margin: 0; max-width: 46em; color: var(--muted); font-size: 16px; font-weight: 500; }
+    .status { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 999px; background: var(--surface-solid); border: 1px solid var(--line); font-size: 13px; color: var(--muted); width: fit-content; }
+    .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .status.err .dot { background: var(--loss); box-shadow: 0 0 0 3px var(--loss-bg); }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+    .nav a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-solid); }
+    .nav a:hover { color: var(--ink); }
+    .nav a.active { color: var(--ink); border-color: rgba(15,118,110,.35); background: var(--accent-soft); }
+    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+    .kpi { background: var(--surface); backdrop-filter: blur(16px) saturate(160%); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 14px; box-shadow: var(--shadow); }
+    .kpi .label { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+    .kpi .value { font-size: clamp(22px, 3.2vw, 34px); font-weight: 600; margin-top: 6px; letter-spacing: -.02em; word-break: break-all; }
+    .kpi .sub { font-size: 12.5px; color: var(--faint); margin-top: 4px; }
+    .mono { font-family: var(--mono); }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 16px; overflow-x: auto; }
+    .card h2 { margin: 0 0 10px; font-size: 14px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding: 6px 10px; }
+    td { padding: 9px 10px; border-top: 1px solid var(--line); }
+    td.num, th.num { text-align: right; }
+    tr.duty td { background: var(--accent-soft); font-weight: 600; }
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .pill.on { background: var(--profit-bg); color: var(--profit); }
+    .pill.off { background: rgba(12,18,34,.07); color: var(--muted); }
+    .pill.bad { background: var(--loss-bg); color: var(--loss); }
+    .pill.warn { background: var(--warn-bg); color: var(--warn); }
+    .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    button.btn { font: inherit; font-size: 15px; font-weight: 700; border: 0; border-radius: 999px; padding: 12px 22px; cursor: pointer; background: var(--ink); color: #fff; transition: .18s; }
+    button.btn:hover { background: var(--accent); }
+    button.btn.stop { background: var(--loss); }
+    button.btn:disabled { opacity: .5; cursor: default; }
+    .waitmsg { font-size: 14px; color: var(--muted); }
+    .waitmsg b { color: var(--ink); }
+    .note { color: var(--faint); font-size: 12.5px; margin-top: 8px; }
+    @media (max-width: 760px) { .kpis { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 480px) { .kpis { grid-template-columns: 1fr; } .wrap { padding-top: 22px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1 class="brand">4narek <span>Автопродажа</span></h1>
+      <nav class="nav" aria-label="Разделы">
+        <a href="/pricing/">Цены</a>
+        <a href="/sales/">Продажи</a>
+        <a href="/funauth/">FunAuth</a>
+        <a href="/autosell/" class="active">Автопродажа</a>
+        <a href="/fleet/">Баны</a>
+      </nav>
+      <p class="lede">Кто сейчас держит деньги для выдач PlayerOK, сколько у него на счёте и как идёт очередь.</p>
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">подключение…</span></div>
+    </header>
+
+    <section class="kpis">
+      <div class="kpi"><div class="label">Активный селлер</div><div class="value mono" id="kDuty">—</div><div class="sub" id="kDutySub"></div></div>
+      <div class="kpi"><div class="label">Баланс селлера</div><div class="value mono" id="kBal">—</div><div class="sub" id="kBalSub"></div></div>
+      <div class="kpi"><div class="label">Заказы</div><div class="value mono" id="kOrders">—</div><div class="sub" id="kOrdersSub"></div></div>
+    </section>
+
+    <section class="actions">
+      <button type="button" class="btn" id="waitBtn">Принять перевод</button>
+      <span class="waitmsg" id="waitMsg"></span>
+    </section>
+
+    <section class="card" id="topupCard">
+      <h2>Пополнение анархий фермы</h2>
+      <p class="note" style="margin:0 0 12px">Если на анархии мало денег, активный селлер заходит на неё и платит <b>только казначею</b> — дальше он сам раскидывает по ботам. Такой перевод считается обычной выдачей (две выдачи — и остаток уходит следующему). Только когда нет заказов.</p>
+      <div class="actions" style="margin-bottom:8px">
+        <label style="display:flex;gap:8px;align-items:center;font-weight:700"><input type="checkbox" id="topupOn"> включено</label>
+        <label style="display:flex;gap:8px;align-items:center">сумма, кк <input type="number" id="topupKk" min="5" max="500" step="5" style="width:90px;font:inherit;padding:8px 10px;border:1px solid var(--line,#ddd);border-radius:10px"></label>
+        <button type="button" class="btn" id="topupSave">Сохранить</button>
+        <span class="waitmsg" id="topupMsg"></span>
+      </div>
+      <div id="topupInfo" class="mono" style="font-size:13px"></div>
+    </section>
+
+    <section class="card" id="handoffCard" style="display:none">
+      <h2>Передача остатка следующему</h2>
+      <div id="handoffText" class="mono"></div>
+    </section>
+
+    <section class="card">
+      <h2>Очередь селлеров</h2>
+      <table>
+        <thead><tr><th>#</th><th>Ник</th><th class="num">Баланс</th><th>Обновлён</th><th>Статус</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="5" class="note">загрузка…</td></tr></tbody>
+      </table>
+      <p class="note">Боты выдачи заходят только по заказу или чтобы принять остаток, поэтому баланс неактивного селлера — последний известный, а не живой.</p>
+    </section>
+  </div>
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => {
+  if (n == null || isNaN(n)) return "—";
+  const a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(2) + " млрд";
+  if (a >= 1e6) return (n / 1e6).toFixed(2) + " млн";
+  if (a >= 1e3) return (n / 1e3).toFixed(1) + " тыс";
+  return String(Math.round(n));
+};
+const full = (n) => (n == null ? "" : Math.round(n).toLocaleString("ru-RU") + " монет");
+function ago(ms) {
+  if (!ms) return "не было";
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 90) return s + " с назад";
+  if (s < 5400) return Math.round(s / 60) + " мин назад";
+  if (s < 172800) return Math.round(s / 3600) + " ч назад";
+  return Math.round(s / 86400) + " дн назад";
+}
+function setStatus(ok, text) {
+  $("status").classList.toggle("err", !ok);
+  $("statusText").textContent = text;
+}
+let waiting = false;
+$("waitBtn").addEventListener("click", async () => {
+  const btn = $("waitBtn");
+  btn.disabled = true;
+  try {
+    const r = await fetch("/autosell/api/wait", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: !waiting }) });
+    const d = await r.json();
+    if (!d.ok) $("waitMsg").textContent = "ошибка: " + (d.error || r.status);
+    else await tick();
+  } catch (e) {
+    $("waitMsg").textContent = "ошибка: " + e.message;
+  }
+  btn.disabled = false;
+});
+async function tick() {
+  try {
+    const r = await fetch("/autosell/api/state", { cache: "no-store" });
+    const d = await r.json();
+    if (d.empty) { setStatus(false, "sell-orch ещё не присылал данные"); return; }
+    setStatus(d.online, d.online ? "sell-orch на связи · обновлено " + d.age_s + " с назад" : "sell-orch не на связи · данные устарели на " + d.age_s + " с");
+    $("kDuty").textContent = d.duty || "—";
+    $("kDutySub").textContent = "выдач у него: " + (d.pays ?? 0) + " из " + (d.pays_before_rotate ?? 2) + " · смена №" + (d.shift_no ?? 0);
+    $("kBal").textContent = fmt(d.duty_balance);
+    $("kBal").title = full(d.duty_balance);
+    $("kBalSub").textContent = d.duty_balance == null ? "баланс ещё не известен" : "обновлён " + ago(d.duty_balance_at_ms);
+    $("kOrders").textContent = d.pending ?? 0;
+    $("kOrdersSub").textContent = d.in_flight ? "в работе: " + String(d.in_flight).slice(0, 8) : "в очереди на выдачу";
+    waiting = !!d.wait_pay;
+    $("waitBtn").textContent = waiting ? "Отменить ожидание" : "Принять перевод";
+    $("waitBtn").classList.toggle("stop", waiting);
+    const lp = d.last_payment;
+    let msg = "";
+    if (waiting) {
+      const w = d.wait_pay;
+      const online = (d.queue || []).some((q) => q.nick === w.nick && q.online && q.ready);
+      msg = "<b>" + w.nick + "</b> " + (online ? "на анархии и ждёт перевод" : "заходит на сервер…") + " · с " + new Date(w.since_ms).toLocaleTimeString("ru-RU");
+    } else if (lp) {
+      msg = "последний перевод: <b>" + fmt(lp.amount) + "</b> от " + lp.from + " → " + lp.nick + " · " + ago(lp.at_ms);
+    }
+    $("waitMsg").innerHTML = msg;
+    const h = d.handoff;
+    $("handoffCard").style.display = h ? "" : "none";
+    if (h) {
+      $("handoffText").textContent = "→ " + h.to + " · отправлено: " + fmt(h.sent_amount) + " · получено: " + fmt(h.received) + " · попыток: " + h.tries + " · " + h.age_s + " с";
+    }
+    const banPoint = (r) => { const m = /Пункт\s+([\d.]+\d)/.exec(r || ""); return m ? m[1] : "?"; };
+    const bans = {};
+    (d.banned || []).forEach((b) => { bans[b.username] = b; });
+    const rows = (d.queue || []).map((q) => {
+      const duty = q.nick === d.duty;
+      let st = '<span class="pill off">офлайн</span>';
+      const faultText = { "2fa": "2FA: нет TG — исключён", proxy_error: "прокси не работает", bad_password: "неверный пароль" };
+      if (bans[q.nick]) st = '<span class="pill bad">бан ' + banPoint(bans[q.nick].reason) + "</span>";
+      else if (q.fault && faultText[q.fault]) st = '<span class="pill bad">' + faultText[q.fault] + "</span>";
+      else if (q.bound === false) st = '<span class="pill bad">не привязан</span>';
+      else if (q.online && q.ready) st = '<span class="pill on">онлайн</span>';
+      else if (q.online) st = '<span class="pill warn">заходит</span>';
+      return '<tr class="' + (duty ? "duty" : "") + '"><td>' + (q.pos + 1) + '</td><td class="mono">' + q.nick + (duty ? " ★" : "") +
+        "</td>" + (duty ? '<td class="num mono" title="' + full(q.balance) + '">' + fmt(q.balance) + "</td><td>" + (q.balance_at_ms ? ago(q.balance_at_ms) : "—") + "</td>" : '<td class="num mono">—</td><td>—</td>') + "<td>" + st + "</td></tr>";
+    });
+    $("rows").innerHTML = rows.join("") || '<tr><td colspan="5" class="note">пусто</td></tr>';
+    topupTick(d);
+  } catch (e) {
+    setStatus(false, "нет связи с Go: " + e.message);
+  }
+}
+
+let topupDirty = false;
+$("topupOn").addEventListener("change", () => { topupDirty = true; });
+$("topupKk").addEventListener("input", () => { topupDirty = true; });
+$("topupSave").addEventListener("click", async () => {
+  const btn = $("topupSave");
+  btn.disabled = true;
+  try {
+    const r = await fetch("/autosell/api/topup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: $("topupOn").checked, amount_kk: Number($("topupKk").value) }) });
+    const d = await r.json();
+    if (!d.ok) { $("topupMsg").textContent = "ошибка: " + (d.error || r.status); }
+    else { topupDirty = false; $("topupMsg").textContent = "сохранено"; setTimeout(() => { $("topupMsg").textContent = ""; }, 3000); await topupTick(); }
+  } catch (e) { $("topupMsg").textContent = "ошибка: " + e.message; }
+  btn.disabled = false;
+});
+async function topupTick(st) {
+  try {
+    const r = await fetch("/autosell/api/topup", { cache: "no-store" });
+    const d = await r.json();
+    if (!d.ok) return;
+    if (!topupDirty) { $("topupOn").checked = !!d.enabled; $("topupKk").value = d.amount_kk; }
+    const lines = [];
+    const t = st && st.topup;
+    if (t && t.active) lines.push("сейчас: an" + t.active.anarchy + " → <b>" + t.active.to + "</b> " + t.active.amount_kk + " кк · " + (t.active.paying ? "платит" : "заходит на анархию") + " · " + t.active.age_s + " с");
+    const need = (d.targets || []).map((x) => "an" + x.anarchy + " (казначей " + x.to + ")");
+    lines.push(need.length ? "мало денег, казначей известен: " + need.join(", ") : "анархий с нехваткой денег и известным казначеем нет");
+    if (t && t.log && t.log.length) {
+      t.log.slice().reverse().slice(0, 4).forEach((e) => lines.push((e.result === "ok" ? "✓ " : "✗ ") + e.at + " an" + e.anarchy + " → " + e.to + " " + e.amount_kk + " кк" + (e.result === "ok" ? "" : " — " + e.reason)));
+    }
+    $("topupInfo").innerHTML = lines.join("<br>");
+  } catch (e) { /* панель живёт и без этого */ }
+}
+tick();
+setInterval(tick, 3000);
+</script>
+</body>
+</html>

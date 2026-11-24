@@ -371,6 +371,13 @@ func adjustPricePridumalnahuy(
 	buyStopCeil, buyStopN, buyStopOK := buyStopCeilNow(cfg, now)
 	// рыночная полоса ходовых: потолок повышения и поводок (тоже по книге, тоже вне mutex)
 	hotPriceCap, hotPriceTether, hotBandN := hotMarketBandNow(cfg, now)
+	// регулятор наценки (nacenka_reg.go): p25 наших покупок — тоже из БД, пока mutex отпущен
+	regBuyP25, regBuyP25OK := 0, false
+	regBuys, regSells := 0, 0
+	if cfg.Hot && nacRegEnabled() {
+		regBuyP25, regBuyP25OK = ownBuysQuantile(item, now, nacRegBuyWindow, nacRegBuyQ, nacRegBuyMinN)
+		regBuys, regSells, _ = ownFlowCounts(item, now, nacRegFlowWindow)
+	}
 	mutex.Lock()
 	if bookCeilOK && multiFloor > bookCeil {
 		multiFloor = bookCeil
@@ -548,6 +555,32 @@ func adjustPricePridumalnahuy(
 		action = "hold_manual_min"
 		notes = append(notes, "manual min/set → ↓ запрещён")
 	}
+
+	// Регулятор наценки ходовых: только когда закупку не тормозят заморозка / пауза / стоп-закуп.
+	nacRegChanged := false
+	if cfg.Hot && nacRegEnabled() && !cfg.NoBuy && !dec.PauseBuy && !dec.Freeze && !paused && !unfroze &&
+		!state.NacenkaFrozen && !buyStopActive[item] {
+		base := itemsNacenkaBase[item]
+		if base <= 0 {
+			base = cfg.Nacenka
+		}
+		var note string
+		nacenka, note, nacRegChanged = applyNacenkaRegLocked(item, now, nacRegInput{
+			Base:         base,
+			Cur:          itemsConfig[item].Nacenka,
+			Step:         step,
+			Price:        newPrice,
+			OnAH:         onAH,
+			Buys:         regBuys,
+			Sales:        regSells,
+			DownStockMin: cfg.HotDownStockMin,
+			UpStockMax:   cfg.HotUpStockMax,
+			FreeSlots:    buyers.FreeSlots,
+			BuyP25:       regBuyP25,
+			BuyP25OK:     regBuyP25OK,
+		})
+		notes = append(notes, note)
+	}
 	if blockUp && strings.Contains(action, "price_up") {
 		newPrice = priceBefore
 		action = "hold_manual_max"
@@ -652,7 +685,7 @@ func adjustPricePridumalnahuy(
 		CycleDuration:  cfg.AnalysisTime,
 	}
 
-	needBroadcast := changed || dec.Freeze || dec.Unfreeze || unfroze || paused || buyStopChanged
+	needBroadcast := changed || dec.Freeze || dec.Unfreeze || unfroze || paused || buyStopChanged || nacRegChanged
 
 	mutex.Unlock()
 	logCapitalCycle(capitalRow)

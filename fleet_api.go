@@ -110,6 +110,8 @@ type fleetOverview struct {
 	StaffChecks     []staffCheckView    `json:"staff_checks"`
 	StaffCheckCount int                 `json:"staff_check_count"`
 	StaffCheckLive  int                 `json:"staff_check_live"`
+	// LowMoney — анархии, куда надо зайти и закинуть денег (см. fleet_low_money.go).
+	LowMoney []lowMoneyAnarchyView `json:"low_money"`
 }
 
 // clientBannedBots — снимок забаненных с каждого WS-оркестратора.
@@ -154,6 +156,14 @@ func registerFleetHTTP(mux *http.ServeMux) {
 		r2.URL = &u
 		fileServer.ServeHTTP(w, &r2)
 	})))
+	// «Мало денег» должно отсчитывать 20 минут и когда панель никто не смотрит
+	go func() {
+		for range time.Tick(time.Minute) {
+			mutex.RLock()
+			_ = collectLowMoneyLocked(time.Now())
+			mutex.RUnlock()
+		}
+	}()
 	log.Printf("[fleet] dashboard ready at /fleet/")
 }
 
@@ -312,6 +322,7 @@ func dedupeBannedBots(raw []bannedBotView) []bannedBotView {
 func setClientClanOwners(ws *websocket.Conn, raw []clanOwnerView) {
 	if len(raw) == 0 {
 		clientClanOwners[ws] = nil
+		refreshLiveOwnersLocked()
 		return
 	}
 	out := make([]clanOwnerView, 0, len(raw))
@@ -337,6 +348,7 @@ func setClientClanOwners(ws *websocket.Conn, raw []clanOwnerView) {
 		out = append(out, b)
 	}
 	clientClanOwners[ws] = out
+	refreshLiveOwnersLocked()
 	ingestClanOwnersFromPresence(out)
 }
 
@@ -452,6 +464,7 @@ func buildFleetOverview() fleetOverview {
 		StaffChecks:     checks,
 		StaffCheckCount: totalChecks,
 		StaffCheckLive:  live,
+		LowMoney:        collectLowMoneyLocked(now),
 	}
 }
 

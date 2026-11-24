@@ -462,12 +462,15 @@ func nickIsFarmBot(nick string) bool {
 	if nk == "" {
 		return false
 	}
-	dir := fleetBotsDir()
-	if dir == "" {
-		return false
-	}
 	out := make(funauthRoster)
-	loadFleetBotsJSON(dir, out)
+	if dir := fleetBotsDir(); dir != "" {
+		loadFleetBotsJSON(dir, out)
+	}
+	for an, set := range fleetNickRoster { // ники, присланные оркестраторами (Go отдельно от фермы)
+		for n := range set {
+			addFleetNick(out, an, n)
+		}
+	}
 	for _, set := range out {
 		if _, ok := set[nk]; ok {
 			return true
@@ -487,20 +490,57 @@ func fleetOwnersFile() string {
 	return filepath.Join(filepath.Dir(dir), "clan-owners.json")
 }
 
+// liveOwners — овнеры кланов, пришедшие от оркестраторов по WS (presence.clan_owners). Отдельный замок:
+// currentClanOwnerRoster зовут и под общим mutex, и без него.
+var (
+	liveOwnersMu sync.RWMutex
+	liveOwners   funauthRoster
+)
+
+// refreshLiveOwnersLocked пересобирает liveOwners из clientClanOwners (вызывать под общим mutex).
+func refreshLiveOwnersLocked() {
+	r := make(funauthRoster)
+	for _, list := range clientClanOwners {
+		for _, o := range list {
+			addFleetNick(r, anarchyInt(o.Anarchy), o.Username)
+		}
+	}
+	liveOwnersMu.Lock()
+	liveOwners = r
+	liveOwnersMu.Unlock()
+}
+
+func liveOwnersCopy() funauthRoster {
+	liveOwnersMu.RLock()
+	defer liveOwnersMu.RUnlock()
+	if len(liveOwners) == 0 {
+		return nil
+	}
+	out := make(funauthRoster, len(liveOwners))
+	for an, set := range liveOwners {
+		m := make(map[string]struct{}, len(set))
+		for k := range set {
+			m[k] = struct{}{}
+		}
+		out[an] = m
+	}
+	return out
+}
+
+// currentClanOwnerRoster — овнеры кланов: файл clan-owners.json (если Go стоит рядом с фермой), иначе то, что
+// оркестраторы сами прислали по WS. Так Go работает отдельно от фермы, без доступа к её файлам.
 func currentClanOwnerRoster() funauthRoster {
 	if skipFleetRosterReload {
 		return fleetNickRoster
 	}
-	path := fleetOwnersFile()
-	if path == "" {
-		return nil
+	if path := fleetOwnersFile(); path != "" {
+		out := make(funauthRoster)
+		loadFleetClanOwnersJSON(path, out)
+		if len(out) > 0 {
+			return out
+		}
 	}
-	out := make(funauthRoster)
-	loadFleetClanOwnersJSON(path, out)
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return liveOwnersCopy()
 }
 
 // loadFleetRunningNicks — ники из bots/*.json + clan-owners.json (текущий запуск).

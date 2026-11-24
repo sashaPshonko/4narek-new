@@ -70,6 +70,37 @@ type funauthAccount struct {
 	socksURL string
 	// floodUntil — Telegram вернул FLOOD_WAIT: до этого момента аккаунт для биндов не берём.
 	floodUntil time.Time
+	// claimedBy — ник, чей bind сейчас идёт на этом TG (под p.mu). Пока занят — другим бинд-задачам не выдаём:
+	// параллельные задачи на одном TG сливают очередь botMsg и воруют ответы друг друга.
+	claimedBy string
+	// jobMu — одна команда FunAuthBot (bind/2fa) на TG за раз.
+	jobMu sync.Mutex
+	// unconfirmed — подряд ответы «не дождались» на этом TG (под p.mu). 2 подряд → считаем TG мёртвым.
+	unconfirmed int
+}
+
+// releaseClaim — бинд на TG закончен, акк снова можно выдавать.
+func (p *funauthPool) releaseClaim(acc *funauthAccount) {
+	if p == nil || acc == nil {
+		return
+	}
+	p.mu.Lock()
+	acc.claimedBy = ""
+	p.mu.Unlock()
+}
+
+// noteUnconfirmed — ответ FunAuthBot не пришёл (привязка/2FA под вопросом). Возвращает сколько раз подряд.
+func (p *funauthPool) noteUnconfirmed(acc *funauthAccount) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	acc.unconfirmed++
+	return acc.unconfirmed
+}
+
+func (p *funauthPool) resetUnconfirmed(acc *funauthAccount) {
+	p.mu.Lock()
+	acc.unconfirmed = 0
+	p.mu.Unlock()
 }
 
 type funauthLoginResult struct {
@@ -739,7 +770,12 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 			diag.Full++
 			continue
 		}
+		if acc.claimedBy != "" && acc.claimedBy != key {
+			diag.Busy++
+			continue
+		}
 		if key != "" && p.nicks[key] == acc.meta.ID {
+			acc.claimedBy = key
 			return acc, diag
 		}
 		if p.accountBoundCountLocked(acc.meta.ID) > 0 {
@@ -756,11 +792,13 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 	}
 
 	if len(ownerReuse) > 0 {
+		ownerReuse[0].claimedBy = key
 		return ownerReuse[0], diag
 	}
 	if len(free) == 0 {
 		return nil, diag
 	}
+	free[0].claimedBy = key
 	return free[0], diag
 }
 

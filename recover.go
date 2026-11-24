@@ -55,6 +55,7 @@ func startHTTPServer() {
 	registerFunauthHTTP(mux)
 	registerSalesHTTP(mux)
 	registerPricingHTTP(mux)
+	registerAutosellHTTP(mux)
 	registerFleetHTTP(mux)
 	srv := &http.Server{
 		Addr:              ":8080",

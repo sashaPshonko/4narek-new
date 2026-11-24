@@ -630,6 +630,10 @@ func removeClient(ws *websocket.Conn) {
 	delete(clientBannedBots, ws)
 	delete(clientAuthFaults, ws)
 	delete(clientClanOwners, ws)
+	delete(clientTreasurer, ws)
+	sellStateDisconnect(ws)
+	refreshLiveOwnersLocked()
+	setClientProxies(ws, nil)
 	deleteClientOrchBots(ws)
 	deleteClientConfigBots(ws)
 	deleteClientOrchestratorAnarchy(ws)
@@ -1510,6 +1514,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			Banned        []bannedBotView `json:"banned"`
 			AuthFaults    []authFaultView `json:"auth_faults"`
 			ClanOwners    []clanOwnerView `json:"clan_owners"`
+			Proxies       []orchProxyRow  `json:"proxies"`
 			Bots          []orchBotNick   `json:"bots"`
 			ConfigBots    *[]orchBotNick  `json:"config_bots"`
 			ConfigAnarchy int             `json:"config_anarchy"`
@@ -1558,6 +1563,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 	Banned        []bannedBotView `json:"banned"`
 	AuthFaults    []authFaultView `json:"auth_faults"`
 	ClanOwners    []clanOwnerView `json:"clan_owners"`
+	Proxies       []orchProxyRow  `json:"proxies"`
 	Bots          []orchBotNick   `json:"bots"`
 	ConfigBots    *[]orchBotNick  `json:"config_bots"`
 	ConfigAnarchy int             `json:"config_anarchy"`
@@ -1665,11 +1671,19 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		if len(msg.Bots) > 0 {
 			setClientOrchBots(ws, msg.Bots)
 		}
+		if len(msg.Proxies) > 0 { // селл-оркестратор шлёт прокси выдачи в fleet (оркестраторы фермы — в presence)
+			setClientProxies(ws, msg.Proxies)
+		}
 		log.Printf("[FLEET] оркестратор подключился | заявленные типы: %v", typesMapKeys(clientFleetTypes[ws]))
 		mutex.Unlock()
 		logGlobalFleetState("[FLEET]")
 
 	case "presence":
+		var presenceExtra struct {
+			Treasurer string `json:"treasurer"`
+		}
+		_ = json.Unmarshal(rawMsg, &presenceExtra)
+		setClientTreasurer(ws, presenceExtra.Treasurer)
 		clientItems[ws] = copyMap(msg.Items)
 		clientInventory[ws] = copyMap(msg.Inventory)
 		setClientActiveTypes(ws, msg.ActiveTypes)
@@ -1682,6 +1696,7 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		setClientBannedBots(ws, msg.Banned)
 		setClientAuthFaults(ws, msg.AuthFaults)
 		setClientClanOwners(ws, msg.ClanOwners)
+		setClientProxies(ws, msg.Proxies)
 		if a := inferOrchestratorAnarchy(msg.Banned, msg.ClanOwners); a > 0 {
 			setClientOrchestratorAnarchy(ws, a)
 		} else if len(msg.Bots) > 0 {
@@ -1889,6 +1904,18 @@ func handleWSMessage(ws *websocket.Conn, rawMsg []byte, msg struct {
 		}
 		anarchy := rawJSONIntField(rawMsg, "anarchy")
 		handleFunauthVerifiedWS(nick, anarchy)
+
+	case "sell_state":
+		// баны и сбои прокси ботов выдачи — на общую страницу банов (как у ботов фермы)
+		var st struct {
+			Banned     []bannedBotView `json:"banned"`
+			AuthFaults []authFaultView `json:"auth_faults"`
+		}
+		_ = json.Unmarshal(rawMsg, &st)
+		setClientBannedBots(ws, st.Banned)
+		setClientAuthFaults(ws, st.AuthFaults)
+		mutex.Unlock()
+		ingestSellState(ws, rawMsg)
 
 	case "staff_check":
 		mutex.Unlock()

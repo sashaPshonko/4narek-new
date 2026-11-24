@@ -97,6 +97,8 @@
     .anarchy > header h2 { margin: 0; font-size: 16px; font-family: var(--display); }
     .anarchy > header .cnt { font-family: var(--mono); color: var(--ban); font-weight: 600; }
     .anarchy.owners > header .cnt { color: var(--ink); }
+    .anarchy.money > header { background: var(--warn-bg); }
+    .anarchy.money > header .cnt { color: var(--warn); }
     table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
     th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
@@ -175,6 +177,7 @@
       <a href="/pricing/" data-nav="pricing">Цены</a>
       <a href="/sales/" data-nav="sales">Продажи</a>
       <a href="/funauth/" data-nav="funauth">FunAuth</a>
+      <a href="/autosell/" data-nav="autosell">Автопродажа</a>
       <a href="/fleet/" data-nav="fleet">Баны</a>
     </nav>
     <div class="toolbar">
@@ -189,7 +192,11 @@
       <div class="card"><div class="k">Анархии с банами</div><div class="v mono" id="kpiAn">—</div></div>
       <div class="card"><div class="k">Владельцы кланов</div><div class="v mono" id="kpiOwners">—</div></div>
       <div class="card"><div class="k">На проверке</div><div class="v mono" id="kpiChecks" style="color:#5b3cc4">—</div></div>
+      <div class="card"><div class="k">Мало денег</div><div class="v mono" id="kpiMoney" style="color:var(--warn)">—</div></div>
     </div>
+    <h2 class="section-title">Мало денег</h2>
+    <p class="lede" style="margin-top:-4px;margin-bottom:10px;font-size:14px">Куда надо зайти и закинуть: на всех ботах анархии вместе меньше 13кк на бота, и продажа товара с АХ не вернёт их до 15кк на бота. Появляется, если так держится 20 минут. Кидать любому боту, который сейчас на анархии, — дальше оркестратор раскидает сам.</p>
+    <div id="money"></div>
     <h2 class="section-title">Владельцы кланов</h2>
     <div id="owners"></div>
     <h2 class="section-title">Сломанные боты</h2>
@@ -430,6 +437,36 @@
         $("kpiAn").textContent = (data.anarchies || []).filter((a) => a.count > 0).length;
         $("kpiOwners").textContent = owners.length ? `${ownersBanned}/${owners.length}` : "—";
         $("kpiChecks").textContent = `${data.staff_check_live ?? 0}/${data.staff_check_count ?? 0}`;
+
+        const money = data.low_money || [];
+        $("kpiMoney").textContent = money.length;
+        const moneyEl = $("money");
+        if (!money.length) {
+          moneyEl.innerHTML = `<div class="anarchy money"><div class="empty">Денег хватает на всех анархиях.</div></div>`;
+        } else {
+          const rows = money.map((m) => {
+            const bots = (m.bots || []).map((b) =>
+              `${escapeHtml(b.username)} ${b.balance_kk == null ? "?" : b.balance_kk + "кк"}${b.on_anarchy ? "" : " (не на анке)"}`).join(" · ");
+            const to = (m.pay_to || []).length
+              ? m.pay_to.map((n) => `<span class="mono">${escapeHtml(n)}</span>`).join(", ")
+              : `<span class="meta">сейчас никого на анархии — дождись, пока бот зайдёт</span>`;
+            return `
+            <tr>
+              <td><div class="nick">an${escapeHtml(m.anarchy)}${m.invis ? " · инвиз" : ""}</div><div class="meta">${bots}</div></td>
+              <td class="mono">${m.coins_kk}кк${m.stock_kk ? ` + товар ≈${m.stock_kk}кк` : ""}<div class="meta">нужно ${m.need_kk}кк</div></td>
+              <td class="mono" style="color:var(--warn);font-weight:700">≈${m.top_up_kk}кк</td>
+              <td>${to}</td>
+              <td class="mono">${fmtWhen(m.since)}</td>
+            </tr>`;
+          }).join("");
+          moneyEl.innerHTML = `<section class="anarchy money">
+            <header><h2>Закинуть</h2><span class="cnt">${money.length}</span></header>
+            <table>
+              <thead><tr><th>Анархия</th><th>Есть</th><th>Закинуть</th><th>Кому</th><th>С</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </section>`;
+        }
 
         const ownersEl = $("owners");
         if (!owners.length) {

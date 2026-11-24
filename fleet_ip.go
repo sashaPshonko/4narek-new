@@ -10,7 +10,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type bannedIPView struct {
@@ -181,6 +184,30 @@ func ipIsBanned(ip string) bool {
 	return ok && v.Banned
 }
 
+// orchProxyRow — прокси бота, присланный оркестратором (только хост, без логина и пароля).
+type orchProxyRow struct {
+	Slot string `json:"slot"`
+	Kind string `json:"kind"` // bot | owner
+	IP   string `json:"ip"`
+}
+
+var (
+	liveProxiesMu sync.RWMutex
+	liveProxies   = map[*websocket.Conn][]orchProxyRow{}
+)
+
+// setClientProxies — прокси, которые оркестратор использует прямо сейчас (presence.proxies).
+// Go так видит их без доступа к ip.json и bots/ фермы. rows == nil — оркестратор отключился.
+func setClientProxies(ws *websocket.Conn, rows []orchProxyRow) {
+	liveProxiesMu.Lock()
+	defer liveProxiesMu.Unlock()
+	if len(rows) == 0 {
+		delete(liveProxies, ws)
+		return
+	}
+	liveProxies[ws] = rows
+}
+
 func loadAssignedProxies() []assignedProxyView {
 	var out []assignedProxyView
 	seen := map[string]struct{}{}
@@ -202,21 +229,23 @@ func loadAssignedProxies() []assignedProxyView {
 		})
 	}
 
+	liveProxiesMu.RLock()
+	for _, rows := range liveProxies {
+		for _, r := range rows {
+			kind := r.Kind
+			if kind == "" {
+				kind = "bot"
+			}
+			add(r.Slot, kind, r.IP)
+		}
+	}
+	liveProxiesMu.RUnlock()
+
 	dir := fleetBotsDir()
 	parent := ""
 	if dir != "" {
 		parent = filepath.Dir(dir)
 		addMapFile(filepath.Join(parent, "ip.json"), "bot", add)
-	}
-	for _, p := range []string{
-		strings.TrimSpace(os.Getenv("FLEET_SELL_BOT")),
-		filepath.Join("..", "sell", "sellbot", "bot.json"),
-		"/root/sell/sellbot/bot.json",
-	} {
-		if p == "" {
-			continue
-		}
-		addSellBotFile(p, add)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Kind != out[j].Kind {
@@ -241,27 +270,6 @@ func addMapFile(path, kind string, add func(slot, kind, raw string)) {
 	}
 	for slot, url := range m {
 		add(slot, kind, url)
-	}
-}
-
-func addSellBotFile(path string, add func(slot, kind, raw string)) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	var rows []struct {
-		Username string `json:"username"`
-		Proxy    string `json:"proxy"`
-	}
-	if json.Unmarshal(raw, &rows) != nil {
-		return
-	}
-	for _, row := range rows {
-		slot := row.Username
-		if slot == "" {
-			slot = "sell"
-		}
-		add(slot, "sell", row.Proxy)
 	}
 }
 

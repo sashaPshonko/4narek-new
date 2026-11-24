@@ -314,11 +314,32 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		}
 		tried[acc.meta.ID] = struct{}{}
 
+		claimed := acc
 		acc = b.pool.ensureNickSOCKS(acc, job.nick)
 		phone := acc.meta.Phone
 		ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
 		result, retry := b.runOnAccount(ctx, acc, job)
 		cancel()
+		b.pool.releaseClaim(claimed)
+		if claimed != acc {
+			b.pool.releaseClaim(acc)
+		}
+		if funauthUnconfirmed(result.Error) {
+			// FunAuthBot не ответил, но привязка могла пройти. Не бросаем этот TG: запоминаем ник за ним,
+			// чтобы повторный bind / 2FA пошли сюда же. Два «не дождались» подряд на одном TG — он правда мёртв.
+			if n := b.pool.noteUnconfirmed(acc); n >= 2 {
+				b.pool.resetUnconfirmed(acc)
+				b.pool.markDead(acc.meta.ID, result.Error)
+				log.Printf("[funauth] account %s: %s второй раз подряд → dead, пробую следующий", phone, result.Error)
+				continue
+			}
+			b.pool.rememberNick(job.nick, acc.meta.ID)
+			log.Printf("[funauth] %s on %s: %s — TG оставлен за ником, без scrub/dead", job.nick, phone, result.Error)
+			return result
+		}
+		if result.OK {
+			b.pool.resetUnconfirmed(acc)
+		}
 		if wait := funauthFloodWait(result.Error); wait > 0 && !result.OK {
 			// Telegram просит подождать: этот аккаунт пропускаем на это время и пробуем другой
 			b.pool.markFlood(acc.meta.ID, wait)
@@ -512,6 +533,8 @@ func (b *funauthBinder) runTwoFAOnAccount(ctx context.Context, acc *funauthAccou
 			acc.botID = id
 		}
 	}
+	acc.jobMu.Lock()
+	defer acc.jobMu.Unlock()
 	sender := message.NewSender(api)
 	funauthPrepareBotChat(ctx, acc)
 	defer funauthScrubAfterJob(acc)
@@ -543,11 +566,13 @@ func (b *funauthBinder) runTwoFAOnAccount(ctx context.Context, acc *funauthAccou
 	}
 }
 
-func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, job *funauthBindJob) (funauthBindResult, bool) {
+func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, job *funauthBindJob) (res funauthBindResult, retry bool) {
 	api := acc.api
 	if api == nil {
 		return funauthBindResult{OK: false, Nick: job.nick, Error: "account_offline"}, false
 	}
+	acc.jobMu.Lock()
+	defer acc.jobMu.Unlock()
 	if acc.botID == 0 {
 		if id, err := resolveFunauthBotID(ctx, api); err == nil {
 			acc.botID = id
@@ -555,7 +580,12 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 	}
 	sender := message.NewSender(api)
 	funauthPrepareBotChat(ctx, acc)
-	defer funauthScrubAfterJob(acc)
+	// Исход неясен (привязка могла пройти) — переписку с ботом не стираем: по ней 2FA найдёт этот TG.
+	defer func() {
+		if !funauthUnconfirmed(res.Error) {
+			funauthScrubAfterJob(acc)
+		}
+	}()
 
 	if err := funauthEnsureChannel(ctx, sender); err != nil {
 		log.Printf("[funauth] join @%s: %v", funauthChannel, err)
@@ -580,15 +610,37 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 		time.Sleep(800 * time.Millisecond)
 	}
 
+	// Прошлый раз исход был неясен и ник оставлен за этим TG — сначала пробуем просто выключить 2FA.
+	if prev := b.pool.accountForNick(job.nick); prev != nil && prev.meta.ID == acc.meta.ID {
+		if p := funauthProbeTwoFA(ctx, sender, acc, job.nick); p.ok {
+			log.Printf("[funauth] %s: уже привязан к %s, 2FA выкл без /bind", job.nick, acc.meta.Phone)
+			return funauthBindResult{OK: true, Nick: job.nick, TgPhone: acc.meta.Phone, Reply: truncateRunes(p.reply, 200)}, false
+		}
+	}
+
 	bindReply, err := funauthSendAndWait(ctx, sender, acc, "/bind "+job.nick+" "+job.password, func(text string) bool {
 		return funauthBindOK.MatchString(text) || funauthBindFull.MatchString(text)
 	})
 	if err != nil {
 		errStr := err.Error()
 		if errStr == "reply_timeout" {
-			return funauthBindResult{
-				OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: "reply_timeout",
-			}, true
+			// Ответа на /bind не дождались — но FunTime мог ник уже привязать (так было с cakisuteram:
+			// привязан, а /2fa не отправлен → потом вход только через Telegram). Проверяем через /2fa.
+			p := funauthProbeTwoFA(ctx, sender, acc, job.nick)
+			switch {
+			case p.ok:
+				log.Printf("[funauth] %s: ответ на /bind не пришёл, но /2fa прошёл — привязан, 2FA выкл", job.nick)
+				return funauthBindResult{OK: true, Nick: job.nick, TgPhone: acc.meta.Phone, Reply: truncateRunes(p.reply, 200)}, false
+			case p.answered && !p.sawBind:
+				// Бот ответил на /2fa отказом — ника за этим TG нет, привязка не прошла. Старое поведение.
+				return funauthBindResult{
+					OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: "reply_timeout", Reply: truncateRunes(p.reply, 200),
+				}, true
+			case p.sawBind:
+				return funauthBindResult{OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: funauthErrTwofaUnconfirmed, Reply: truncateRunes(p.reply, 200)}, false
+			default:
+				return funauthBindResult{OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: funauthErrBindUnconfirmed}, false
+			}
 		}
 		return funauthBindResult{
 			OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: errStr,
@@ -609,27 +661,71 @@ func (b *funauthBinder) runOnAccount(ctx context.Context, acc *funauthAccount, j
 		}, false
 	}
 
-	twofaReply, err := funauthSendAndWait(ctx, sender, acc, "/2fa "+job.nick, func(text string) bool {
-		return funauthTwofaOK.MatchString(text)
+	// Ник уже привязан к этому TG. Что бы дальше ни случилось — на другой TG не уходим и этот мёртвым не считаем:
+	// 2FA можно выключить только отсюда. Две попытки /2fa.
+	var p funauthTwoFAProbe
+	for attempt := 0; attempt < 2 && ctx.Err() == nil; attempt++ {
+		p = funauthProbeTwoFA(ctx, sender, acc, job.nick)
+		if p.ok {
+			return funauthBindResult{
+				OK:      true,
+				Nick:    job.nick,
+				TgPhone: acc.meta.Phone,
+				Reply:   truncateRunes(p.reply, 200),
+			}, false
+		}
+	}
+	errStr := funauthErrTwofaUnconfirmed
+	if p.err != "" && p.err != "reply_timeout" {
+		errStr += ": " + p.err
+	}
+	return funauthBindResult{
+		OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: errStr, Reply: truncateRunes(p.reply, 200),
+	}, false
+}
+
+const (
+	// funauthErrBindUnconfirmed — на /bind и /2fa ответа нет: привязан ли ник, неизвестно.
+	funauthErrBindUnconfirmed = "bind_unconfirmed"
+	// funauthErrTwofaUnconfirmed — ник привязан к TG, а 2FA выключить не удалось.
+	funauthErrTwofaUnconfirmed = "twofa_unconfirmed"
+)
+
+func funauthUnconfirmed(errStr string) bool {
+	return strings.HasPrefix(errStr, funauthErrBindUnconfirmed) || strings.HasPrefix(errStr, funauthErrTwofaUnconfirmed)
+}
+
+type funauthTwoFAProbe struct {
+	ok       bool   // 2FA выключена
+	answered bool   // бот ответил на /2fa (не «был привязан»)
+	sawBind  bool   // пока ждали — пришло запоздалое «был привязан»
+	reply    string // ответ на /2fa
+	err      string
+}
+
+// funauthProbeTwoFA — шлёт `/2fa ник` и ждёт ответ. Запоздалое «был привязан» по /bind не считается ответом,
+// но запоминается (значит ник привязан к этому TG).
+func funauthProbeTwoFA(ctx context.Context, sender *message.Sender, acc *funauthAccount, nick string) funauthTwoFAProbe {
+	var p funauthTwoFAProbe
+	if ctx.Err() != nil {
+		p.err = "reply_timeout"
+		return p
+	}
+	reply, err := funauthSendAndWait(ctx, sender, acc, "/2fa "+nick, func(text string) bool {
+		if funauthBindOK.MatchString(text) {
+			p.sawBind = true
+			return false
+		}
+		return strings.TrimSpace(text) != ""
 	})
 	if err != nil {
-		errStr := err.Error()
-		if errStr == "reply_timeout" {
-			return funauthBindResult{
-				OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: "reply_timeout",
-			}, true
-		}
-		return funauthBindResult{
-			OK: false, Nick: job.nick, TgPhone: acc.meta.Phone, Error: errStr,
-		}, funauthRetryNextAccount(errStr)
+		p.err = err.Error()
+		return p
 	}
-
-	return funauthBindResult{
-		OK:      true,
-		Nick:    job.nick,
-		TgPhone: acc.meta.Phone,
-		Reply:   truncateRunes(twofaReply, 200),
-	}, false
+	p.answered = true
+	p.reply = reply
+	p.ok = funauthTwofaOK.MatchString(reply)
+	return p
 }
 
 func funauthEnsureChannel(ctx context.Context, sender *message.Sender) error {

@@ -82,3 +82,44 @@ func TestPickReusesOwnerTGForNextOwner(t *testing.T) {
 		t.Fatalf("expected reuse tg1, got %v busy=%d full=%d", acc, diag.Busy, diag.Full)
 	}
 }
+
+// Один TG — одна бинд-задача: пока tg1 занят ником a, другой ник его не получает (раньше три бинда шли
+// параллельно на одном TG и воровали ответы FunAuthBot друг у друга).
+func TestPickClaimsAccountUntilReleased(t *testing.T) {
+	p := newFunauthPool()
+	p.accounts = map[string]*funauthAccount{
+		"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+1"}, ready: true, api: &tg.Client{}},
+	}
+	p.nicks = map[string]string{}
+
+	a, _ := p.pickForAnarchyBindDiag("nick_a", 221, nil)
+	if a == nil || a.meta.ID != "tg1" {
+		t.Fatalf("nick_a должен получить tg1, got %v", a)
+	}
+	b, diag := p.pickForAnarchyBindDiag("nick_b", 221, nil)
+	if b != nil {
+		t.Fatalf("tg1 занят nick_a, а выдан nick_b")
+	}
+	if diag.Busy != 1 {
+		t.Fatalf("busy=%d want 1 (ждать, а не no_accounts)", diag.Busy)
+	}
+	p.releaseClaim(a)
+	b, _ = p.pickForAnarchyBindDiag("nick_b", 221, nil)
+	if b == nil || b.meta.ID != "tg1" {
+		t.Fatalf("после release tg1 свободен, got %v", b)
+	}
+}
+
+func TestFunauthUnconfirmed(t *testing.T) {
+	for s, want := range map[string]bool{
+		"bind_unconfirmed":                   true,
+		"twofa_unconfirmed":                  true,
+		"twofa_unconfirmed: account_offline": true,
+		"reply_timeout":                      false,
+		"":                                   false,
+	} {
+		if got := funauthUnconfirmed(s); got != want {
+			t.Fatalf("funauthUnconfirmed(%q)=%v want %v", s, got, want)
+		}
+	}
+}
