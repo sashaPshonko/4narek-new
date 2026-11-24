@@ -44,8 +44,10 @@ type funauthAccountMeta struct {
 	Phone    string `json:"phone"`
 	Username string `json:"username,omitempty"`
 	Full     bool   `json:"full"`
-	Started  bool   `json:"started"`
-	Anarchy  int    `json:"anarchy,omitempty"`
+	// FullBot — FunAuthBot сам отказал («много аккаунтов»). Full считается как FullBot или «ботов фермы на TG уже лимит».
+	FullBot bool `json:"fullBot,omitempty"`
+	Started bool `json:"started"`
+	Anarchy int  `json:"anarchy,omitempty"`
 }
 
 type funauthAccountView struct {
@@ -218,6 +220,8 @@ type funauthPool struct {
 	nicks    map[string]string // nick(lower) → account id
 	verified map[string]bool   // nick(lower) → game verified (5s on anarchy без «чтобы двигаться»)
 	roster   funauthRoster
+	// perAccount — сколько ботов фермы можно привязать к одному TG-аккаунту (1..funauthMaxPerAccount, задаётся в панели).
+	perAccount int
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -226,15 +230,16 @@ type funauthPool struct {
 func newFunauthPool() *funauthPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &funauthPool{
-		apiID:    funauthDesktopAPIID,
-		apiHash:  funauthDesktopAPIHash,
-		dir:      funauthSessionsDir,
-		accounts: make(map[string]*funauthAccount),
-		pending:  make(map[string]*funauthPendingLogin),
-		nicks:    make(map[string]string),
-		verified: make(map[string]bool),
-		ctx:      ctx,
-		cancel:   cancel,
+		apiID:      funauthDesktopAPIID,
+		apiHash:    funauthDesktopAPIHash,
+		dir:        funauthSessionsDir,
+		accounts:   make(map[string]*funauthAccount),
+		pending:    make(map[string]*funauthPendingLogin),
+		nicks:      make(map[string]string),
+		verified:   make(map[string]bool),
+		perAccount: 1,
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 }
 
@@ -253,6 +258,7 @@ func (p *funauthPool) init() {
 	} else {
 		log.Printf("[funauth] MTProto без прокси (TELEGRAM_PROXY=off)")
 	}
+	p.loadSettings()
 	p.loadNicks()
 	p.loadVerified()
 	funauthBindProxies.init(p.dir)
@@ -396,6 +402,7 @@ func (p *funauthPool) markFull(id string) {
 		return
 	}
 	a.meta.Full = true
+	a.meta.FullBot = true
 	if err := p.saveMeta(a.meta); err != nil {
 		log.Printf("[funauth] save meta %s: %v", id, err)
 	}
@@ -567,7 +574,8 @@ func (p *funauthPool) syncAnarchyRosterFull(anarchy int) {
 	}
 }
 
-// syncAccountRosterFull — ферма 1 MC = 1 TG; овнер не закрывает слот (следующий овнер той же анки).
+// syncAccountRosterFull — TG закрыт, когда к нему привязано ботов фермы столько, сколько разрешено в панели
+// (по умолчанию 1 MC = 1 TG), или когда FunAuthBot сам отказал. Овнер слот не закрывает (следующий овнер той же анки).
 func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -575,8 +583,8 @@ func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 	if acc == nil {
 		return false
 	}
-	hasFarm := p.accountHasFarmNickLocked(accountID)
-	complete := hasFarm || acc.meta.Full
+	// старые мета-файлы без fullBot: Full там мог быть и от лимита 1, и от отказа бота — пересчитываем, отказ бот повторит
+	complete := acc.meta.FullBot || p.accountFarmCountLocked(accountID) >= p.perAccountLocked()
 	if acc.meta.Full != complete {
 		was := acc.meta.Full
 		acc.meta.Full = complete
@@ -584,7 +592,7 @@ func (p *funauthPool) syncAccountRosterFull(accountID string) bool {
 			log.Printf("[funauth] save meta %s: %v", accountID, err)
 		}
 		if complete {
-			log.Printf("[funauth] TG %s → full (ферма привязана)", accountID)
+			log.Printf("[funauth] TG %s → full (ботов фермы: лимит %d)", accountID, p.perAccountLocked())
 		} else if was {
 			log.Printf("[funauth] TG %s → not full", accountID)
 		}
@@ -705,6 +713,36 @@ func (p *funauthPool) accountHasFarmNickLocked(accountID string) bool {
 	return false
 }
 
+// accountFarmCountLocked — сколько ботов фермы привязано к TG.
+func (p *funauthPool) accountFarmCountLocked(accountID string) int {
+	n := 0
+	for nick, id := range p.nicks {
+		if id == accountID && nickIsFarmBot(nick) {
+			n++
+		}
+	}
+	return n
+}
+
+// accountHasOwnerNickLocked — среди привязанных к TG есть овнер клана (овнеров с ботами фермы не смешиваем).
+func (p *funauthPool) accountHasOwnerNickLocked(accountID string) bool {
+	owners := currentClanOwnerRoster()
+	if len(owners) == 0 {
+		return false
+	}
+	for nick, id := range p.nicks {
+		if id != accountID {
+			continue
+		}
+		for _, set := range owners {
+			if _, ok := set[nick]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (p *funauthPool) cleanupOrphanAnarchies() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -746,6 +784,12 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 	var diag funauthPickDiag
 	var free []*funauthAccount
 	var ownerReuse []*funauthAccount
+	type sharedCand struct {
+		acc   *funauthAccount
+		bound int
+	}
+	var shared []sharedCand
+	limit := p.perAccountLocked()
 	ownerJob := nickIsClanOwnerOf(key, anarchy)
 
 	// TG-логины в процессе (loginStart → loginCode/importAuthKey → connectAccount)
@@ -778,10 +822,15 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 			acc.claimedBy = key
 			return acc, diag
 		}
-		if p.accountBoundCountLocked(acc.meta.ID) > 0 {
+		if bound := p.accountBoundCountLocked(acc.meta.ID); bound > 0 {
 			if ownerJob && !p.accountHasFarmNickLocked(acc.meta.ID) &&
 				(acc.meta.Anarchy == 0 || acc.meta.Anarchy == anarchy) {
 				ownerReuse = append(ownerReuse, acc)
+				continue
+			}
+			// лимит ботов на один TG из панели: добираем TG, где ещё есть место (овнеров с ботами фермы не смешиваем)
+			if !ownerJob && bound < limit && !p.accountHasOwnerNickLocked(acc.meta.ID) {
+				shared = append(shared, sharedCand{acc: acc, bound: bound})
 				continue
 			}
 			diag.Busy++
@@ -794,6 +843,17 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 	if len(ownerReuse) > 0 {
 		ownerReuse[0].claimedBy = key
 		return ownerReuse[0], diag
+	}
+	if len(shared) > 0 {
+		// сначала заполняем самый заполненный TG, чтобы остальные оставались свободными; при равенстве — по номеру
+		best := shared[0]
+		for _, c := range shared[1:] {
+			if c.bound > best.bound || (c.bound == best.bound && c.acc.meta.Phone < best.acc.meta.Phone) {
+				best = c
+			}
+		}
+		best.acc.claimedBy = key
+		return best.acc, diag
 	}
 	if len(free) == 0 {
 		return nil, diag
@@ -832,7 +892,7 @@ func (p *funauthPool) assignAnarchy(accountID string, anarchy int) {
 			log.Printf("[funauth] save meta %s: %v", accountID, err)
 		}
 		log.Printf("[funauth] TG %s → anarchy %d", acc.meta.Phone, anarchy)
-	} else if acc.meta.Anarchy != anarchy {
+	} else if acc.meta.Anarchy != anarchy && p.perAccountLocked() <= 1 {
 		log.Printf("[funauth] WARN TG %s anarchy %d, bind for %d", acc.meta.Phone, acc.meta.Anarchy, anarchy)
 	}
 }

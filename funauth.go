@@ -155,6 +155,24 @@ func funauthAPI(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 
+	case path == "/settings" && r.Method == http.MethodGet:
+		funauthJSON(w, http.StatusOK, map[string]any{
+			"ok": true, "perAccount": funauthPoolInst.perAccountLimit(), "maxPerAccount": funauthMaxPerAccount,
+		})
+		return
+
+	case path == "/settings" && r.Method == http.MethodPost:
+		var body struct {
+			PerAccount int `json:"perAccount"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&body); err != nil || body.PerAccount < 1 {
+			funauthJSONErr(w, http.StatusBadRequest, "bad json")
+			return
+		}
+		n := funauthPoolInst.setPerAccount(body.PerAccount)
+		funauthJSON(w, http.StatusOK, map[string]any{"ok": true, "perAccount": n, "maxPerAccount": funauthMaxPerAccount})
+		return
+
 	case path == "/accounts" && r.Method == http.MethodGet:
 		if !funauthPoolInst.configured() {
 			funauthJSONErr(w, http.StatusServiceUnavailable, "funauth not ready")

@@ -12,3 +12,6 @@ backups/
 dist/
 .venv/
 v9_research/.venv/
+
+autosell_topup.json
+funauth_settings.json

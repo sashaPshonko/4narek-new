@@ -337,6 +337,17 @@
         <div id="queueInfo" class="msg"></div>
       </section>
 
+      <section class="card">
+        <h2>Ботов на один TG</h2>
+        <p class="hint">Сколько ботов фермы привязывается к одному Telegram-аккаунту. 1 — как раньше (один бот — один TG). При 10 один TG обслуживает до 10 ботов. Уже привязанные не трогаются, лимит действует на новые привязки.</p>
+        <label for="perAccount">Ботов на TG (1–10)</label>
+        <input id="perAccount" type="number" min="1" max="10" step="1" value="1" />
+        <div class="row">
+          <button id="btnPerAccount" type="button">Сохранить</button>
+        </div>
+        <div id="perAccountMsg" class="msg"></div>
+      </section>
+
       <section class="card wide">
         <h2>Импорт auth key</h2>
         <p class="hint" style="margin:0 0 14px">Один или много ключей — <b>по одному на строку</b>. Hex (512) или Telethon StringSession. Можно <code>2:hex…</code>. DC подбирается сам (если не зафиксирован). Импорт в фоне: не ждём ready.</p>
@@ -739,6 +750,30 @@
         $('btnCheckProxies').disabled = false;
       }
     };
+
+
+    let perAccountDirty = false;
+    $('perAccount').addEventListener('input', () => { perAccountDirty = true; });
+    async function loadPerAccount() {
+      const d = await api('/settings');
+      if (d && d.ok && !perAccountDirty) $('perAccount').value = d.perAccount;
+    }
+    $('btnPerAccount').onclick = async () => {
+      const n = Math.max(1, Math.min(10, Math.round(Number($('perAccount').value) || 1)));
+      $('perAccount').value = n;
+      const d = await api('/settings', { method: 'POST', body: JSON.stringify({ perAccount: n }) });
+      const msg = $('perAccountMsg');
+      if (d && d.ok) {
+        perAccountDirty = false;
+        msg.className = 'msg ok';
+        msg.textContent = 'Сохранено: ' + d.perAccount + ' бот(ов) на TG';
+      } else {
+        msg.className = 'msg err';
+        msg.textContent = 'Ошибка: ' + ((d && d.error) || 'не сохранилось');
+      }
+      refresh();
+    };
+    loadPerAccount();
 
     $('btnRefresh').onclick = () => refresh();
     refresh();

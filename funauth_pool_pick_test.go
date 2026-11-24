@@ -123,3 +123,108 @@ func TestFunauthUnconfirmed(t *testing.T) {
 		}
 	}
 }
+
+func TestPickSharesTGUpToLimit(t *testing.T) {
+	p := newFunauthPool()
+	p.perAccount = 3
+	p.accounts = map[string]*funauthAccount{
+		"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+1"}, ready: true, api: &tg.Client{}},
+		"tg2": {meta: funauthAccountMeta{ID: "tg2", Phone: "+2"}, ready: true, api: &tg.Client{}},
+	}
+	p.nicks = map[string]string{"nick_a": "tg1"}
+
+	// есть место на tg1 (1 из 3) — добираем его, tg2 остаётся свободным
+	acc, _ := p.pickForAnarchyBindDiag("nick_b", 503, nil)
+	if acc == nil || acc.meta.ID != "tg1" {
+		t.Fatalf("expected shared tg1, got %v", acc)
+	}
+	acc.claimedBy = ""
+	p.nicks["nick_b"] = "tg1"
+	acc, _ = p.pickForAnarchyBindDiag("nick_c", 503, nil)
+	if acc == nil || acc.meta.ID != "tg1" {
+		t.Fatalf("expected tg1 again (2 of 3), got %v", acc)
+	}
+	acc.claimedBy = ""
+	p.nicks["nick_c"] = "tg1"
+
+	// tg1 забит (3 из 3) — четвёртый бот уходит на свободный tg2
+	acc, _ = p.pickForAnarchyBindDiag("nick_d", 503, nil)
+	if acc == nil || acc.meta.ID != "tg2" {
+		t.Fatalf("expected free tg2 when tg1 is at the limit, got %v", acc)
+	}
+}
+
+func TestPickLimitOneKeepsOldBehaviour(t *testing.T) {
+	p := newFunauthPool() // лимит по умолчанию 1
+	p.accounts = map[string]*funauthAccount{
+		"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+1"}, ready: true, api: &tg.Client{}},
+	}
+	p.nicks = map[string]string{"nick_a": "tg1"}
+	acc, diag := p.pickForAnarchyBindDiag("nick_b", 503, nil)
+	if acc != nil || diag.Busy != 1 {
+		t.Fatalf("limit 1: shared TG must stay busy, got acc=%v busy=%d", acc, diag.Busy)
+	}
+}
+
+func TestPickFarmBotDoesNotShareWithOwnerTG(t *testing.T) {
+	root := t.TempDir()
+	owners := filepath.Join(root, "clan-owners.json")
+	if err := os.WriteFile(owners, []byte(`{"503":{"username":"owner_a","anarchy":503}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FLEET_OWNERS_FILE", owners)
+	t.Setenv("FLEET_BOTS_DIR", filepath.Join(root, "bots"))
+	_ = os.Mkdir(filepath.Join(root, "bots"), 0o755)
+
+	p := newFunauthPool()
+	p.perAccount = 5
+	p.accounts = map[string]*funauthAccount{
+		"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+1"}, ready: true, api: &tg.Client{}},
+	}
+	p.nicks = map[string]string{"owner_a": "tg1"}
+	acc, _ := p.pickForAnarchyBindDiag("farm_b", 503, nil)
+	if acc != nil {
+		t.Fatalf("farm bot must not share TG with a clan owner, got %s", acc.meta.ID)
+	}
+}
+
+func TestClampPerAccount(t *testing.T) {
+	if clampPerAccount(0) != 1 || clampPerAccount(7) != 7 || clampPerAccount(99) != funauthMaxPerAccount {
+		t.Fatal("clamp")
+	}
+}
+
+func TestSyncFullFollowsPerAccountLimit(t *testing.T) {
+	root := t.TempDir()
+	bots := filepath.Join(root, "bots")
+	_ = os.Mkdir(bots, 0o755)
+	if err := os.WriteFile(filepath.Join(bots, "503b.json"), []byte(`[{"username":"a","anarchy":503},{"username":"b","anarchy":503}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FLEET_BOTS_DIR", bots)
+	t.Setenv("FLEET_OWNERS_FILE", filepath.Join(root, "none.json"))
+
+	p := newFunauthPool()
+	p.dir = t.TempDir()
+	p.accounts = map[string]*funauthAccount{"tg1": {meta: funauthAccountMeta{ID: "tg1"}}}
+	p.nicks = map[string]string{"a": "tg1"}
+
+	p.perAccount = 2
+	if p.syncAccountRosterFull("tg1") {
+		t.Fatal("1 бот из 2 — TG ещё не закрыт")
+	}
+	p.nicks["b"] = "tg1"
+	if !p.syncAccountRosterFull("tg1") {
+		t.Fatal("2 бота из 2 — TG закрыт")
+	}
+	// лимит подняли — закрытие по лимиту снимается
+	p.perAccount = 5
+	if p.syncAccountRosterFull("tg1") {
+		t.Fatal("после повышения лимита TG снова открыт")
+	}
+	// а отказ самого FunAuthBot остаётся
+	p.accounts["tg1"].meta.FullBot = true
+	if !p.syncAccountRosterFull("tg1") {
+		t.Fatal("FullBot должен держать TG закрытым")
+	}
+}
