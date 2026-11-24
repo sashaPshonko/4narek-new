@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -226,5 +227,26 @@ func TestSyncFullFollowsPerAccountLimit(t *testing.T) {
 	p.accounts["tg1"].meta.FullBot = true
 	if !p.syncAccountRosterFull("tg1") {
 		t.Fatal("FullBot должен держать TG закрытым")
+	}
+}
+
+func TestTGFullOnlyAtLimit(t *testing.T) {
+	if !funauthTGFull(1, 1) || funauthTGFull(0, 1) {
+		t.Fatal("лимит 1: удаляем после первой привязки, как раньше")
+	}
+	if funauthTGFull(9, 10) || !funauthTGFull(10, 10) {
+		t.Fatal("лимит 10: удаляем ровно на десятом боте")
+	}
+	if !funauthTGFull(3, 3) || funauthTGFull(2, 3) {
+		t.Fatal("лимит 3")
+	}
+}
+
+func TestNoAccessErrors(t *testing.T) {
+	if !funauthNoAccessErr(errors.New("rpc error code 401: AUTH_KEY_UNREGISTERED")) {
+		t.Fatal("AUTH_KEY_UNREGISTERED = нет доступа")
+	}
+	if funauthNoAccessErr(errors.New("FLOOD_WAIT_30")) || funauthNoAccessErr(nil) {
+		t.Fatal("флуд и nil — не потеря доступа")
 	}
 }
