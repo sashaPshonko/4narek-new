@@ -831,9 +831,16 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 				ownerReuse = append(ownerReuse, acc)
 				continue
 			}
-			// лимит ботов на один TG из панели: добираем TG, где ещё есть место (овнеров с ботами фермы не смешиваем)
-			if !ownerJob && bound < limit && !p.accountHasOwnerNickLocked(acc.meta.ID) {
-				shared = append(shared, sharedCand{acc: acc, bound: bound})
+			// лимит ботов на один TG из панели: добираем TG, где ещё есть место (овнеров с ботами фермы не смешиваем).
+			// Считаем БОТОВ ФЕРМЫ, как и пометка «заполнен» (syncAccountRosterFull): иначе старые (уже заменённые)
+			// ники, оставшиеся в nicks.json, занимают места, TG не закрывается и не удаляется, а боты бесконечно
+			// ждут «busy». Если ботов фермы на TG нет совсем (чужие ники), считаем по всем — осторожнее.
+			used := p.accountFarmCountLocked(acc.meta.ID)
+			if used == 0 {
+				used = bound
+			}
+			if !ownerJob && used < limit && !p.accountHasOwnerNickLocked(acc.meta.ID) {
+				shared = append(shared, sharedCand{acc: acc, bound: used})
 				continue
 			}
 			diag.Busy++

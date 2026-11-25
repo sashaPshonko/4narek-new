@@ -155,6 +155,31 @@ func TestPickSharesTGUpToLimit(t *testing.T) {
 	}
 }
 
+func TestPickCountsFarmBotsNotStaleNicks(t *testing.T) {
+	root := t.TempDir()
+	bots := filepath.Join(root, "bots")
+	_ = os.Mkdir(bots, 0o755)
+	// на ферме сейчас 2 бота; третий ник на TG — старый, уже заменённый
+	if err := os.WriteFile(filepath.Join(bots, "503b.json"), []byte(`[{"username":"a","anarchy":503},{"username":"b","anarchy":503},{"username":"new","anarchy":503}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FLEET_BOTS_DIR", bots)
+	t.Setenv("FLEET_OWNERS_FILE", filepath.Join(root, "none.json"))
+
+	p := newFunauthPool()
+	p.perAccount = 3
+	p.accounts = map[string]*funauthAccount{
+		"tg1": {meta: funauthAccountMeta{ID: "tg1", Phone: "+1"}, ready: true, api: &tg.Client{}},
+	}
+	p.nicks = map[string]string{"a": "tg1", "b": "tg1", "old_banned": "tg1"}
+
+	// 3 ника на TG, но ботов фермы 2 из 3 — место есть
+	acc, _ := p.pickForAnarchyBindDiag("new", 503, nil)
+	if acc == nil || acc.meta.ID != "tg1" {
+		t.Fatalf("старый ник не должен занимать место, got %v", acc)
+	}
+}
+
 func TestPickLimitOneKeepsOldBehaviour(t *testing.T) {
 	p := newFunauthPool() // лимит по умолчанию 1
 	p.accounts = map[string]*funauthAccount{
