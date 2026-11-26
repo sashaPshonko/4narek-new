@@ -725,6 +725,13 @@ func handleFunauthTwoFAWS(nick string, anarchy int) {
 		log.Printf("[funauth] 2fa skip empty nick")
 		return
 	}
+	// после неудачи ник ждёт паузу (1…30 мин; без TG — 6 ч): бот просит 2FA на каждом заходе, TG не дёргаем зря
+	if wait, lastErr, logNow := funauthTwoFAWait(nick); wait > 0 {
+		if logNow {
+			log.Printf("[funauth] 2fa %s: пауза ещё %s после «%s»", nick, wait.Round(time.Second), lastErr)
+		}
+		return
+	}
 	if ok, why := funauthMayStartTwoFA(nick); !ok {
 		log.Printf("[funauth] 2fa skip %s (%s)", nick, why)
 		funauthSetNickState(nick, "busy")
@@ -756,6 +763,7 @@ func handleFunauthTwoFAWS(nick string, anarchy int) {
 		}
 
 		result := funauthBinderInst.TwoFA(nick, anarchy)
+		funauthTwoFANote(nick, result.OK, result.Error)
 
 		if result.Error == "busy" || result.Error == "already_pending" {
 			funauthSetNickState(nick, "busy")
@@ -765,6 +773,22 @@ func handleFunauthTwoFAWS(nick string, anarchy int) {
 				"ok":     false,
 				"nick":   nick,
 				"error":  "busy",
+				"mode":   "twofa",
+			})
+			return
+		}
+
+		if result.Error == funauthErrTGLost {
+			funauthSetNickState(nick, "fail:"+funauthErrTGLost)
+			enqueueTelegramMessage(
+				fmt.Sprintf("🚨 FunAuth 2FA: TG ника `%s` удалён или без доступа — 2FA не выключить, нужен новый ник", nick),
+				"Markdown",
+			)
+			broadcastFunauthResult(map[string]interface{}{
+				"action": "funauth_result",
+				"ok":     false,
+				"nick":   nick,
+				"error":  funauthErrTGLost,
 				"mode":   "twofa",
 			})
 			return

@@ -333,7 +333,7 @@ func runServer() {
 	goImmortal("httpServer", startHTTPServer)
 	goImmortal("clanSetupDispatch", startClanSetupDispatcher)
 
-	// book2: цены из книги — таймеры до xray/funauth (те могут висеть минуты).
+	// book2: цены из книги — таймеры до funauth (он может висеть минуты).
 	startItemTimers()
 
 	initMLLog()
@@ -341,10 +341,6 @@ func runServer() {
 
 	// ОТКЛЮЧАЕМ ТОЛЬКО ТЕЛЕГРАМ
 	// initTelegramBot()
-	if err := ensureTelegramXray(); err != nil {
-		log.Printf("[xray] %v — FunAuth без SOCKS", err)
-	}
-
 	// Funauth ОСТАВЛЯЕМ (если HTTP ещё не вызвал — Once)
 	initFunauth()
 

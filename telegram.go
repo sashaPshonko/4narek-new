@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,10 +19,9 @@ import (
 )
 
 const (
-	telegramProxyDefault = "socks5h://127.0.0.1:1080"
-	telegramChatID       = -4709535234
-	telegramMinInterval  = 1200 * time.Millisecond // ~50 msg/min — ниже лимита TG
-	telegramQueueSize    = 256
+	telegramChatID      = -4709535234
+	telegramMinInterval = 1200 * time.Millisecond // ~50 msg/min — ниже лимита TG
+	telegramQueueSize   = 256
 )
 
 var tgBot *bot.Bot
@@ -36,15 +33,13 @@ type tgQueuedMsg struct {
 
 var tgOutbox chan tgQueuedMsg
 
+// resolveTelegramProxyURL — SOCKS для Telegram из TELEGRAM_PROXY. По умолчанию пусто: сервер ходит в Telegram напрямую.
 func resolveTelegramProxyURL() string {
 	v := strings.TrimSpace(os.Getenv("TELEGRAM_PROXY"))
 	if v == "off" || v == "0" || v == "false" {
 		return ""
 	}
-	if v != "" {
-		return v
-	}
-	return telegramProxyDefault
+	return v
 }
 
 func parseSocksHostPort(proxyURL string) (host, port string) {
@@ -108,51 +103,6 @@ func socks5ContextDialer(proxyURL string) (proxy.ContextDialer, error) {
 	return cd, nil
 }
 
-func isTCPReachable(host, port string, timeout time.Duration) bool {
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), timeout)
-	if err != nil {
-		return false
-	}
-	_ = conn.Close()
-	return true
-}
-
-func findXrayDir() string {
-	if d := strings.TrimSpace(os.Getenv("XRAY_DIR")); d != "" {
-		return d
-	}
-	candidates := []string{".", "../4narek-1.12"}
-	if wd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(wd, "..", "4narek-1.12"))
-	}
-	for _, dir := range candidates {
-		if _, err := os.Stat(filepath.Join(dir, "xray.mjs")); err == nil {
-			return dir
-		}
-	}
-	return "."
-}
-
-func syncVlessToXrayDir(xrayDir string) {
-	src := "vless.url"
-	if _, err := os.Stat(src); err != nil {
-		return
-	}
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return
-	}
-	dst := filepath.Join(xrayDir, "vless.url")
-	if cur, err := os.ReadFile(dst); err == nil && string(cur) == string(data) {
-		return
-	}
-	if err := os.WriteFile(dst, data, 0o600); err != nil {
-		log.Printf("[Telegram] vless.url → %s: %v", dst, err)
-		return
-	}
-	log.Printf("[Telegram] vless.url → %s", dst)
-}
-
 func telegramHTTPClient(proxyURL string) *http.Client {
 	if proxyURL == "" {
 		return &http.Client{Timeout: 60 * time.Second}
@@ -169,67 +119,6 @@ func telegramHTTPClient(proxyURL string) *http.Client {
 			Dial: dialer.Dial,
 		},
 	}
-}
-
-func isTelegramAPIOkViaProxy(proxyURL string) bool {
-	client := telegramHTTPClient(proxyURL)
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.telegram.org", nil)
-	if err != nil {
-		return false
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return false
-	}
-	defer res.Body.Close()
-	_, _ = io.Copy(io.Discard, res.Body)
-	return res.StatusCode > 0
-}
-
-func ensureTelegramXray() error {
-	proxyURL := resolveTelegramProxyURL()
-	if proxyURL == "" {
-		log.Println("[Telegram] прокси выключен (TELEGRAM_PROXY=off)")
-		return nil
-	}
-
-	host, port := parseSocksHostPort(proxyURL)
-	if isTCPReachable(host, port, 2*time.Second) && isTelegramAPIOkViaProxy(proxyURL) {
-		log.Printf("[Telegram] прокси OK: %s:%s", host, port)
-		return nil
-	}
-
-	if os.Getenv("TELEGRAM_AUTO_XRAY") == "off" {
-		return fmt.Errorf("SOCKS %s:%s недоступен (TELEGRAM_AUTO_XRAY=off)", host, port)
-	}
-
-	xrayDir := findXrayDir()
-	syncVlessToXrayDir(xrayDir)
-	log.Printf("[Telegram] запускаю xray: node xray.mjs (cwd=%s)", xrayDir)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "node", "xray.mjs")
-	cmd.Dir = xrayDir
-	cmd.Env = os.Environ()
-	out, err := cmd.CombinedOutput()
-	if len(out) > 0 {
-		log.Printf("[Telegram] xray: %s", strings.TrimSpace(string(out)))
-	}
-	if err != nil {
-		return fmt.Errorf("xray.mjs: %w", err)
-	}
-
-	for i := 0; i < 24; i++ {
-		if isTCPReachable(host, port, 2*time.Second) && isTelegramAPIOkViaProxy(proxyURL) {
-			log.Printf("[Telegram] xray поднял прокси %s:%s", host, port)
-			return nil
-		}
-		time.Sleep(2 * time.Second)
-	}
-	return fmt.Errorf("таймаут ожидания SOCKS %s:%s", host, port)
 }
 
 func startTelegramOutbox() {
@@ -283,9 +172,6 @@ func enqueueTelegramMessage(text, parseMode string) {
 
 // fetchAndLogTelegramChats — getUpdates: id чатов, куда бот получал сообщения.
 func fetchAndLogTelegramChats() error {
-	if err := ensureTelegramXray(); err != nil {
-		return err
-	}
 	client := telegramHTTPClient(resolveTelegramProxyURL())
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?limit=100", token)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

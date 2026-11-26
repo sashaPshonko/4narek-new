@@ -289,7 +289,7 @@ func (p *funauthBindProxyPool) checkAll() []funauthBindProxyView {
 	return p.list()
 }
 
-// pickBindSOCKS — живой SOCKS из пула (Telegram DC проходит). Пусто → xray/без прокси.
+// pickBindSOCKS — живой SOCKS из пула (Telegram DC проходит). Пусто → напрямую.
 func pickBindSOCKS() string {
 	p := funauthBindProxies
 	p.mu.Lock()

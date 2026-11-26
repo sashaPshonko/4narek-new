@@ -334,6 +334,7 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 				continue
 			}
 			b.pool.rememberNick(job.nick, acc.meta.ID)
+			b.pool.markTwoFAPending(job.nick)
 			log.Printf("[funauth] %s on %s: %s — TG оставлен за ником, без scrub/dead", job.nick, phone, result.Error)
 			return result
 		}
@@ -348,7 +349,10 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		}
 		if retry {
 			why := "full"
-			if funauthRetryNextAccount(result.Error) {
+			if funauthNoAccessErr(errors.New(result.Error)) {
+				why = "no access"
+				b.pool.dropAccount(acc.meta.ID, result.Error)
+			} else if funauthRetryNextAccount(result.Error) {
 				why = "dead"
 				b.pool.markDead(acc.meta.ID, result.Error)
 			}
@@ -357,66 +361,71 @@ func (b *funauthBinder) processJob(job *funauthBindJob) funauthBindResult {
 		}
 		if result.OK {
 			b.pool.afterBindSuccess(job.nick, acc.meta.ID, job.anarchy)
+			b.pool.clearTwoFAPending(job.nick)
 			b.pool.deleteTelegramAfterBind(acc, job.nick)
 		}
 		return result
 	}
 }
 
+// processTwoFA — `/2fa ник` только с того TG, к которому ник привязан: FunAuthBot выключает 2FA лишь оттуда.
+// Ника нет в nicks.json — ищем TG по переписке с ботом. С чужих TG /2fa не шлём: бесполезно и злит FunAuthBot.
+// TG ника удалён или потерял сессию — tg_lost: выключить 2FA больше нечем, нику нужна замена.
 func (b *funauthBinder) processTwoFA(job *funauthBindJob) funauthBindResult {
-	tried := make(map[string]struct{})
-	tryAcc := func(acc *funauthAccount, why string) *funauthBindResult {
-		if acc == nil {
-			return nil
-		}
-		if _, seen := tried[acc.meta.ID]; seen {
-			return nil
-		}
-		tried[acc.meta.ID] = struct{}{}
-		acc = b.pool.ensureNickSOCKS(acc, job.nick)
-		log.Printf("[funauth] 2fa %s via %s (%s)", job.nick, acc.meta.Phone, why)
-		ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
-		res := b.runTwoFAOnAccount(ctx, acc, job.nick)
-		cancel()
-		if res.OK {
-			b.pool.rememberNick(job.nick, acc.meta.ID)
-			return &res
-		}
-		log.Printf("[funauth] 2fa skip %s on %s: %s", job.nick, acc.meta.Phone, res.Error)
-		return nil
+	acc, mapped, lost := b.pool.twoFATarget(job.nick)
+	if lost {
+		log.Printf("[funauth] 2fa %s: TG ника больше нет в пуле — выключить 2FA нечем, нужен новый ник", job.nick)
+		return funauthBindResult{OK: false, Nick: job.nick, Error: funauthErrTGLost}
 	}
-
-	if preferred := b.pool.accountForNick(job.nick); preferred != nil {
-		if res := tryAcc(preferred, "nicks.json"); res != nil {
-			return *res
-		}
+	if mapped {
+		return b.twoFAOn(acc, job.nick, "nicks.json")
 	}
 
 	histCtx, histCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	fromHistory := b.findAccountsByBotHistory(histCtx, job.nick)
 	histCancel()
-	for _, acc := range fromHistory {
-		if res := tryAcc(acc, "history"); res != nil {
-			return *res
+	last := funauthBindResult{OK: false, Nick: job.nick, Error: "no_bound_account"}
+	for _, a := range fromHistory {
+		res := b.twoFAOn(a, job.nick, "history")
+		if res.OK {
+			return res
 		}
+		last = res
 	}
+	if len(fromHistory) == 0 {
+		log.Printf("[funauth] 2fa %s: ник не привязан ни к одному TG пула", job.nick)
+	}
+	return last
+}
 
-	log.Printf("[funauth] 2fa %s: map/history пусто — перебор остальных", job.nick)
-	for {
-		job.mu.Lock()
-		cancelled := job.cancelled
-		job.mu.Unlock()
-		if cancelled {
-			return funauthBindResult{OK: false, Nick: job.nick, Error: "busy"}
-		}
-		acc := b.pool.pickReadyAny(tried)
-		if acc == nil {
-			return funauthBindResult{OK: false, Nick: job.nick, Error: "no_bound_account"}
-		}
-		if res := tryAcc(acc, "fallback"); res != nil {
-			return *res
-		}
+// twoFAOn — один `/2fa` на конкретном TG. Сессии нет — TG из пула убираем.
+func (b *funauthBinder) twoFAOn(acc *funauthAccount, nick, why string) funauthBindResult {
+	b.pool.mu.Lock()
+	ready := acc.ready && acc.api != nil
+	b.pool.mu.Unlock()
+	if !ready {
+		// клиент переподключается (проверка пула поднимет) — попробуем при следующем запросе
+		return funauthBindResult{OK: false, Nick: nick, TgPhone: acc.meta.Phone, Error: "account_offline"}
 	}
+	acc = b.pool.ensureNickSOCKS(acc, nick)
+	log.Printf("[funauth] 2fa %s via %s (%s)", nick, acc.meta.Phone, why)
+	ctx, cancel := context.WithTimeout(context.Background(), funauthJobTimeout)
+	res := b.runTwoFAOnAccount(ctx, acc, nick)
+	cancel()
+	if res.OK {
+		b.pool.rememberNick(nick, acc.meta.ID)
+		b.pool.clearTwoFAPending(nick)
+		// TG мог ждать удаления только из-за этого ника
+		b.pool.deleteTelegramAfterBind(acc, nick)
+		return res
+	}
+	if funauthNoAccessErr(errors.New(res.Error)) {
+		b.pool.dropAccount(acc.meta.ID, res.Error)
+	} else if wait := funauthFloodWait(res.Error); wait > 0 {
+		b.pool.markFlood(acc.meta.ID, wait)
+	}
+	log.Printf("[funauth] 2fa skip %s on %s: %s %s", nick, acc.meta.Phone, res.Error, truncateRunes(res.Reply, 120))
+	return res
 }
 
 func (b *funauthBinder) findAccountsByBotHistory(ctx context.Context, nick string) []*funauthAccount {

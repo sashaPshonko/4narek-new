@@ -48,9 +48,15 @@ func (p *funauthPool) deleteTelegramAfterBind(acc *funauthAccount, nick string) 
 	id, phone, api := acc.meta.ID, acc.meta.Phone, acc.api
 	p.mu.Lock()
 	farmBound, limit := p.accountFarmCountLocked(id), p.perAccountLocked()
+	pending := p.accountPendingNicksLocked(id)
 	p.mu.Unlock()
 	if !funauthTGFull(farmBound, limit) {
 		log.Printf("[funauth] TG %s после %s: ботов %d из %d — оставляю в пуле", phone, nick, farmBound, limit)
+		return
+	}
+	if len(pending) > 0 {
+		// у этих ников 2FA выключается только с этого TG — удалим, когда /2fa у них пройдёт
+		log.Printf("[funauth] TG %s заполнен (%d/%d), но 2FA не подтверждена у %v — не удаляю", phone, farmBound, limit, pending)
 		return
 	}
 	if api == nil {

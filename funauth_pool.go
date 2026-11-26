@@ -79,6 +79,8 @@ type funauthAccount struct {
 	jobMu sync.Mutex
 	// unconfirmed — подряд ответы «не дождались» на этом TG (под p.mu). 2 подряд → считаем TG мёртвым.
 	unconfirmed int
+	// stopped — клиент MTProto завершился (обрыв, markDead). Проверка пула поднимет его заново.
+	stopped bool
 }
 
 // releaseClaim — бинд на TG закончен, акк снова можно выдавать.
@@ -219,7 +221,9 @@ type funauthPool struct {
 	pending  map[string]*funauthPendingLogin
 	nicks    map[string]string // nick(lower) → account id
 	verified map[string]bool   // nick(lower) → game verified (5s on anarchy без «чтобы двигаться»)
-	roster   funauthRoster
+	// twofaPending — ники, у которых 2FA не подтверждена (twofa_pending.json). TG с такими никами не удаляем.
+	twofaPending map[string]bool
+	roster       funauthRoster
 	// perAccount — сколько ботов фермы можно привязать к одному TG-аккаунту (1..funauthMaxPerAccount, задаётся в панели).
 	perAccount int
 
@@ -238,8 +242,10 @@ func newFunauthPool() *funauthPool {
 		nicks:      make(map[string]string),
 		verified:   make(map[string]bool),
 		perAccount: 1,
-		ctx:        ctx,
-		cancel:     cancel,
+
+		twofaPending: make(map[string]bool),
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 }
 
@@ -256,11 +262,12 @@ func (p *funauthPool) init() {
 	if proxyURL := resolveTelegramProxyURL(); proxyURL != "" {
 		log.Printf("[funauth] MTProto через прокси %s", proxyURL)
 	} else {
-		log.Printf("[funauth] MTProto без прокси (TELEGRAM_PROXY=off)")
+		log.Printf("[funauth] MTProto напрямую (bind-прокси из пула — если есть рабочий)")
 	}
 	p.loadSettings()
 	p.loadNicks()
 	p.loadVerified()
+	p.loadTwoFAPending()
 	funauthBindProxies.init(p.dir)
 	p.roster = loadFleetRunningNicks()
 	p.cleanupOrphanAnarchies()
@@ -276,7 +283,8 @@ func (p *funauthPool) init() {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		if e.Name() == funauthNicksFile || e.Name() == funauthVerifiedFile || e.Name() == funauthBindProxiesFile {
+		if e.Name() == funauthNicksFile || e.Name() == funauthVerifiedFile || e.Name() == funauthBindProxiesFile ||
+			e.Name() == funauthTwoFAPendingFile {
 			continue
 		}
 		path := filepath.Join(p.dir, e.Name())
@@ -304,6 +312,7 @@ func (p *funauthPool) init() {
 	log.Printf("[funauth] loading %d account(s) from %s", n, p.dir)
 	p.backfillTGMap(phones)
 	p.scheduleScrubBound()
+	p.startHealthLoop()
 }
 
 func (p *funauthPool) sessionPath(id string) string {
@@ -412,8 +421,8 @@ func (p *funauthPool) markFull(id string) {
 	log.Printf("[funauth] TG %s → full (FunAuthBot: много аккаунтов)", a.meta.Phone)
 }
 
-// markDead — сессия MTProto дохлая (CONNECTION_LAYER_INVALID и т.п.):
-// убираем из ready, рвём клиент, чистим nick→tg чтобы биндер брал следующий акк.
+// markDead — сессия MTProto дохлая (CONNECTION_LAYER_INVALID и т.п.): убираем из ready и рвём клиент,
+// биндер берёт следующий акк.
 func (p *funauthPool) markDead(id, reason string) {
 	if p == nil || strings.TrimSpace(id) == "" {
 		return
@@ -429,34 +438,16 @@ func (p *funauthPool) markDead(id, reason string) {
 	a.api = nil
 	cancel := a.cancel
 	a.cancel = nil
-	cleared := 0
-	for nick, aid := range p.nicks {
-		if aid == id {
-			delete(p.nicks, nick)
-			cleared++
-		}
-	}
-	snapshot := make(map[string]string, len(p.nicks))
-	for k, v := range p.nicks {
-		snapshot[k] = v
-	}
 	p.mu.Unlock()
+	// Ники за TG не стираем: 2FA у них выключается только с этого TG, проверка пула его переподключит.
 	if cancel != nil {
 		cancel()
-	}
-	if cleared > 0 {
-		raw, err := json.MarshalIndent(snapshot, "", "  ")
-		if err == nil {
-			if err := os.WriteFile(p.nicksPath(), raw, 0o600); err != nil {
-				log.Printf("[funauth] save nicks after dead: %v", err)
-			}
-		}
 	}
 	reason = strings.TrimSpace(reason)
 	if len(reason) > 120 {
 		reason = reason[:120]
 	}
-	log.Printf("[funauth] TG %s → dead (%s), clearedNicks=%d", phone, reason, cleared)
+	log.Printf("[funauth] TG %s → dead (%s), переподключу при проверке пула", phone, reason)
 }
 
 func (p *funauthPool) accountForNick(nick string) *funauthAccount {
@@ -872,20 +863,6 @@ func (p *funauthPool) pickForAnarchyBindDiag(
 	return free[0], diag
 }
 
-func (p *funauthPool) pickReadyAny(exclude map[string]struct{}) *funauthAccount {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for _, acc := range p.accounts {
-		if _, skip := exclude[acc.meta.ID]; skip {
-			continue
-		}
-		if acc.ready && acc.api != nil {
-			return acc
-		}
-	}
-	return nil
-}
-
 func (p *funauthPool) assignAnarchy(accountID string, anarchy int) {
 	if anarchy <= 0 || accountID == "" {
 		return
@@ -931,7 +908,7 @@ func (p *funauthPool) markStarted(id string) {
 	}
 }
 
-// funauthClientOptions — сессия + апдейты + SOCKS. socksURL пустой → xray 1080.
+// funauthClientOptions — сессия + апдейты + SOCKS. socksURL пустой → TELEGRAM_PROXY, если задан, иначе напрямую.
 func funauthClientOptions(sessionPath string, handler telegram.UpdateHandler, socksURL string) telegram.Options {
 	opt := telegram.Options{
 		SessionStorage: &session.FileStorage{Path: sessionPath},
@@ -1026,7 +1003,7 @@ func (p *funauthPool) connectAccount(meta funauthAccountMeta, socksURL string) {
 		_ = p.saveMeta(acc.meta)
 		p.mu.Unlock()
 
-		via := "xray"
+		via := "direct"
 		if acc.socksURL != "" {
 			via = socksURLHost(acc.socksURL)
 		}
@@ -1049,11 +1026,17 @@ func (p *funauthPool) connectAccount(meta funauthAccountMeta, socksURL string) {
 		log.Printf("[funauth] client %s stopped: %v", meta.Phone, err)
 	}
 	p.mu.Lock()
-	if cur := p.accounts[meta.ID]; cur == acc {
+	current := p.accounts[meta.ID] == acc
+	if current {
 		acc.ready = false
 		acc.api = nil
+		acc.stopped = true
 	}
 	p.mu.Unlock()
+	// сессии больше нет (отозвана, акк удалён) — переподключаться бесполезно
+	if current && err != nil && (funauthNoAccessErr(err) || strings.Contains(err.Error(), "not authorized")) {
+		p.dropAccount(meta.ID, err.Error())
+	}
 }
 
 // ensureNickSOCKS переподключает TG-акк через рабочий SOCKS из bind_proxies.json (не ip.json ботов).
@@ -1063,7 +1046,7 @@ func (p *funauthPool) ensureNickSOCKS(acc *funauthAccount, nick string) *funauth
 	}
 	socks := pickBindSOCKS()
 	if socks == "" {
-		log.Printf("[funauth] %s: нет рабочего bind-прокси — остаёмся на xray", nick)
+		log.Printf("[funauth] %s: нет рабочего bind-прокси — напрямую", nick)
 		return acc
 	}
 	p.mu.Lock()
@@ -1076,7 +1059,7 @@ func (p *funauthPool) ensureNickSOCKS(acc *funauthAccount, nick string) *funauth
 	}
 	log.Printf("[funauth] %s: MTProto → %s", nick, socksURLHost(socks))
 	if !p.reconnectAccount(meta, socks) {
-		log.Printf("[funauth] %s: не поднялись через bind-прокси — xray", nick)
+		log.Printf("[funauth] %s: не поднялись через bind-прокси — напрямую", nick)
 		p.mu.Lock()
 		cur := p.accounts[meta.ID]
 		p.mu.Unlock()
@@ -1236,7 +1219,7 @@ func (p *funauthPool) runPendingLogin(pend *funauthPendingLogin) {
 	if socks != "" {
 		log.Printf("[funauth] login %s via %s", pend.phone, socksURLHost(socks))
 	} else {
-		log.Printf("[funauth] login %s — нет SOCKS фермы, xray", pend.phone)
+		log.Printf("[funauth] login %s — напрямую (нет рабочего bind-прокси)", pend.phone)
 	}
 	client := telegram.NewClient(p.apiID, p.apiHash, funauthClientOptions(sessionFile, dispatcher, socks))
 
@@ -1304,7 +1287,7 @@ func (p *funauthPool) runPendingLogin(pend *funauthPendingLogin) {
 		case pend.done <- funauthLoginResult{view: acc.view()}:
 		default:
 		}
-		via := "xray"
+		via := "direct"
 		if socks != "" {
 			via = socksURLHost(socks)
 		}
